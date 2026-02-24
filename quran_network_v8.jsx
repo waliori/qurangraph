@@ -1,50 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { norm, extractRoot, STOP } from "./src/arabic-utils.js";
+import { loadHafsData, loadQiraatDiffs, loadNarrationText } from "./src/data-loader.js";
+import { NARRATIONS, NARRATION_MAP } from "./src/qiraat-config.js";
 
-/* ═══ Qira'at DB ═══ */
-const Q = {
-"1:4":[{t:"c",h:"مَالِكِ",v:"مَلِكِ",r:"نافع/ابن كثير/أبو عمرو",n:"مالك (صاحب) vs ملك (حاكم)"}],
-"2:9":[{t:"c",h:"يُخَادِعُونَ",v:"يَخْدَعُونَ",r:"نافع/ابن كثير/أبو عمرو",n:"مفاعلة vs فعل"}],
-"2:10":[{t:"c",h:"يَكْذِبُونَ",v:"يُكَذِّبُونَ",r:"نافع/ابن كثير",n:"يكذبون vs يكذّبون (إنكار)"}],
-"2:51":[{t:"c",h:"وَاعَدْنَا",v:"وَعَدْنَا",r:"أبو عمرو/أبو جعفر/يعقوب",n:"مفاعلة vs فعل"}],
-"2:85":[{t:"c",h:"أُسَارَى تُفَادُوهُمْ",v:"أَسْرَى تَفْدُوهُمْ",r:"حمزة/الكسائي/خلف",n:"تغيير وزن الجمع والفعل"}],
-"2:106":[{t:"c",h:"نُنسِهَا",v:"نَنْسَأْهَا",r:"ابن عامر",n:"ننسها (نسيان) vs ننسأها (تأخير)"}],
-"2:125":[{t:"c",h:"وَاتَّخِذُوا",v:"وَاتَّخَذُوا",r:"نافع/ابن عامر/أبو جعفر",n:"اتخِذوا (أمر) vs اتخَذوا (خبر)"}],
-"2:132":[{t:"c",h:"وَوَصَّى",v:"وَأَوْصَى",r:"نافع/ابن عامر/أبو جعفر",n:"وصّى vs أوصى"}],
-"2:140":[{t:"c",h:"تَقُولُونَ",v:"يَقُولُونَ",r:"ابن كثير/أبو عمرو",n:"خطاب vs غيبة"}],
-"2:184":[{t:"c",h:"يُطِيقُونَهُ",v:"يُطَوَّقُونَهُ",r:"ابن عباس ☆",n:"يطيقونه (يستطيعون) vs يطوّقونه (يُكلَّفون)"},{t:"c",h:"مِسْكِينٍ",v:"مَسَاكِينَ",r:"نافع/ابن ذكوان",n:"مفرد vs جمع"}],
-"2:222":[{t:"c",h:"يَطْهُرْنَ",v:"يَطَّهَّرْنَ",r:"أبو عمرو وغيره",n:"يطهُرن (ينقطع) vs يتطهّرن (يغتسلن) — يغير الحكم"}],
-"2:238":[{t:"a",h:"—",v:"وَصَلَاةِ الْعَصْرِ",r:"عائشة/حفصة ☆",n:"إضافة 'وصلاة العصر' تعيّن الوسطى"}],
-"2:259":[{t:"c",h:"نُنشِزُهَا",v:"نُنْشِرُهَا",r:"ابن كثير/أبو عمرو/يعقوب",n:"ننشزها (نرفعها) vs ننشرها (نحييها)"}],
-"2:282":[{t:"c",h:"أَن تَضِلَّ",v:"إِنْ تَضِلَّ",r:"حمزة",n:"أنْ (تعليل) vs إنْ (شرط)"},{t:"c",h:"فَتُذَكِّرَ",v:"فَتُذْكِرَ",r:"ابن كثير/أبو عمرو/يعقوب",n:"تذكّر vs تُذكِر"}],
-"2:285":[{t:"c",h:"وَكُتُبِهِ",v:"وَكِتَابِهِ",r:"حمزة/الكسائي",n:"كتبه (جمع) vs كتابه (مفرد)"}],
-"3:37":[{t:"c",h:"وَكَفَّلَهَا زَكَرِيَّا",v:"وَكَفَلَهَا زَكَرِيَّاءُ",r:"عاصم/حمزة vs الباقون",n:"كفّلها الله vs كفَلها زكريا"}],
-"3:146":[{t:"c",h:"قَاتَلَ",v:"قُتِلَ",r:"ابن عامر/عاصم vs الباقون",n:"قاتَل (حارب) vs قُتِل (استُشهد)"}],
-"4:11":[{t:"a",h:"—",v:"مِنْ بَعْدِ دَيْنٍ يُقْضَى أَوْ وَصِيَّةٍ",r:"ابن مسعود ☆",n:"تقديم الدين على الوصية"}],
-"4:12":[{t:"c",h:"يُوصَى",v:"يُوصِي",r:"حمزة/عاصم",n:"مبني مجهول vs معلوم"}],
-"4:24":[{t:"a",h:"—",v:"إِلَى أَجَلٍ مُسَمًّى",r:"أُبَيّ/ابن عباس ☆",n:"إضافة — تأثير على حكم المتعة"}],
-"4:34":[{t:"c",h:"وَاضْرِبُوهُنَّ",v:"وَأَعْرِضُوا عَنْهُنَّ",r:"ابن مسعود ☆",n:"اضربوهن vs أعرضوا عنهن — تغيير جذري"}],
-"4:43":[{t:"c",h:"لَامَسْتُمُ",v:"لَمَسْتُمُ",r:"حمزة/الكسائي/خلف",n:"لامستم (جماع) vs لمستم (لمس) — يغير حكم الوضوء"}],
-"4:94":[{t:"c",h:"السَّلَامَ",v:"السَّلَمَ",r:"نافع/ابن عامر/أبو جعفر",n:"السلام (تحية) vs السلَم (استسلام)"}],
-"4:176":[{t:"a",h:"—",v:"مِنْ أَبِيهِ",r:"سعد بن أبي وقاص ☆",n:"تقييد أخت الكلالة"}],
-"5:6":[{t:"c",h:"وَأَرْجُلَكُمْ",v:"وَأَرْجُلِكُمْ",r:"نافع/ابن عامر/حمزة/الكسائي",n:"نصب=غسل vs جر=مسح — خلاف فقهي كبير"}],
-"5:38":[{t:"c",h:"أَيْدِيَهُمَا",v:"أَيْمَانَهُمَا",r:"ابن مسعود ☆",n:"أيديَهما vs أيمانَهما — يقيّد باليمنى"}],
-"5:45":[{t:"c",h:"عَلَيْهِمْ",v:"عَلَيْكُمْ",r:"أُبَيّ ☆",n:"عليهم (بني إسرائيل) vs عليكم (المسلمين)"}],
-"5:89":[{t:"a",h:"—",v:"مُتَتَابِعَاتٍ",r:"ابن مسعود/أُبَيّ ☆",n:"إضافة 'متتابعات' — يوجب التتابع"}],
-"11:46":[{t:"c",h:"عَمَلٌ غَيْرُ صَالِحٍ",v:"عَمِلَ غَيْرَ صَالِحٍ",r:"الكسائي",n:"عملٌ (اسم) vs عمِلَ (فعل) — الابن أم أفعاله؟"}],
-"13:31":[{t:"c",h:"يَيْأَسِ",v:"يَتَبَيَّنِ",r:"عليّ/ابن عباس ☆",n:"ييأس vs يتبيّن — اختلاف جذري"}],
-"24:27":[{t:"c",h:"تَسْتَأْنِسُوا",v:"تَسْتَأْذِنُوا",r:"ابن مسعود/ابن عباس ☆",n:"تستأنسوا vs تستأذنوا"}],
-"33:6":[{t:"a",h:"—",v:"وَهُوَ أَبٌ لَهُمْ",r:"أُبَيّ ☆",n:"إضافة — النبي أب المؤمنين"}],
-"33:49":[{t:"c",h:"تَعْتَدُّونَهَا",v:"يَعْتَدِدْنَهَا",r:"أبو عمرو",n:"أنتم vs هنّ"}],
-"49:6":[{t:"c",h:"فَتَبَيَّنُوا",v:"فَتَثَبَّتُوا",r:"حمزة/الكسائي/خلف",n:"تبيّنوا vs تثبّتوا"}],
-"57:7":[{t:"c",h:"مُّسْتَخْلَفِينَ",v:"مُسْتَخْلِفِينَ",r:"أُبَيّ ☆",n:"مستخلَفين vs مستخلِفين"}],
-"66:3":[{t:"c",h:"عَرَّفَ",v:"عَرَفَ",r:"الكسائي",n:"عرَّف (أعلمها) vs عرَف (علم فقط)"}],
-"81:24":[{t:"c",h:"بِضَنِينٍ",v:"بِظَنِينٍ",r:"ابن كثير/أبو عمرو/الكسائي",n:"ضنين (بخيل) vs ظنين (متّهم)"}],
-"112:1":[{t:"d",h:"قُلْ هُوَ",v:"—",r:"ابن مسعود ☆",n:"حذف 'قل هو'"}],
-};
+/* ═══ Qira'at (loaded from JSON) ═══ */
 const QT = { c: { l: "تغيير", col: "#f59e0b", ic: "⇄" }, a: { l: "إضافة", col: "#22c55e", ic: "+" }, d: { l: "حذف", col: "#ef4444", ic: "−" } };
 
-function QiraatPanel({ verseKey, compact, theme }) {
-  const items = Q[verseKey]; if (!items?.length) return null;
+function QiraatPanel({ verseKey, compact, theme, qiraatDiffs }) {
+  const items = qiraatDiffs?.[verseKey]; if (!items?.length) return null;
   const bg = theme === "light" ? "#f5f0ff" : "#0d0f1a";
   const bd = theme === "light" ? "#d8b4fe" : "#2a1f3d";
   return (
@@ -71,81 +34,7 @@ function QiraatPanel({ verseKey, compact, theme }) {
   );
 }
 
-/* ═══ Arabic ═══ */
-function norm(w) {
-  return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u08D4-\u08E1\u08F0-\u08F2\u0617-\u061A\u06E2-\u06E6\u06E8\u06EA-\u06EC]/g, "")
-    .replace(/\u0640/g, "").replace(/[\u0671\u0622\u0623\u0625]/g, "\u0627")
-    .replace(/\u0629/g, "\u0647").replace(/\u0649/g, "\u064A")
-    .replace(/\u0624/g, "\u0648").replace(/\u0626/g, "\u064A")
-    .replace(/[^\u0621-\u064A]/g, "").trim();
-}
-
-/* ═══ Real Arabic trilateral root extraction ═══ */
-const ROOT_CACHE = {};
-function extractRoot(w) {
-  const n = norm(w);
-  if (ROOT_CACHE[n]) return ROOT_CACHE[n];
-  let r = n;
-  // Phase 1: Strip prefixes (longest first)
-  const prefixes = ["واستال","فاستال","باستال","واست","فاست","باست","والت","فالت","بالت","وانت","فانت","والم","فالم","بالم","وال","فال","بال","كال","است","انت","افت","الت","لل","ال","وت","فت","وي","في","ون","فن","بت","لت","لي","لن","سي","سن","وا","فا","با","لا","كا","و","ف","ب","ل","ك","س"];
-  for (const p of prefixes) { if (r.length > p.length + 2 && r.startsWith(p)) { r = r.slice(p.length); break; } }
-  // Phase 2: Strip suffixes (longest first)
-  const suffixes = ["تموهن","تموها","كموها","وهما","تهما","تمون","كموه","تموه","وهن","وها","وهم","تهن","تها","تهم","كما","كمو","تمو","نهم","نها","نهن","يهم","يها","ونا","ينا","اتن","وكم","يكم","ون","وا","ين","ان","تم","تن","كن","كم","نا","ها","هم","هن","ني","يا","تا","ته","نه","يه","كه","ات","وه","ي","ه","ا","ت","ن","و"];
-  for (const s of suffixes) { if (r.length > s.length + 2 && r.endsWith(s)) { r = r.slice(0, -s.length); break; } }
-  // Phase 3: Handle known patterns to get trilateral
-  if (r.length === 3) { ROOT_CACHE[n] = r; return r; }
-  // 4-letter with known infixes/prefixes
-  if (r.length === 4) {
-    // مفعل، مفعل pattern
-    if (r[0] === "\u0645") { const tri = r[1]+r[2]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // تفعل pattern
-    if (r[0] === "\u062A") { const tri = r[1]+r[2]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // أفعل pattern
-    if (r[0] === "\u0627") { const tri = r[1]+r[2]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // فعّل (doubled middle) → فعل
-    if (r[1] === r[2]) { const tri = r[0]+r[1]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // فاعل (alif after first) → فعل
-    if (r[1] === "\u0627") { const tri = r[0]+r[2]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // فعال pattern
-    if (r[2] === "\u0627") { const tri = r[0]+r[1]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // فعول pattern
-    if (r[2] === "\u0648") { const tri = r[0]+r[1]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-    // فعيل pattern
-    if (r[2] === "\u064A") { const tri = r[0]+r[1]+r[3]; ROOT_CACHE[n] = tri; return tri; }
-  }
-  if (r.length === 5) {
-    // تفعّل، تفاعل
-    if (r[0] === "\u062A" && r[2] === r[3]) { const tri = r[1]+r[2]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    if (r[0] === "\u062A" && r[2] === "\u0627") { const tri = r[1]+r[3]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    // مفعول، مفعال، مفعيل
-    if (r[0] === "\u0645") {
-      if (r[3] === "\u0648" || r[3] === "\u0627" || r[3] === "\u064A") { const tri = r[1]+r[2]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-      if (r[2] === r[3]) { const tri = r[1]+r[2]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    }
-    // افتعل pattern
-    if (r[0] === "\u0627" && r[2] === "\u062A") { const tri = r[1]+r[3]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    // افعال
-    if (r[0] === "\u0627" && r[3] === "\u0627") { const tri = r[1]+r[2]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    // انفعل
-    if (r[0] === "\u0627" && r[1] === "\u0646") { const tri = r[2]+r[3]+r[4]; ROOT_CACHE[n] = tri; return tri; }
-    // generic 5: try removing middle long vowels
-    for (let i = 1; i < r.length - 1; i++) {
-      if ("\u0627\u0648\u064A".includes(r[i])) { const tri = r.slice(0,i)+r.slice(i+1); if (tri.length === 3) { ROOT_CACHE[n] = tri; return tri; } if (tri.length === 4) { const t2 = tri[0]+tri[1]+tri[3]; ROOT_CACHE[n] = t2; return t2; } }
-    }
-  }
-  if (r.length >= 6) {
-    // استفعل
-    if (r.startsWith("\u0627\u0633\u062A")) { const rest = r.slice(3); if (rest.length === 3) { ROOT_CACHE[n] = rest; return rest; } if (rest.length >= 3) { const tri = rest[0]+rest[1]+rest[rest.length-1]; ROOT_CACHE[n] = tri; return tri; } }
-    // Fallback: take chars at positions likely to be root
-    const tri = r[r.length-3]+r[r.length-2]+r[r.length-1];
-    ROOT_CACHE[n] = tri; return tri;
-  }
-  // Fallback for length 2
-  ROOT_CACHE[n] = r.length >= 2 ? r : n;
-  return ROOT_CACHE[n];
-}
-
-const STOP = new Set("في,من,على,الى,عن,ان,لا,ما,هو,لم,قد,بل,ثم,او,كل,هم,هن,هي,نحن,الذي,الذين,التي,ذلك,هذا,هذه,تلك,الا,اذا,اذ,حتى,لن,لو,مع,بين,عند,فيه,فيها,منه,منها,عليه,عليها,اليه,اليها,به,بها,له,لها,لهم,لكم,لنا,بكم,منكم,عليكم,فيهم,منهم,عليهم,وما,فما,بما,مما,عما,كما,لما,فلا,ولا,يا,قل,قالوا,قال,كان,كانوا,كانت,ايها,انه,انها,انا,لك,ذا,اولئك,هولاء,كيف,اين,متى,هل,الله,رب,ربك,ربكم,ربه,ربهم,انما,عليكم,ذلكم,الذين".split(","));
+/* norm, extractRoot, STOP imported from arabic-utils.js */
 
 function fColor(c) { if (c <= 2) return "#ff6b6b"; if (c <= 5) return "#ff922b"; if (c <= 15) return "#fcc419"; if (c <= 40) return "#51cf66"; if (c <= 100) return "#339af0"; return "#868e96"; }
 const DC = ["#fbbf24","#60a5fa","#cc5de8","#51cf66","#ff922b","#ff6b6b","#e599f7","#66d9e8","#ffa94d","#c0eb75"];
@@ -198,7 +87,7 @@ function getDescendants(nid, links) { const ch = new Set(), cm = {}; links.forEa
 function getPathToCenter(nid, pm) { const p = new Set(); let c = nid, s = 200; while (c && s-- > 0) { p.add(c); c = pm[c]; } return p; }
 
 /* ═══ Lazy Graph Builder ═══ */
-function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat) {
+function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs) {
   const nodes = [], links = [], loopLinks = [], parentMap = {};
   const addedNodes = new Set(), visitedVerses = new Set();
   const cv = verseData[centerKey]; if (!cv) return { nodes, links, loopLinks, parentMap };
@@ -208,8 +97,8 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
   addedNodes.add(centerId); visitedVerses.add(centerKey);
 
   // Add qiraat variant nodes for center
-  if (showQiraat && Q[centerKey]) {
-    Q[centerKey].forEach((qi, idx) => {
+  if (showQiraat && qiraatDiffs[centerKey]) {
+    qiraatDiffs[centerKey].forEach((qi, idx) => {
       const qid = `q:${centerKey}:${idx}`;
       const label = qi.t === "d" ? `−${qi.h}` : qi.t === "a" ? `+${qi.v}` : qi.v;
       nodes.push({ id: qid, type: "qiraat", label, reader: qi.r, note: qi.n, qType: qi.t, hafs: qi.h, variant: qi.v, r: 14, color: QT[qi.t].col, depth: 0.5 });
@@ -248,8 +137,8 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
         }
         links.push({ source: item.wordId, target: vid, dist: 95 });
         // Qiraat for child verses
-        if (showQiraat && Q[vk]) {
-          Q[vk].forEach((qi, idx) => {
+        if (showQiraat && qiraatDiffs[vk]) {
+          qiraatDiffs[vk].forEach((qi, idx) => {
             const qid = `q:${vk}:${idx}`; if (addedNodes.has(qid)) return;
             const label = qi.t === "d" ? `−${qi.h}` : qi.t === "a" ? `+${qi.v}` : qi.v;
             nodes.push({ id: qid, type: "qiraat", label, reader: qi.r, note: qi.n, qType: qi.t, hafs: qi.h, variant: qi.v, r: 10, color: QT[qi.t].col, depth: item.depth + 0.5 });
@@ -266,6 +155,9 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
 /* ═══ MAIN ═══ */
 export default function QuranNetwork() {
   const [quranRaw, setQuranRaw] = useState(null);
+  const [qiraatDiffs, setQiraatDiffs] = useState({});
+  const [activeQiraa, setActiveQiraa] = useState("hafs");
+  const [narrationData, setNarrationData] = useState({});
   const [loading, setLoading] = useState(true);
   const [surah, setSurah] = useState(2); const [ayah, setAyah] = useState(228);
   const [maxBranch, setMaxBranch] = useState(10);
@@ -287,7 +179,19 @@ export default function QuranNetwork() {
   const T = THEMES[theme];
 
   useEffect(() => { const u = () => { if (containerRef.current) { const r = containerRef.current.getBoundingClientRect(); setDims({ w: r.width, h: r.height }); } }; u(); window.addEventListener("resize", u); return () => window.removeEventListener("resize", u); }, [loading]);
-  useEffect(() => { fetch("https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json").then(r => r.json()).then(d => { setQuranRaw(d); setLoading(false); }).catch(() => setLoading(false)); }, []);
+  useEffect(() => {
+    Promise.all([loadHafsData(), loadQiraatDiffs()])
+      .then(([hafs, diffs]) => { setQuranRaw(hafs); setQiraatDiffs(diffs || {}); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // Lazy-load narration text when switching Qira'a
+  useEffect(() => {
+    if (activeQiraa === "hafs" || narrationData[activeQiraa]) return;
+    loadNarrationText(activeQiraa).then(d => {
+      setNarrationData(prev => ({ ...prev, [activeQiraa]: d }));
+    });
+  }, [activeQiraa, narrationData]);
 
   const { w2v, r2v, verseData, surahList } = useMemo(() => {
     if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
@@ -300,9 +204,18 @@ export default function QuranNetwork() {
   const currentVerse = verseData[currentKey];
   const ayahCount = quranRaw?.find(s => s.id === surah)?.total_verses || 1;
 
+  // Get narration verse text if a non-Hafs qira'a is active
+  const activeNarr = NARRATION_MAP[activeQiraa];
+  const activeFont = activeQiraa !== "hafs" && activeNarr ? activeNarr.font : null;
+  const getNarrVerse = useCallback((suraId, ayaId) => {
+    if (activeQiraa === "hafs" || !narrationData[activeQiraa]) return null;
+    const sura = narrationData[activeQiraa].find(s => s.id === suraId);
+    return sura?.verses.find(v => v.id === ayaId);
+  }, [activeQiraa, narrationData]);
+
   const { graphNodes, graphLinks, loopLinks, parentMap } = useMemo(() => {
     if (!currentVerse) return { graphNodes: [], graphLinks: [], loopLinks: [], parentMap: {} };
-    const r = buildLazyGraph(currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat);
+    const r = buildLazyGraph(currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs);
     const newN = r.nodes.map(n => positions[n.id] ? { ...n, x: positions[n.id].x, y: positions[n.id].y } : { ...n });
     if (newN.some(n => !positions[n.id] && !n.fixed)) {
       const laid = forceLayout(newN, r.links, dims.w, dims.h, 140);
@@ -311,7 +224,7 @@ export default function QuranNetwork() {
       return { graphNodes: laid, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap };
     }
     return { graphNodes: newN, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap };
-  }, [currentVerse, currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, dims]);
+  }, [currentVerse, currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs, dims]);
 
   useEffect(() => { const ids = new Set(graphNodes.map(n => n.id)); setPositions(prev => { const c = {}; for (const [k, v] of Object.entries(prev)) { if (ids.has(k)) c[k] = v; } return c; }); }, [graphNodes]);
 
@@ -392,6 +305,9 @@ export default function QuranNetwork() {
             <label style={{ display: "flex", alignItems: "center", gap: 2, cursor: "pointer", fontSize: 9, color: T.textDim }}>
               <input type="checkbox" checked={showQiraat} onChange={e => setShowQiraat(e.target.checked)} /><span style={{ color: "#a78bfa" }}>📜 قراءات</span>
             </label>
+            <select value={activeQiraa} onChange={e => setActiveQiraa(e.target.value)} style={{ ...SS.sel, fontSize: 10, color: activeQiraa !== "hafs" ? "#a78bfa" : T.textDim }}>
+              {NARRATIONS.map(n => <option key={n.key} value={n.key}>{n.ar}</option>)}
+            </select>
             <div style={{ display: "flex", alignItems: "center", gap: 3, background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 6, padding: "2px 8px", border: `1px solid ${T.panelBorder}` }}>
               <span style={{ fontSize: 9, color: "#cc5de8" }}>لكل كلمة</span>
               <input type="range" min={3} max={50} value={maxBranch} onChange={e => setMaxBranch(+e.target.value)} style={{ width: 50, accentColor: "#cc5de8" }} />
@@ -434,11 +350,16 @@ export default function QuranNetwork() {
             <div style={{ fontSize: 17, lineHeight: 2.2, color: T.ayahText }}>
               <HighlightedAyah text={currentVerse.text} primaryWord={activeWord || (hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null)} interactive={true} onWordClick={(wn) => handleWordClick(wn, currentKey)} activeGraphWord={hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null} searchMode={searchMode} theme={theme} />
             </div>
+            {activeFont && (() => { const nv = getNarrVerse(surah, ayah); return nv ? (
+              <div style={{ fontSize: 19, lineHeight: 2.4, color: "#a78bfa", fontFamily: `"${activeFont}", Arial`, marginTop: 4, padding: "4px 8px", background: theme === "light" ? "#f5f0ff" : "#0d0f1a", borderRadius: 6, border: `1px solid ${theme === "light" ? "#d8b4fe" : "#2a1f3d"}` }}>
+                <span style={{ fontSize: 9, color: "#7c3aed" }}>{activeNarr.ar}:</span> {nv.text}
+              </div>
+            ) : null; })()}
             <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>
               {currentVerse.sn} — الآية {currentVerse.a}
-              {Q[currentKey] && <span style={{ color: "#a78bfa", marginRight: 8 }}>📜 {Q[currentKey].length} قراءة</span>}
+              {qiraatDiffs[currentKey] && <span style={{ color: "#a78bfa", marginRight: 8 }}>📜 {qiraatDiffs[currentKey].length} قراءة</span>}
             </div>
-            {Q[currentKey] && <QiraatPanel verseKey={currentKey} compact={true} theme={theme} />}
+            {qiraatDiffs[currentKey] && <QiraatPanel qiraatDiffs={qiraatDiffs} verseKey={currentKey} compact={true} theme={theme} />}
           </div>
         )}
 
@@ -516,7 +437,7 @@ export default function QuranNetwork() {
                   )}
                   {n.type === "word" && !isWE && n.count > 1 && <text x={p.x + r + 3} y={p.y + 3} fontSize={10} fill={T.textFaint} style={{ pointerEvents: "none" }}>+</text>}
                   {isWE && <circle cx={p.x + r - 1} cy={p.y - r + 1} r={5} fill="#22c55e" stroke={T.bg} strokeWidth={1.5} />}
-                  {n.type === "verse" && Q[n.verseKey] && <g><circle cx={p.x - r} cy={p.y + r - 2} r={5} fill="#7c3aed" stroke={T.bg} strokeWidth={1.5} /><text x={p.x - r} y={p.y + r + 1} textAnchor="middle" fontSize={6} fill="#fff" style={{ pointerEvents: "none" }}>📜</text></g>}
+                  {n.type === "verse" && qiraatDiffs[n.verseKey] && <g><circle cx={p.x - r} cy={p.y + r - 2} r={5} fill="#7c3aed" stroke={T.bg} strokeWidth={1.5} /><text x={p.x - r} y={p.y + r + 1} textAnchor="middle" fontSize={6} fill="#fff" style={{ pointerEvents: "none" }}>📜</text></g>}
                 </g>
               );
             })}
@@ -542,7 +463,7 @@ export default function QuranNetwork() {
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
-                  {Q[hovNode.verseKey] && <span style={{ fontSize: 9, color: "#a78bfa" }}>📜 {Q[hovNode.verseKey].length}</span>}
+                  {qiraatDiffs[hovNode.verseKey] && <span style={{ fontSize: 9, color: "#a78bfa" }}>📜 {qiraatDiffs[hovNode.verseKey].length}</span>}
                 </div>
                 <div style={{ fontSize: 15, lineHeight: 2, color: T.text }}>
                   <HighlightedAyah text={hovNode.text} primaryWord={getConnWord(hovNode)} sharedWords={hovNode.sharedWords || []} searchMode={searchMode} theme={theme}
@@ -598,7 +519,7 @@ export default function QuranNetwork() {
                     {selNode.sharedWords.map((w, i) => <span key={i} style={{ fontSize: 11, color: "#fcd34d", background: "#fcc41922", padding: "1px 7px", borderRadius: 5, border: "1px solid #fcc41933" }}>{w}</span>)}
                   </div>
                 )}
-                {selNode.verseKey && Q[selNode.verseKey] && <QiraatPanel verseKey={selNode.verseKey} theme={theme} />}
+                {selNode.verseKey && qiraatDiffs[selNode.verseKey] && <QiraatPanel qiraatDiffs={qiraatDiffs} verseKey={selNode.verseKey} theme={theme} />}
               </>
             ) : null}
           </div>

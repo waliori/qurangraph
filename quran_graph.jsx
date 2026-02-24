@@ -1,31 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-
-const STOP = new Set('في,من,على,الى,عن,ان,لا,ما,هو,لم,قد,بل,ثم,او,كل,هم,هن,هي,نحن,الذي,الذين,التي,ذلك,هذا,هذه,تلك,الا,اذا,اذ,حتى,لن,لو,مع,بين,عند,فيه,فيها,منه,منها,عليه,عليها,اليه,اليها,به,بها,له,لها,لهم,لكم,لنا,بكم,منكم,عليكم,فيهم,منهم,عليهم,وما,فما,بما,مما,عما,كما,لما,فلا,ولا,يا,قل,قالوا,قال,كان,كانوا,كانت,ايها,انه,انها,انا,لك,ذا,تلك,اولئك,هولاء,نعم,كيف,اين,متى,لماذا,هل,الله,رب,ربك,ربكم,ربه,ربهم'.split(','));
-
-function norm(w) {
-  return w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u08D4-\u08E1\u08F0-\u08F2\u0617-\u061A\u06E2-\u06E6\u06E8\u06EA-\u06EC]/g,'')
-    .replace(/\u0640/g,'').replace(/[\u0671\u0622\u0623\u0625]/g,'\u0627')
-    .replace(/\u0629/g,'\u0647').replace(/\u0649/g,'\u064A')
-    .replace(/\u0624/g,'\u0648').replace(/\u0626/g,'\u064A')
-    .replace(/[^\u0621-\u064A]/g,'').trim();
-}
-
-function extractRoot(w) {
-  let r = norm(w);
-  // Strip common prefixes
-  if (r.startsWith('وال')) r = r.slice(3);
-  else if (r.startsWith('فال')) r = r.slice(3);
-  else if (r.startsWith('بال')) r = r.slice(3);
-  else if (r.startsWith('كال')) r = r.slice(3);
-  else if (r.startsWith('لل')) r = r.slice(2);
-  else if (r.startsWith('ال')) r = r.slice(2);
-  else if (r.startsWith('و') || r.startsWith('ف') || r.startsWith('ب') || r.startsWith('ل') || r.startsWith('ك') || r.startsWith('س')) r = r.slice(1);
-  // Strip common suffixes
-  if (r.endsWith('ون') || r.endsWith('ين') || r.endsWith('ان') || r.endsWith('ات') || r.endsWith('وا') || r.endsWith('تم') || r.endsWith('نا') || r.endsWith('ها') || r.endsWith('هم') || r.endsWith('كم')) r = r.slice(0,-2);
-  else if (r.endsWith('ه') || r.endsWith('ي') || r.endsWith('ت') || r.endsWith('ا') || r.endsWith('و') || r.endsWith('ن')) r = r.slice(0,-1);
-  if (r.length < 2) r = norm(w);
-  return r;
-}
+import { norm, extractRoot, STOP } from "./src/arabic-utils.js";
+import { loadHafsData } from "./src/data-loader.js";
 
 function tokenize(text) {
   return text.split(/\s+/).filter(w => w.length > 0).map(w => {
@@ -52,8 +27,7 @@ export default function App() {
   const ref = useRef();
 
   useEffect(() => {
-    fetch("https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json")
-      .then(r => r.json()).then(d => { setData(d); setLoading(false); })
+    loadHafsData().then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
