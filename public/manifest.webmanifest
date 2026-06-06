@@ -1,0 +1,16 @@
+{
+  "name": "آيات.network — شبكة الكلمات القرآنية",
+  "short_name": "آيات.network",
+  "description": "مستكشف تفاعلي لشبكة الكلمات والجذور والصيغ في القرآن الكريم.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070a12",
+  "theme_color": "#070a12",
+  "icons": [
+    { "src": "logomark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -13,7 +13,8 @@
     "data:download": "node scripts/download-data.js",
     "data:transform": "node scripts/transform-data.js",
     "data:roots": "node scripts/build-roots.js",
-    "data:build": "npm run data:download && npm run data:transform && npm run data:roots"
+    "data:lexicons": "node scripts/build-lexicons.js",
+    "data:build": "npm run data:download && npm run data:transform && npm run data:roots && npm run data:lexicons"
   },
   "dependencies": {
     "react": "^19.1.0",

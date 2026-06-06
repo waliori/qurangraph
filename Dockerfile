@@ -27,6 +27,7 @@ RUN if [ ! -s data/source/maqayis.txt ] || [ ! -s data/source/quran-morphology.t
     fi \
  && npm run data:transform \
  && npm run data:roots \
+ && npm run data:lexicons \
  && npm run build
 
 # ── Stage 2: static runtime ────────────────────────────────────────────────

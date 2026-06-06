@@ -8,7 +8,7 @@ import react from '@vitejs/plugin-react'
 // hence connect-src 'self' and style-src 'unsafe-inline'. The Arabic/Qur'an
 // faces come from Google Fonts, so its stylesheet host (fonts.googleapis.com)
 // and font host (fonts.gstatic.com) are allowed for style-src / font-src.
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; base-uri 'self'; object-src 'none'"
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'"
 
 function cspPlugin() {
   return {

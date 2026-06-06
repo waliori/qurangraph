@@ -2,9 +2,26 @@
 
 An interactive force-directed graph of the Qur'an. Pick a verse and it becomes
 the centre of a network; expand its words to discover every other verse that
-shares the same word — or the same triliteral **root** — and keep expanding
-outward. In root mode each root also shows its core meaning from Ibn Fāris's
-*Maqāyīs al-Lugha*. Pan, zoom, drag nodes, switch light/dark, all in the browser.
+shares the same word, the same **lemma** (صيغة), or the same triliteral **root** —
+and keep expanding outward. A pure Qur'an↔Qur'an + Arabic-language research tool:
+all links are *lexical* (shared surface form / lemma / root); there is no
+interpretive verse-to-verse cross-referencing and no translation layer.
+
+**Features**
+
+- **Three grouping modes** — exact surface form · lemma · root — plus a **matching
+  precision** toggle (loose folds آية/اية; strict keeps them distinct).
+- **Morphology**, from the Quranic Arabic Corpus: filter the graph by part of
+  speech / Form (وزن) / aspect / voice, and read a word's full morphology
+  (root, lemma, form, tense, voice, mood, person/gender/number/case) in the inspector.
+- **Multiple Arabic lexicons** — Maqāyīs (Ibn Fāris), Mufradāt (al-Rāghib),
+  Lisān al-ʿArab (Ibn Manẓūr) — swappable per word; each labelled as one source.
+- **Rarity-weighted edges** (rarer shared word = stronger signal) + a "rare links
+  only" filter; an **editable stop-word layer** (particles vs. content words).
+- **Distribution-by-sūrah** and within-verse **collocation** views; **CSV** export.
+- **Shareable URL state** (deep-link any graph), **PNG/SVG export**, and an
+  installable **PWA** (works offline after first load).
+- Pan, zoom, drag nodes, switch light/dark — all in the browser.
 
 ## Quran text & reading
 
@@ -32,23 +49,28 @@ npm test           # unit tests (vitest)
 ## Data pipeline
 
 Everything the app needs at runtime is committed under `public/data/`:
-`quran-hafs.json` (text), `roots.json` (word→root), `root-meanings.json`
-(root→meaning). To regenerate from source:
+`quran-hafs.json` (text), `roots.json` (word→root), `lemmas.json` (word→lemma),
+`morphology.json` (columnar per-token morphology), and `lexicons/` (per-lexicon
+root→meaning files + an `index.json` manifest). To regenerate from source:
 
 ```bash
-npm run data:download   # fetch Tanzil XML + morphology + Maqayis → data/source/
+npm run data:download   # fetch Tanzil + morphology + Maqayis + Mufradat + Lisan → data/source/
 npm run data:transform  # XML → public/data/quran-hafs.json
-npm run data:roots      # morphology + Maqayis → roots.json + root-meanings.json
-# or all three in order:
+npm run data:roots      # morphology → roots.json + lemmas.json + morphology.json
+npm run data:lexicons   # dictionaries → public/data/lexicons/*.json (+ index.json)
+# or all of them in order:
 npm run data:build
 ```
 
-`roots.json` is built by aligning the per-word **Quranic Arabic Corpus**
-morphology onto the Tanzil tokens (position-first, normalised-surface
-fallback). `root-meanings.json` extracts each root's opening sense from
-**Maqāyīs al-Lugha**. The builder prints coverage (≈65 % of all tokens carry a
-root — the rest are particles/proper nouns with none; ≈92 % of the Quran's
-~1,650 roots are matched to a Maqāyīs entry).
+`roots.json` / `lemmas.json` are built by aligning the per-word **Quranic Arabic
+Corpus** morphology onto the Tanzil tokens (position-first, normalised-surface
+fallback) and majority-voting per surface form. `morphology.json` keeps the full
+per-token analysis (POS, lemma, Form, aspect, voice, mood, agreement, case),
+dictionary-coded and verse-keyed to stay small. Each lexicon under `lexicons/`
+extracts root→meaning from its source and aligns to the Qur'an's roots. Coverage
+(printed by the builders): ≈65 % of tokens carry a root and ≈96 % a lemma (the
+rest are particles/proper nouns); roots matched to a lexicon ≈92 % (Maqāyīs),
+≈91 % (Lisān), ≈83 % (Mufradāt, Qur'an-scoped).
 
 ## Architecture
 
@@ -81,19 +103,25 @@ scripts/                   data download / transform / root build (Node)
   Arabic Corpus) maps each normalised word form to its authoritative root;
   `rootOf()` / `rootKey()` are pure lookups. Tokens with no root (particles,
   proper nouns) are shown but left **ungrouped** in root mode.
-- Each root carries its **Ibn Fāris meaning** from `root-meanings.json` (concise
-  sense + expandable full paragraph), shown in the word panel.
+- **Lemmas & morphology are precomputed too** — `lemmas.json` maps each form to
+  its lemma (lemma mode groups inflections of one lemma but keeps distinct
+  derivations of a shared root apart); `morphology.json` holds the per-token
+  analysis the inspector displays and the morphology filter queries.
+- Each root carries a **lexicon meaning** from the active dictionary under
+  `lexicons/` (Maqāyīs / Mufradāt / Lisān), concise + expandable, shown and
+  switchable in the word panel — each labelled as one language reference.
 - Child verses for an expanded word are **ranked by how many words they share
   with the centre verse** (most-related first), then capped at the "per word"
-  slider value.
+  slider value. Edges are coloured by the connecting word's rarity.
 
 ## Sources & licences
 
 - **Text** — Tanzil Uthmani (Ḥafṣ). Tanzil terms (free, non-commercial).
-- **Roots** — [Quranic Arabic Corpus](https://corpus.quran.com) morphology
-  (Arabic-script mirror `mustafa0x/quran-morphology`). GNU GPL.
-- **Meanings** — *Muʿjam Maqāyīs al-Lugha*, Ibn Fāris (d. 395 AH); public-domain
-  text via the [OpenITI](https://github.com/OpenITI) digitisation (CC-BY-SA).
+- **Roots / lemmas / morphology** — [Quranic Arabic Corpus](https://corpus.quran.com)
+  morphology (Arabic-script mirror `mustafa0x/quran-morphology`). GNU GPL.
+- **Lexicons** ([OpenITI](https://github.com/OpenITI) digitisations, CC-BY-SA):
+  *Muʿjam Maqāyīs al-Lugha*, Ibn Fāris (d. 395 AH); *Mufradāt fī Gharīb al-Qurʾān*,
+  al-Rāghib al-Iṣfahānī (d. 502 AH); *Lisān al-ʿArab*, Ibn Manẓūr (d. 711 AH).
 
 ## Interaction
 
