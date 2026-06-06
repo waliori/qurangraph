@@ -63,6 +63,18 @@ export default function QuranGraph() {
   const [panStart, setPanStart] = useState(null);
   const [positions, setPositions] = useState({});
   const positionsRef = useRef(positions);
+  const pendingPosRef = useRef(null); // shared node positions to apply on next structural build
+  const graphNodesRef = useRef([]);   // latest node set, for position snapshots off the render path
+  // Flat [x0,y0,…] of live node positions in sorted-node-id order — so a share link
+  // can reproduce the exact arrangement. Capped to keep the URL sane on huge graphs.
+  const posSnapshot = useCallback(() => {
+    const nodes = graphNodesRef.current;
+    if (!nodes.length || nodes.length > 600) return null;
+    const ids = nodes.map((n) => n.id).sort();
+    const live = positionsRef.current, out = [];
+    for (const id of ids) { const p = live[id]; out.push(p ? Math.round(p.x) : 0, p ? Math.round(p.y) : 0); }
+    return out;
+  }, []);
   const [dragId, setDragId] = useState(null);
   const dragStartRef = useRef(null);
   const draggedRef = useRef(false); // true once a press turns into a real drag
@@ -177,6 +189,7 @@ export default function QuranGraph() {
   // hydration and session load). Replaces the whole interactive state.
   const applyState = useCallback((u) => {
     if (!u) return;
+    pendingPosRef.current = u.pos || null; // applied (and pinned) by the structure effect
     if (u.surah) setSurah(u.surah);
     if (u.ayah) setAyah(u.ayah);
     setSearchMode(u.mode); setPrecision(u.precision); setTheme(u.theme);
@@ -206,10 +219,12 @@ export default function QuranGraph() {
   const urlSnapshot = { surah, ayah, mode: searchMode, precision, activeLexicon, theme, maxBranch, hideStop, showLoops, rareOnly, expandedWords, expandedVerses, selected, transform, morphFilter, stopExtra, stopDisabled };
   useEffect(() => {
     if (!hydrated) return;
-    const id = setTimeout(() => writeUrlState(urlSnapshot), 300);
+    const id = setTimeout(() => writeUrlState({ ...urlSnapshot, pos: posSnapshot() }), 350);
     return () => clearTimeout(id);
+    // `positions` is included so the URL re-captures the SETTLED layout (it commits
+    // only when the simulation comes to rest) — not the transient mid-animation one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, surah, ayah, searchMode, precision, activeLexicon, theme, maxBranch, hideStop, showLoops, rareOnly, expandedWords, expandedVerses, selected, transform, morphFilter, stopExtra, stopDisabled]);
+  }, [hydrated, surah, ayah, searchMode, precision, activeLexicon, theme, maxBranch, hideStop, showLoops, rareOnly, expandedWords, expandedVerses, selected, transform, morphFilter, stopExtra, stopDisabled, positions]);
 
   // ── Undo / redo of exploration (expand/collapse · select · navigate centre) ──
   // Records discrete steps in these fields only — not pan/zoom or hover.
@@ -416,39 +431,73 @@ export default function QuranGraph() {
   // a ref keeps this off the per-frame render path (it must not re-run as the sim
   // ticks positions in).
   useLayoutEffect(() => {
+    graphNodesRef.current = graphNodes;
     const pos = positionsRef.current;
     const parentOf = {};
     for (const l of graphLinks) if (parentOf[l.target] === undefined) parentOf[l.target] = l.source;
     const missing = graphNodes.filter((n) => !n.fixed && !pos[n.id]);
     const missingByParent = {};
     for (const n of missing) (missingByParent[parentOf[n.id]] ||= []).push(n.id);
+    const C = { x: VW / 2, y: VH / 2 };
+    const centerId = "v:" + currentKey;
+    // Seed a new node near its parent. The centre's own words ring it (full circle);
+    // a word's verse-fan blooms OUTWARD — away from the centre, into open space — so
+    // expansions don't pile on top of existing clusters.
     const seedAround = (n) => {
-      const pp = pos[parentOf[n.id]];
+      const par = parentOf[n.id];
+      const pp = pos[par];
       if (!pp) return { x: n.x, y: n.y };
-      const sibs = missingByParent[parentOf[n.id]];
-      const idx = Math.max(0, sibs.indexOf(n.id));
-      const ang = idx * 2.399963; // golden angle → even angular spread
-      // Phyllotaxis (sunflower) seed: radius grows with √idx so siblings fill a
-      // uniform-density DISK around the parent, not one overcrowded ring.
-      const rad = 110 + 36 * Math.sqrt(idx + 0.5);
-      return { x: pp.x + Math.cos(ang) * rad, y: pp.y + Math.sin(ang) * rad };
+      const sibs = missingByParent[par] || [n.id];
+      const idx = Math.max(0, sibs.indexOf(n.id)), k = sibs.length;
+      if (par === centerId) {
+        const ang = idx * 2.399963; // golden angle around the centre
+        const rad = 110 + 36 * Math.sqrt(idx + 0.5);
+        return { x: pp.x + Math.cos(ang) * rad, y: pp.y + Math.sin(ang) * rad };
+      }
+      const outward = Math.atan2(pp.y - C.y, pp.x - C.x) || idx * 2.399963;
+      const spread = Math.min(Math.PI * 1.4, 0.6 + k * 0.16);
+      const t = k > 1 ? idx / (k - 1) - 0.5 : 0;
+      const rad = 90 + 30 * Math.sqrt(idx + 0.5);
+      return { x: pp.x + Math.cos(outward + t * spread) * rad, y: pp.y + Math.sin(outward + t * spread) * rad };
     };
+
+    const pend = pendingPosRef.current;
+    let pendMap = null;
+    if (pend && pend.length) {
+      // Reproduce a shared arrangement: place every node at its saved position
+      // (sorted-node-id order) — fall back to the seed for any node not covered.
+      const ids = graphNodes.map((n) => n.id).sort();
+      const at = new Map(ids.map((id, i) => [id, i]));
+      pendMap = {};
+      for (const n of graphNodes) {
+        if (n.fixed) continue;
+        const i = at.get(n.id), x = pend[2 * i], y = pend[2 * i + 1];
+        if (Number.isFinite(x) && Number.isFinite(y)) pendMap[n.id] = { x, y };
+      }
+    }
     const seeded = graphNodes.map((n) => {
+      if (pendMap && pendMap[n.id]) return { ...n, ...pendMap[n.id] };
       const s = pos[n.id];
       if (s) return { ...n, x: s.x, y: s.y };
       if (n.fixed) return n;
-      const sd = seedAround(n);
-      return { ...n, x: sd.x, y: sd.y };
+      return { ...n, ...seedAround(n) };
     });
     sim.sync(seeded, graphLinks);
-    // Paint the seeded layout (incl. brand-new nodes around their parent) before the
-    // browser paints, so a freshly-expanded fan never flashes at its build-time seed.
+    if (pendMap) sim.place(pendMap); // force EXISTING bodies too (sync keeps their old spot)
+    // Paint the seeded layout before the browser paints (no flash at build-time seeds).
     const p = sim.getPositions();
     positionsRef.current = p;
     applyPositions(registry, p);
-    sim.reheat(missing.length ? 1 : 0.45);
+    if (pendMap) {
+      // Pin the restored layout so it matches the source; the user can drag or reset.
+      for (const n of graphNodes) if (!n.fixed) sim.stick(n.id);
+      pendingPosRef.current = null;
+      sim.reheat(0.04);
+    } else {
+      sim.reheat(missing.length ? 1 : 0.45);
+    }
     runSim();
-  }, [graphNodes, graphLinks, runSim, sim, registry]);
+  }, [graphNodes, graphLinks, currentKey, runSim, sim, registry]);
 
   const nmap = useMemo(() => { const m = {}; graphNodes.forEach((n) => (m[n.id] = n)); return m; }, [graphNodes]);
   // The per-word branch slider caps how many āyāt each word fans out to. Rather
@@ -545,7 +594,7 @@ export default function QuranGraph() {
 
   // Write current state to the URL and copy the deep-link to the clipboard.
   const copyLink = () => {
-    const href = writeUrlState(urlSnapshot);
+    const href = writeUrlState({ ...urlSnapshot, pos: posSnapshot() });
     const flash = () => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500); };
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(href).then(flash).catch(flash);
     else flash();

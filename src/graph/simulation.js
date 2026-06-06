@@ -62,6 +62,9 @@ export function createSimulation(W = 1600, H = 1100) {
   }
 
   function reheat(a = 1) { if (a > alpha) alpha = a; }
+  // Force bodies (existing AND new) to explicit positions — used to restore a shared
+  // arrangement, where sync() alone would leave already-placed nodes where they are.
+  function place(map2) { for (const b of bodies) { const p = map2[b.id]; if (p && Number.isFinite(p.x)) { b.x = p.x; b.y = p.y; b.vx = 0; b.vy = 0; } } }
   function setSelected(id, set) { selectedId = id || null; gather = set || new Set(); }
   function pin(id, x, y) { const b = map[id]; if (b) { b.pinned = true; b.x = x; b.y = y; b.vx = 0; b.vy = 0; } }
   function unpin(id) { const b = map[id]; if (b) b.pinned = false; }
@@ -168,7 +171,7 @@ export function createSimulation(W = 1600, H = 1100) {
   }
 
   return {
-    sync, reheat, setSelected, pin, unpin, stick, clearSticky, step, getPositions,
+    sync, reheat, place, setSelected, pin, unpin, stick, clearSticky, step, getPositions,
     get alpha() { return alpha; },
   };
 }

@@ -33,6 +33,9 @@ export function encodeState(s) {
   if (s.morphFilter && (s.morphFilter.pos?.length || s.morphFilter.form?.length || s.morphFilter.aspect?.length || s.morphFilter.voice?.length)) o.mf = s.morphFilter;
   const sx = arr(s.stopExtra); if (sx.length) o.sx = sx.sort();
   const sd = arr(s.stopDisabled); if (sd.length) o.sd = sd.sort();
+  // Node positions (flat [x0,y0,x1,y1,…] in sorted-node-id order) so a shared graph
+  // reproduces the exact arrangement, not just which nodes are expanded.
+  if (Array.isArray(s.pos) && s.pos.length) o.pp = s.pos;
   return encodeURIComponent(JSON.stringify(o));
 }
 
@@ -59,6 +62,7 @@ export function decodeState(str) {
   out.morphFilter = o.mf && typeof o.mf === "object" ? o.mf : null;
   out.stopExtra = Array.isArray(o.sx) ? o.sx : [];
   out.stopDisabled = Array.isArray(o.sd) ? o.sd : [];
+  out.pos = Array.isArray(o.pp) ? o.pp : null;
   return out;
 }
 
