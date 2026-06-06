@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { norm } from "../arabic-utils.js";
+import { fColor, dColor } from "../theme.js";
 
 /* ═══ Memoized SVG graph render ═══
  *
@@ -17,6 +18,16 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   const isVE = n.type === "verse" && n.isExpanded;
   const clickable = n.type !== "center";
 
+  // Recompute the node colour per render so a theme switch instantly recolours the
+  // graph (the colour baked at build time is for one theme only). Light mode swaps
+  // in deeper, saturated tones that hold up on the parchment field.
+  const L = theme === "light";
+  const col = n.type === "word" ? fColor(n.count, theme) : n.type === "verse" ? dColor(n.depth, theme) : (L ? "#a16207" : n.color);
+  const cGold = L ? "#b45309" : "#fcd34d"; // active-word accent
+  const cVir = L ? "#0f766e" : "#34d8a8";  // expanded word
+  const cPur = L ? "#6d28d9" : "#a78bfa";  // expanded verse
+  const sel = L ? "#2a2620" : "#fff";      // selected / hovered outline
+
   return (
     <g data-node={n.id} style={{ cursor: "pointer", opacity, transition: "opacity 0.25s" }}
       role={clickable ? "button" : undefined}
@@ -27,27 +38,27 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
       onClick={(e) => onClick(n, e)}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } } : undefined}>
 
-      {(isWE || isVE) && <circle cx={x} cy={y} r={r + 7} fill="none" stroke={isWE ? "#34d8a8" : "#a78bfa"} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
-      {(isS || isAW) && <circle cx={x} cy={y} r={r + 10} fill="none" stroke={isAW ? "#fcd34d" : n.color} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
+      {(isWE || isVE) && <circle cx={x} cy={y} r={r + 7} fill="none" stroke={isWE ? cVir : cPur} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
+      {(isS || isAW) && <circle cx={x} cy={y} r={r + 10} fill="none" stroke={isAW ? cGold : col} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
 
       <circle cx={x} cy={y} r={r}
-        fill={isAW ? "#fcd34d44" : isWE ? "#34d8a833" : isVE ? "#a78bfa33" : n.color + T.nodeFill}
-        stroke={isS ? (theme === "light" ? "#2a2620" : "#fff") : isAW ? "#fcd34d" : isWE ? "#34d8a8" : isVE ? "#a78bfa" : isH ? (theme === "light" ? "#2a2620" : "#fff") : n.color}
+        fill={isAW ? cGold + "44" : isWE ? cVir + "33" : isVE ? cPur + "33" : col + T.nodeFill}
+        stroke={isS ? sel : isAW ? cGold : isWE ? cVir : isVE ? cPur : isH ? sel : col}
         strokeWidth={n.type === "center" ? 3 : isH || isS || isAW ? 2.5 : isWE || isVE ? 2 : n.type === "word" ? 1.8 : 1} />
 
-      {n.type === "word" && <text x={x} y={y + 3.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill={theme === "light" ? "#2a2620" : "#fff"} style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.count || ""}</text>}
-      {n.type === "verse" && (n.sharedCount || 0) > 1 && <text x={x} y={y + 3} textAnchor="middle" fontSize={7} fill="#fcd34d" fontWeight="bold" style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.sharedCount}</text>}
+      {n.type === "word" && <text x={x} y={y + 3.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill={L ? "#2a2620" : "#fff"} style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.count || ""}</text>}
+      {n.type === "verse" && (n.sharedCount || 0) > 1 && <text x={x} y={y + 3} textAnchor="middle" fontSize={7} fill={cGold} fontWeight="bold" style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.sharedCount}</text>}
 
       <text x={x} y={n.type === "word" ? y - r - 4 : y + r + 11}
         textAnchor="middle" fontSize={n.type === "center" ? 12 : n.type === "word" ? 12 : 8}
-        fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? (theme === "light" ? "#2a2620" : "#fff") : n.type === "verse" ? T.textDim : n.color}
+        fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? sel : n.type === "verse" ? T.textDim : col}
         direction="rtl" style={{ pointerEvents: "none", fontFamily: n.type === "verse" ? "var(--font-display)" : "var(--font-quran)" }}>{n.label}</text>
 
       {n.type === "word" && n.rootLabel && n.rootLabel !== norm(n.label) && (
-        <text x={x} y={y - r - 15} textAnchor="middle" fontSize={8} fill="#34d8a8" opacity={0.75} direction="rtl" style={{ pointerEvents: "none", fontFamily: "var(--font-ui)" }}>({n.rootLabel})</text>
+        <text x={x} y={y - r - 15} textAnchor="middle" fontSize={8} fill={cVir} opacity={L ? 0.95 : 0.75} direction="rtl" style={{ pointerEvents: "none", fontFamily: "var(--font-ui)" }}>({n.rootLabel})</text>
       )}
       {n.type === "word" && !isWE && n.count > 1 && <text x={x + r + 3} y={y + 3} fontSize={10} fill={T.textFaint} style={{ pointerEvents: "none" }}>+</text>}
-      {isWE && <circle cx={x + r - 1} cy={y - r + 1} r={5} fill="#34d8a8" stroke={T.bg} strokeWidth={1.5} />}
+      {isWE && <circle cx={x + r - 1} cy={y - r + 1} r={5} fill={cVir} stroke={T.bg} strokeWidth={1.5} />}
     </g>
   );
 });

@@ -72,13 +72,15 @@
 
 /* ── Light mode: a warm parchment manuscript ── */
 [data-theme="light"] {
-  --canvas:   #f5f1e6;
-  --ink-900:  #fffdf6;
-  --ink-850:  #fbf7ec;
-  --ink-800:  #f1ebd9;
-  --ink-700:  #e8e0cb;
-  --ink-600:  #ded3b8;
-  --ink-400:  #b7a983;
+  /* The stage canvas is a deeper parchment than the panels, so jewel-tone nodes
+     and dark text read with real contrast instead of washing out on near-white. */
+  --canvas:   #e3d9bf;
+  --ink-900:  #fbf7ec;
+  --ink-850:  #f5efdf;
+  --ink-800:  #ece4cd;
+  --ink-700:  #e2d8bd;
+  --ink-600:  #d6c9a8;
+  --ink-400:  #b1a37c;
 
   --text-strong: #2a2620;
   --text-body:   #463f33;

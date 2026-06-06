@@ -666,7 +666,7 @@ export default function QuranGraph() {
                   <div className="ag-tip-word">{hovNode.label}</div>
                   <div className="ag-tip-meta">
                     {hovNode.rootLabel && <span className="ag-tag" style={{ background: "color-mix(in oklab, var(--viridian-500) 14%, transparent)", color: "var(--viridian-400)", borderColor: "color-mix(in oklab, var(--viridian-500) 30%, transparent)" }}>جذر {hovNode.rootLabel}</span>}
-                    <span className="ag-tag" style={{ color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", borderColor: fColor(hovNode.count) + "44" }}>{hovNode.count} آية</span>
+                    <span className="ag-tag" style={{ color: fColor(hovNode.count, theme), background: fColor(hovNode.count, theme) + "22", borderColor: fColor(hovNode.count, theme) + "44" }}>{hovNode.count} آية</span>
                   </div>
                   {hovNode.root && meanings?.[hovNode.root] && <div className="ag-tip-mean">{meanings[hovNode.root].c}</div>}
                 </div>
@@ -722,7 +722,7 @@ export default function QuranGraph() {
                 </div>
                 <div className="ag-insp-scroll">
                   <div className="ag-insp-stat">
-                    <span className="ag-insp-num" style={{ color: fColor(selNode.count) }}>{selNode.count}</span>
+                    <span className="ag-insp-num" style={{ color: fColor(selNode.count, theme) }}>{selNode.count}</span>
                     <span className="ag-insp-cap">آية وردت فيها</span>
                   </div>
                   {selNode.count > 1 && (
