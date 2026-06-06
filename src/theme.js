@@ -33,3 +33,18 @@ export function dColor(d, theme = "dark") {
   const DC = theme === "light" ? DC_LIGHT : DC_DARK;
   return DC[Math.min(d, DC.length - 1)];
 }
+
+/* ═══ Edge rarity ═══
+ *
+ * A verse-to-verse link is stronger Qur'an-internal signal the RARER the word it
+ * runs through: two āyāt sharing a hapax say far more than two sharing اللّٰه. The
+ * connecting word's `count` (verses it occurs in) → a weight in ~(0.1, 0.63] via
+ * 1/log2(count+2); these scales render that weight as colour + stroke width, on a
+ * deliberately different ramp from fColor so it reads as "signal strength", not
+ * frequency. Higher weight = rarer = brighter & thicker. */
+export function rarityWeight(count) { return 1 / Math.log2((count || 1) + 2); }
+const E_DARK = ["#3a4a6a", "#6aa8ff", "#34d8a8", "#fcd34d"]; // common → rare (faint → bright)
+const E_LIGHT = ["#b8ac8a", "#1d4ed8", "#0f766e", "#b45309"];
+function eBucket(w) { if (w < 0.18) return 0; if (w < 0.28) return 1; if (w < 0.45) return 2; return 3; }
+export function eColor(weight, theme = "dark") { return (theme === "light" ? E_LIGHT : E_DARK)[eBucket(weight || 0)]; }
+export function eWidth(weight) { return 0.5 + Math.min(1, (weight || 0) * 1.6) * 2; }

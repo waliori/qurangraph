@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLazyGraph, getDescendants, getPathToCenter } from "./buildGraph.js";
-import { setRootMap } from "../arabic-utils.js";
+import { setRootMap, setLemmaMap } from "../arabic-utils.js";
 
 function word(s) { return { orig: s, norm: s }; }
 
@@ -72,6 +72,58 @@ describe("root mode (precomputed roots)", () => {
     expect(rabs.rootLabel).toBe("ربص");   // real root → labelled
     expect(fi.rootLabel).toBe(null);       // no root → ungrouped, no label
     setRootMap(null);
+  });
+});
+
+describe("lemma mode (precomputed lemmas)", () => {
+  const vd = {
+    "1:1": { text: "استغفر يستغفر غفور", s: 1, a: 1, sn: "س", words: [word("استغفر"), word("يستغفر"), word("غفور")] },
+  };
+  const l2v = { "استغفر": ["1:1"], "غفور": ["1:1"] };
+
+  it("collapses inflections of one lemma but keeps distinct lemmas of a shared root apart", () => {
+    // استغفر/يستغفر share lemma استغفر; غفور is a different lemma (same root غفر).
+    setLemmaMap({ "استغفر": "استغفر", "يستغفر": "استغفر", "غفور": "غفور" });
+    const { nodes } = buildLazyGraph("1:1", vd, l2v, l2v, new Set(), new Set(), false, 10, "lemma", 800, 600, { l2v });
+    const lookups = nodes.filter((n) => n.type === "word").map((n) => n.lookup).sort();
+    expect(lookups).toEqual(["استغفر", "غفور"]); // two forms of one lemma collapsed
+    setLemmaMap(null);
+  });
+});
+
+describe("morphology filter", () => {
+  const vd = {
+    "1:1": { text: "alpha beta", s: 1, a: 1, sn: "س", words: [word("alpha"), word("beta")] },
+  };
+  const w2v = { alpha: ["1:1"], beta: ["1:1"] };
+  // Tuple fields: [pos,vf,aspect,voice,mood,person,gender,number,gcase,lemma,root,precise]
+  const M = {
+    legend: { pos: ["", "noun", "verb"], aspect: ["", "perf", "impf"], voice: ["", "act", "pass"], mood: [""], gender: [""], number: [""], gcase: [""] },
+    lemmas: [""], roots: [""],
+    v: { "1:1": [[2, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]] },
+  };
+
+  it("drops words whose morphology fails an active filter", () => {
+    const { nodes } = buildLazyGraph("1:1", vd, w2v, w2v, new Set(), new Set(), false, 10, "exact", 800, 600, { M, morphFilter: { pos: ["verb"], form: [], aspect: [], voice: [] } });
+    const words = nodes.filter((n) => n.type === "word").map((n) => n.lookup);
+    expect(words).toEqual(["alpha"]); // only the verb survives a verb-only filter
+  });
+
+  it("shows all words when no filter is active", () => {
+    const { nodes } = buildLazyGraph("1:1", vd, w2v, w2v, new Set(), new Set(), false, 10, "exact", 800, 600, { M, morphFilter: { pos: [], form: [], aspect: [], voice: [] } });
+    expect(nodes.filter((n) => n.type === "word").length).toBe(2);
+  });
+});
+
+describe("rarity edge weighting", () => {
+  it("assigns a higher weight to links through a rarer connecting word", () => {
+    // رب is in 3 verses (common), لله in 1 (rare). Expanding each, the link from
+    // the rarer word must carry the larger weight.
+    const g1 = buildLazyGraph("1:1", verseData, w2v, r2v, new Set(["رب@1:1"]), new Set(), false, 10, "exact");
+    const g2 = buildLazyGraph("1:1", verseData, w2v, r2v, new Set(["الحمد@1:1"]), new Set(), false, 10, "exact");
+    const wRib = g1.links.find((l) => l.source === "w:رب@1:1" && l.weight != null).weight;     // count 3
+    const wHamd = g2.links.find((l) => l.source === "w:الحمد@1:1" && l.weight != null).weight;  // count 2
+    expect(wHamd).toBeGreaterThan(wRib); // rarer (fewer verses) → stronger signal
   });
 });
 

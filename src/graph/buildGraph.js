@@ -1,17 +1,36 @@
-import { rootKey, rootOf, STOP } from "../arabic-utils.js";
-import { fColor, dColor } from "../theme.js";
+import { rootOf, lemmaOf, groupKey, STOP } from "../arabic-utils.js";
+import { decodeMorph, passesMorphFilter, morphFilterActive } from "../morphology.js";
+import { fColor, dColor, rarityWeight } from "../theme.js";
 
-/* Unique, non-stop words of a verse, keyed by exact-norm or root. */
-export function getUW(v, hideStop, mode) {
+/* Unique, non-stop words of a verse, keyed by the active mode (exact|lemma|root).
+ * `opts.morphRows` (a verse's morphology tuple array, index-aligned to v.words) +
+ * `opts.M` + `opts.morphFilter` optionally drop words failing the morphology
+ * filter. Each returned word carries its original index `idx` in v.words so the
+ * inspector can look up its per-token morphology. */
+export function getUW(v, hideStop, mode, opts = {}) {
+  const { morphRows, M, morphFilter, stopSet } = opts;
+  const stop = stopSet || STOP;
+  // An explicit stopSet (composed by the app from the user's edits) ALWAYS applies,
+  // so hiding/adding a word takes effect regardless of the master "hide particles"
+  // toggle. Without one (tests), fall back to honouring hideStop over module STOP.
+  const applyStop = stopSet ? true : hideStop;
+  const filtering = M && morphFilterActive(morphFilter);
   const seen = new Set();
-  return v.words
-    .filter((w) => {
-      const key = mode === "root" ? rootKey(w.norm) : w.norm;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return !(hideStop && STOP.has(w.norm));
-    })
-    .map((w) => ({ ...w, lookup: mode === "root" ? rootKey(w.norm) : w.norm }));
+  const out = [];
+  v.words.forEach((w, idx) => {
+    if (filtering && !passesMorphFilter(morphRows ? decodeMorph(morphRows[idx], M) : null, morphFilter)) return;
+    // Exact mode keys on the precision-aware surface form (w.exact); root/lemma on
+    // the precomputed maps. w.exact falls back to w.norm for callers/tests that omit it.
+    const key = mode === "exact" ? (w.exact ?? w.norm) : groupKey(w.norm, mode);
+    // Hide if the word's surface form OR its grouping key is in the stop set — so a
+    // hidden word works whether you typed the surface form or (in root/lemma mode)
+    // the node's root/lemma key.
+    if (applyStop && (stop.has(w.norm) || stop.has(key))) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ ...w, idx, lookup: key });
+  });
+  return out;
 }
 
 /* source → [targets] adjacency map. Build once per graph and reuse across the
@@ -46,9 +65,11 @@ export function getPathToCenter(nid, parentMap) {
   return path;
 }
 
-/* The `lookup` key (exact norm or root) for a word, per search mode. */
-function lookupOf(wordNorm, mode) {
-  return mode === "root" ? rootKey(wordNorm) : wordNorm;
+/* The `lookup` key for a word object, per search mode. Exact mode uses the
+ * precision-aware surface form (w.exact, falling back to w.norm); lemma/root use
+ * the precomputed maps. Takes the word OBJECT so it can read w.exact. */
+function wordKey(w, mode) {
+  return mode === "exact" ? (w.exact ?? w.norm) : groupKey(w.norm, mode);
 }
 
 /* ═══ Lazy graph builder ═══
@@ -62,20 +83,23 @@ function lookupOf(wordNorm, mode) {
  * W/H seed deterministic initial coordinates so the first paint is never NaN;
  * the force layout refines them afterwards.
  */
-export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, W = 900, H = 600) {
+export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, W = 900, H = 600, opts = {}) {
+  const { l2v, M, morphFilter, rareOnly = false, rareMax = 100, stopSet } = opts;
   const nodes = [], links = [], loopLinks = [], parentMap = {};
   const addedNodes = new Set(), visitedVerses = new Set();
   const cv = verseData[centerKey];
   if (!cv) return { nodes, links, loopLinks, parentMap };
 
   const cx = W / 2, cy = H / 2;
-  const index = searchMode === "root" ? r2v : w2v;
+  const index = searchMode === "root" ? r2v : searchMode === "lemma" ? (l2v || w2v) : w2v;
+  // Per-verse morphology row arrays for the active filter (index-aligned to words).
+  const morphOpts = (verseKey) => ({ morphRows: M?.v?.[verseKey], M, morphFilter, stopSet });
 
   // Centre verse's own lookup keys — computed once, reused for ranking/sharing.
-  const centerLookups = new Set(cv.words.map((w) => lookupOf(w.norm, searchMode)));
+  const centerLookups = new Set(cv.words.map((w) => wordKey(w, searchMode)));
   const sharedOf = (v) => [
     ...new Set(
-      v.words.filter((w) => centerLookups.has(lookupOf(w.norm, searchMode))).map((w) => w.orig)
+      v.words.filter((w) => centerLookups.has(wordKey(w, searchMode))).map((w) => w.orig)
     ),
   ];
 
@@ -103,17 +127,28 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
     if (item.type === "show-words") {
       const v = verseData[item.verseKey];
       if (!v) continue;
-      getUW(v, hideStop, searchMode).forEach((w) => {
+      getUW(v, hideStop, searchMode, morphOpts(item.verseKey)).forEach((w) => {
         const wid = `w:${w.lookup}@${item.verseKey}`;
         if (addedNodes.has(wid)) return;
         const count = (index[w.lookup] || []).length;
+        // Rare-links mode: hide hub words so only distinctive shared vocabulary shows.
+        if (rareOnly && count > rareMax) return;
         const expKey = `${w.lookup}@${item.verseKey}`;
         const isExp = expandedWords.has(expKey);
-        const realRoot = searchMode === "root" ? rootOf(w.norm) : null;
-        nodes.push({ id: wid, type: "word", wordNorm: w.norm, lookup: w.lookup, label: w.orig, count, r: Math.min(7 + Math.log2(count + 1) * 3, 20), color: fColor(count), depth: item.depth + 1, isExpanded: isExp, parentVerseKey: item.verseKey, rootLabel: realRoot, root: realRoot, ...place(item.depth + 1) });
+        const realRoot = rootOf(w.norm);     // always derivable — shown as context in any mode
+        const realLemma = lemmaOf(w.norm);
+        // The label under the node: the root in root/lemma mode (the grouping/context).
+        const rootLabel = searchMode === "exact" ? null : realRoot;
+        // Coverage: in root/lemma mode a word with no precomputed root/lemma is
+        // ungrouped — distinguish "no data" from "no link" with a marker (Phase 10).
+        const uncovered = (searchMode === "root" && !realRoot) || (searchMode === "lemma" && !realLemma);
+        nodes.push({ id: wid, type: "word", wordNorm: w.norm, lookup: w.lookup, label: w.orig, count, r: Math.min(7 + Math.log2(count + 1) * 3, 20), color: fColor(count), depth: item.depth + 1, isExpanded: isExp, parentVerseKey: item.verseKey, wordIndex: w.idx, rootLabel, root: realRoot, lemma: realLemma, hasRoot: !!realRoot, hasLemma: !!realLemma, uncovered, ...place(item.depth + 1) });
         addedNodes.add(wid);
         parentMap[wid] = item.verseId;
-        links.push({ source: item.verseId, target: wid, dist: 160 });
+        // Weight the verse→word link by the WORD's rarity too (it's the word this
+        // link runs through), so the rarity edge encoding shows on these links — not
+        // only on the deeper word→verse ones.
+        links.push({ source: item.verseId, target: wid, dist: 160, weight: rarityWeight(count) });
         if (isExp) queue.push({ type: "show-verses", wordId: wid, lookup: w.lookup, fromVerseKey: item.verseKey, depth: item.depth + 1 });
       });
     } else if (item.type === "show-verses") {
@@ -135,11 +170,13 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
       // them into a roomy disk whose labels stay legible. √ (not linear) keeps a
       // big fan-out compact rather than flinging it to the edge of the canvas.
       const ring = Math.max(150, Math.round(36 * Math.sqrt(ranked.length)));
+      // Rarity of every link through this word: rarer connecting word = stronger signal.
+      const weight = rarityWeight((index[item.lookup] || []).length);
 
       ranked.forEach(({ vk, v, shared }) => {
         const vid = "v:" + vk;
         if (visitedVerses.has(vk)) {
-          if (addedNodes.has(vid)) loopLinks.push({ source: item.wordId, target: vid });
+          if (addedNodes.has(vid)) loopLinks.push({ source: item.wordId, target: vid, weight });
           return;
         }
         visitedVerses.add(vk);
@@ -149,7 +186,7 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
           addedNodes.add(vid);
           parentMap[vid] = item.wordId;
         }
-        links.push({ source: item.wordId, target: vid, dist: ring });
+        links.push({ source: item.wordId, target: vid, dist: ring, weight });
         if (isVE) queue.push({ type: "show-words", verseId: vid, verseKey: vk, depth: item.depth + 1 });
       });
     }
