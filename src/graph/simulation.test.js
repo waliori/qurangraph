@@ -67,27 +67,29 @@ describe("createSimulation", () => {
     expect(sim.getPositions()["v:1"]).not.toEqual({ x: 200, y: 200 });
   });
 
-  it("makes a shared node travel to the selected word instead of its parent", () => {
-    // v:s is parented to w:a but also shares w:b (a loop link in the real graph).
-    const ns = [
+  it("makes a shared node travel toward whichever word is selected", () => {
+    // v:s is parented to w:a but also shares w:b. Words pinned so we can compare
+    // where the shared āyah comes to rest depending on which one is selected.
+    const base = () => [
       { id: "center", r: 28, fixed: true, x: 800, y: 550 },
-      { id: "w:a", r: 10, x: 600, y: 550 },
-      { id: "w:b", r: 10, x: 1000, y: 550 },
-      { id: "v:s", r: 8, x: 600, y: 560 },
+      { id: "w:a", r: 10, fixed: true, x: 400, y: 550 },
+      { id: "w:b", r: 10, fixed: true, x: 1200, y: 550 },
+      { id: "v:s", r: 8, x: 410, y: 560 },
     ];
-    const lk = [
-      { source: "center", target: "w:a", dist: 160 },
-      { source: "center", target: "w:b", dist: 160 },
-      { source: "w:a", target: "v:s", dist: 130 },
-    ];
-    const sim = createSimulation(1600, 1100);
-    sim.sync(ns, lk);
-    sim.setSelected("w:b", new Set(["v:s"])); // select w:b; v:s is its shared āyah
-    settle(sim);
-    const p = sim.getPositions();
-    const dB = Math.hypot(p["v:s"].x - p["w:b"].x, p["v:s"].y - p["w:b"].y);
-    const dA = Math.hypot(p["v:s"].x - p["w:a"].x, p["v:s"].y - p["w:a"].y);
-    expect(dB).toBeLessThan(dA); // travelled to the selection, not its parent
+    const lk = [{ source: "w:a", target: "v:s", dist: 130 }];
+    const runWith = (selId) => {
+      const sim = createSimulation(1600, 1100);
+      sim.sync(base(), lk);
+      sim.setSelected(selId, new Set(["v:s"]));
+      settle(sim);
+      return sim.getPositions()["v:s"];
+    };
+    const pA = runWith("w:a"), pB = runWith("w:b");
+    const dAwhenA = Math.hypot(pA.x - 400, pA.y - 550);
+    const dAwhenB = Math.hypot(pB.x - 400, pB.y - 550);
+    const dBwhenB = Math.hypot(pB.x - 1200, pB.y - 550);
+    expect(dAwhenB).toBeGreaterThan(dAwhenA); // selecting w:b pulls it away from w:a
+    expect(dBwhenB).toBeLessThan(dAwhenB);    // …and it gathers around w:b
   });
 
   it("is deterministic for identical input (no Math.random)", () => {

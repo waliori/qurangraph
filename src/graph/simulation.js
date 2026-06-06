@@ -79,14 +79,21 @@ export function createSimulation(W = 1600, H = 1100) {
     const al = alpha * 0.85;
     const N = bodies.length;
 
-    // Gravity. A node linked to the selection orbits the SELECTION alone (it drops
-    // its parent anchor), so a shared āyah travels all the way across rather than
-    // settling between two words. Everything else orbits its own parent.
+    // A node linked to the selection orbits the SELECTION alone (it drops its
+    // parent anchor) so a shared āyah travels all the way across. But it's pulled
+    // to a target RADIUS around the selection — sized like the expansion ring so
+    // the cluster stays a roomy, label-legible disk instead of collapsing onto the
+    // centre. Everything else orbits its own parent.
+    const R = selectedId ? Math.max(150, 36 * Math.sqrt(gather.size)) : 0;
     for (const b of bodies) {
       if (b.fixed || b.pinned) continue;
       if (selectedId && gather.has(b.id)) {
         const s = map[selectedId];
-        if (s) { b.vx += (s.x - b.x) * 0.07 * al; b.vy += (s.y - b.y) * 0.07 * al; }
+        if (s) {
+          const dx = b.x - s.x, dy = b.y - s.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const f = (R - d) / d * 0.08 * al; // spring toward the ring at radius R
+          b.vx += dx * f; b.vy += dy * f;
+        }
         continue;
       }
       const p = parentId[b.id] !== undefined ? map[parentId[b.id]] : null;
