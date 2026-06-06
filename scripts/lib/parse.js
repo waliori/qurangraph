@@ -6,6 +6,85 @@ export function parseMorphologyRoot(features) {
   return m ? m[1] : null;
 }
 
+/* ═══ Full morphology of one SEGMENT ═══
+ *
+ * The Quranic Arabic Corpus tags one row per *segment* (LOCATION = s:a:w:seg);
+ * a word is several segments (prefixes + stem + pronoun suffix). FEATURES is a
+ * pipe-delimited bag of tags. `posClass` is the row's column-3 value (N/P/V).
+ *
+ * Returns every morphological field the corpus encodes for the segment:
+ *   { root, lemma, vf, aspect, voice, mood, pos, person, gender, number, gcase,
+ *     pref, suff }
+ * vf is an integer Form (1..11) or 0; person is 0|1|2|3; the rest are short
+ * string codes or null. `pos` is the most specific class we can name.
+ */
+const AGREE_RE = /^(?:([123])(M|F)?(S|D|P)?|(M|F)(S|D|P)?)$/; // 3MP, 2MS, 1P, FS, M …
+
+export function parseMorphology(features = "", posClass = "") {
+  const has = (t) => new RegExp(`(?:^|\\|)${t}(?:\\||$)`).test(features);
+  const grab = (t) => { const m = new RegExp(`(?:^|\\|)${t}:([^|]+)`).exec(features); return m ? m[1] : null; };
+
+  const root = grab("ROOT");
+  const lemma = grab("LEM");
+  const vfRaw = grab("VF");
+  const vf = vfRaw ? parseInt(vfRaw, 10) : 0;
+  const aspect = has("PERF") ? "perf" : has("IMPF") ? "impf" : has("IMPV") ? "impv" : null;
+  const isVerb = posClass === "V" || aspect != null;
+  const voice = has("PASS") ? "pass" : isVerb ? "act" : null;
+  const moodRaw = grab("MOOD");
+  const mood = moodRaw ? moodRaw.toLowerCase() : null;
+  const gcase = has("NOM") ? "nom" : has("ACC") ? "acc" : has("GEN") ? "gen" : null;
+  const pref = has("PREF");
+  const suff = has("SUFF");
+
+  // Most-specific part of speech.
+  const pos = has("PASS_PCPL") ? "passpcpl"
+    : has("ACT_PCPL") ? "actpcpl"
+    : has("PN") ? "pn"
+    : has("PRON") ? "pron"
+    : has("ADJ") ? "adj"
+    : posClass === "V" ? "verb"
+    : posClass === "P" ? "particle"
+    : posClass === "N" ? "noun"
+    : null;
+
+  // Person / gender / number from an agreement token (3MP, FS, M, 1P …).
+  let person = 0, gender = null, number = null;
+  for (const tok of features.split("|")) {
+    const m = AGREE_RE.exec(tok);
+    if (!m) continue;
+    person = m[1] ? +m[1] : 0;
+    gender = (m[2] || m[4] || "").toLowerCase() || null;
+    const n = (m[3] || m[5] || "").toLowerCase();
+    number = n ? { s: "s", d: "d", p: "p" }[n] : null;
+    break;
+  }
+
+  return { root, lemma, vf, aspect, voice, mood, pos, person, gender, number, gcase, pref, suff };
+}
+
+/* ═══ Aggregate a word's segments into one morphology record ═══
+ *
+ * `segments` = the segment rows of a single s:a:w, in order, each
+ * { form, features, posClass }. We concatenate the surface forms and pick the
+ * STEM segment (the one carrying a ROOT, else the first non-affix segment, else
+ * the first) to represent the word's lemma/root/POS/inflection.
+ * Returns { form, ...stemMorphology } (pref/suff stripped — a word is not an affix).
+ */
+export function aggregateWord(segments) {
+  let form = "";
+  const parsed = segments.map((sg) => {
+    form += sg.form || "";
+    return parseMorphology(sg.features || "", sg.posClass || "");
+  });
+  const stem =
+    parsed.find((p) => p.root) ||
+    parsed.find((p) => !p.pref && !p.suff) ||
+    parsed[0] || parseMorphology("", "");
+  const { pref, suff, ...morph } = stem; // eslint-disable-line no-unused-vars
+  return { form, ...morph };
+}
+
 /* Collapse a geminate triliteral (last two radicals identical) to the
  * 2-letter form Ibn Faris uses as a header, e.g. ربب → رب, مدد → مد. */
 export function collapseGeminate(root) {
@@ -87,4 +166,59 @@ export function parseMaqayisEntry(lines, maxFull = 600) {
   const full = cleanProse(body.join(" ")) || opening;
 
   return { c, f, full };
+}
+
+/* ═══ Generalised lexicon parser ═══
+ *
+ * Turns a whole OpenITI dictionary text into { headword → { c, f, full } } for any
+ * of the supported layouts. Headwords are the dictionary's own root entries; the
+ * build step aligns them onto the Qur'an's roots via matchRoot (same as Maqāyīs).
+ *   - "maqayis":  `### | (root)` headers (handled by parseMaqayisEntry per entry).
+ *   - "lisan":    a bare `# <root>` line opens an entry; body runs to the next one.
+ *   - "mufradat": `# <root> : <definition>` opens an entry; `~~` lines continue it.
+ */
+const LEX_NOISE = /\bms\d+\b|PageV\d+P\d+|@[A-Z]+@|\^|@|%|\*|=|\(\s*\d+\s*\)/g;
+function cleanLex(s) {
+  return s.replace(LEX_NOISE, " ").replace(/[#~[\]{}|]/g, " ").replace(/\s+/g, " ").trim();
+}
+function pack(rootText, bodyLines, maxFull) {
+  const full = cleanLex(bodyLines.join(" "));
+  if (!full || full.length < 4) return null;
+  const dot = full.indexOf(".");
+  const c = dot > 0 && dot < 240 ? full.slice(0, dot).trim() : capAtSentence(full, 160);
+  const f = capAtSentence(full, maxFull);
+  return { root: rootText, c, f, full };
+}
+
+export function parseLexiconText(text, format, maxFull = 600) {
+  const lines = text.split("\n");
+  const out = {};
+  const add = (root, body) => {
+    const r = (root || "").replace(/[^ء-ي]/g, "");
+    if (!/^[ء-ي]{2,6}$/.test(r) || out[r]) return;
+    const e = pack(r, body, maxFull);
+    if (e) out[r] = { c: e.c, f: e.f, full: e.full };
+  };
+
+  if (format === "mufradat") {
+    const HEAD = /^#\s*([ء-ي]{2,6})\s*:\s*(.*)$/;
+    let root = null, body = [];
+    for (const line of lines) {
+      const m = HEAD.exec(line);
+      if (m) { add(root, body); root = m[1]; body = [m[2] || ""]; }
+      else if (root && /^~~/.test(line)) body.push(line);
+      else if (root && /^#\s/.test(line) && !/PageV/.test(line)) body.push(line); // sub-point within entry
+    }
+    add(root, body);
+  } else if (format === "lisan") {
+    const HEAD = /^#\s*([ء-ي]{2,6})\s*$/; // a line that is only a root
+    let root = null, body = [];
+    for (const line of lines) {
+      const m = HEAD.exec(line);
+      if (m) { add(root, body); root = m[1]; body = []; }
+      else if (root && (/^~~/.test(line) || /^#\s/.test(line)) && !/PageV/.test(line)) body.push(line);
+    }
+    add(root, body);
+  }
+  return out;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMorphologyRoot, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry } from "./parse.js";
+import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText } from "./parse.js";
 
 describe("parseMorphologyRoot", () => {
   it("extracts ROOT when present", () => {
@@ -9,6 +9,55 @@ describe("parseMorphologyRoot", () => {
   it("returns null when no root (particles/prefixes)", () => {
     expect(parseMorphologyRoot("P|PREF|LEM:ب")).toBe(null);
     expect(parseMorphologyRoot("DET|PREF|LEM:ال")).toBe(null);
+  });
+});
+
+describe("parseMorphology", () => {
+  it("reads root, lemma, case and agreement for a noun", () => {
+    const m = parseMorphology("ROOT:سمو|LEM:اسْم|M|GEN", "N");
+    expect(m.root).toBe("سمو");
+    expect(m.lemma).toBe("اسْم");
+    expect(m.pos).toBe("noun");
+    expect(m.gcase).toBe("gen");
+    expect(m.gender).toBe("m");
+  });
+  it("reads verb form, aspect, voice, mood and person/number", () => {
+    const m = parseMorphology("IMPF|VF:1|ROOT:عبد|LEM:عَبَدَ|1P|MOOD:IND", "V");
+    expect(m).toMatchObject({ root: "عبد", vf: 1, aspect: "impf", voice: "act", mood: "ind", person: 1, number: "p", pos: "verb" });
+  });
+  it("detects passive and higher forms", () => {
+    const m = parseMorphology("PERF|VF:4|PASS|ROOT:نزل|LEM:أَنزَلَ|3MS", "V");
+    expect(m).toMatchObject({ vf: 4, aspect: "perf", voice: "pass", person: 3, gender: "m", number: "s" });
+  });
+  it("flags proper nouns, participles and affixes", () => {
+    expect(parseMorphology("PN|ROOT:أله|LEM:اللَّه|GEN", "N").pos).toBe("pn");
+    expect(parseMorphology("PASS_PCPL|VF:1|ROOT:غضب|LEM:مَغْضُوب|M|GEN", "N").pos).toBe("passpcpl");
+    expect(parseMorphology("P|PREF|LEM:ب", "P").pref).toBe(true);
+    expect(parseMorphology("PRON|SUFF|3MP", "N").suff).toBe(true);
+  });
+});
+
+describe("aggregateWord", () => {
+  it("concatenates segment forms and lifts the stem's morphology", () => {
+    // بِسْمِ = بِ (prefix particle) + سْمِ (noun stem carrying the root)
+    const w = aggregateWord([
+      { form: "بِ", features: "P|PREF|LEM:ب", posClass: "P" },
+      { form: "سْمِ", features: "ROOT:سمو|LEM:اسْم|M|GEN", posClass: "N" },
+    ]);
+    expect(w.form).toBe("بِسْمِ");
+    expect(w.root).toBe("سمو");
+    expect(w.lemma).toBe("اسْم");
+    expect(w.pos).toBe("noun");
+    expect(w.pref).toBeUndefined(); // a word is not an affix
+  });
+  it("keeps verb + attached pronoun on the verb stem", () => {
+    const w = aggregateWord([
+      { form: "تَأْخُذُ", features: "IMPF|VF:1|ROOT:أخذ|LEM:أَخَذَ|3FS|MOOD:IND", posClass: "V" },
+      { form: "هُۥ", features: "PRON|SUFF|3MS", posClass: "N" },
+    ]);
+    expect(w.root).toBe("أخذ");
+    expect(w.aspect).toBe("impf");
+    expect(w.pos).toBe("verb");
   });
 });
 
@@ -72,5 +121,36 @@ describe("parseMaqayisEntry", () => {
   });
   it("returns null with no prose", () => {
     expect(parseMaqayisEntry(["~~orphan"])).toBe(null);
+  });
+});
+
+describe("parseLexiconText", () => {
+  it("parses Lisān-style entries (bare root line + definition, [ * ] delimited)", () => {
+    const text = [
+      "######OpenITI#",
+      "# أبأ",
+      "# ] أبأ : الأباءة الأجمة القصب [ * ] [",
+      "~~والجمع أباء عن الأصمعي",
+      "# أتأ",
+      "# ] أتأ : حكى أبو علي في التذكرة",
+    ].join("\n");
+    const e = parseLexiconText(text, "lisan");
+    expect(Object.keys(e).sort()).toEqual(["أبأ", "أتأ"]);
+    expect(e["أبأ"].c).toContain("الأباءة الأجمة القصب");
+    expect(e["أبأ"].full).not.toContain("*"); // OCR markers cleaned
+  });
+
+  it("parses Mufradāt-style entries (# root : definition)", () => {
+    const text = [
+      "######OpenITI#",
+      "# PageV01P006 المفردات في غريب القرآن",
+      "# أبا : الأب الوالد",
+      "~~ويسمى كل من كان سببا في إيجاد شيء",
+      "# أبد : الأبد الدوام",
+    ].join("\n");
+    const e = parseLexiconText(text, "mufradat");
+    expect(Object.keys(e).sort()).toEqual(["أبا", "أبد"]);
+    expect(e["أبا"].c).toContain("الأب الوالد");
+    expect(e["أبد"].c).toContain("الدوام");
   });
 });

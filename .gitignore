@@ -8,5 +8,6 @@ dist
 # inputs the build needs.
 /public/data/quran-hafs.json
 /public/data/roots.json
-/public/data/root-meanings.json
-/public/data/root-meanings-full.json
+/public/data/lemmas.json
+/public/data/morphology.json
+/public/data/lexicons/

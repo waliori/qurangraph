@@ -33,6 +33,14 @@ const MORPHOLOGY_URL =
 const MAQAYIS_URL =
   "https://raw.githubusercontent.com/OpenITI/0400AH/master/data/0395IbnFarisQazwini/0395IbnFarisQazwini.MucjamMaqayis/0395IbnFarisQazwini.MucjamMaqayis.Shamela0021710-ara1";
 
+// Al-Mufradat fi Gharib al-Qur'an (al-Raghib al-Isfahani, d.502) — OpenITI (JK).
+const MUFRADAT_URL =
+  "https://raw.githubusercontent.com/OpenITI/0525AH/master/data/0502RaghibIsbahani/0502RaghibIsbahani.Mufradat/0502RaghibIsbahani.Mufradat.JK001150-ara1";
+
+// Lisan al-'Arab (Ibn Manzur, d.711) — OpenITI (JK). Large (~25MB).
+const LISAN_URL =
+  "https://raw.githubusercontent.com/OpenITI/0725AH/master/data/0711IbnManzurIfriqi/0711IbnManzurIfriqi.LisanCarab/0711IbnManzurIfriqi.LisanCarab.JK000880-ara1";
+
 if (!existsSync("data/source")) mkdirSync("data/source", { recursive: true });
 
 async function main() {
@@ -50,6 +58,22 @@ async function main() {
   const maqayis = await download(MAQAYIS_URL);
   writeFileSync("data/source/maqayis.txt", maqayis);
   console.log(`  -> ${maqayis.length} bytes`);
+
+  // Extra lexicons are best-effort: a failure (e.g. moved OpenITI path) shouldn't
+  // break the core build, so each is caught and skipped.
+  for (const [name, url, out] of [
+    ["Mufradat (al-Raghib)", MUFRADAT_URL, "data/source/mufradat.txt"],
+    ["Lisan al-'Arab (Ibn Manzur)", LISAN_URL, "data/source/lisan.txt"],
+  ]) {
+    try {
+      console.log(`Downloading ${name}...`);
+      const buf = await download(url);
+      writeFileSync(out, buf);
+      console.log(`  -> ${buf.length} bytes`);
+    } catch (e) {
+      console.warn(`  ! skipped ${name}: ${e.message}`);
+    }
+  }
 
   console.log("\nDone!");
 }
