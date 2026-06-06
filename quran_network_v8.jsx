@@ -1,38 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { norm, extractRoot, STOP } from "./src/arabic-utils.js";
-import { loadHafsData, loadQiraatDiffs, loadNarrationText } from "./src/data-loader.js";
-import { NARRATIONS, NARRATION_MAP } from "./src/qiraat-config.js";
-
-/* ═══ Qira'at (loaded from JSON) ═══ */
-const QT = { c: { l: "تغيير", col: "#f59e0b", ic: "⇄" }, a: { l: "إضافة", col: "#22c55e", ic: "+" }, d: { l: "حذف", col: "#ef4444", ic: "−" } };
-
-function QiraatPanel({ verseKey, compact, theme, qiraatDiffs }) {
-  const items = qiraatDiffs?.[verseKey]; if (!items?.length) return null;
-  const bg = theme === "light" ? "#f5f0ff" : "#0d0f1a";
-  const bd = theme === "light" ? "#d8b4fe" : "#2a1f3d";
-  return (
-    <div style={{ background: bg, borderRadius: 8, padding: compact ? "4px 8px" : "8px 12px", border: `1px solid ${bd}`, marginTop: compact ? 4 : 8 }}>
-      <div style={{ fontSize: compact ? 9 : 11, color: "#a78bfa", fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-        📜 قراءات أخرى ({items.length})
-        {items.some(i => i.r.includes("☆")) && <span style={{ fontSize: 8, color: "#fbbf24" }}>☆ = شاذة</span>}
-      </div>
-      {items.map((it, i) => {
-        const ty = QT[it.t];
-        return (<div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: compact ? 3 : 6, padding: "3px 6px", background: ty.col + "0a", borderRadius: 6, borderRight: `3px solid ${ty.col}44` }}>
-          <span style={{ fontSize: 12, minWidth: 16 }}>{ty.ic}</span>
-          <div style={{ flex: 1, direction: "rtl" }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {it.t !== "a" && <span style={{ fontSize: compact ? 12 : 14, color: theme === "light" ? "#64748b" : "#94a3b8", textDecoration: "line-through", textDecorationColor: "#ef444466" }}>{it.h}</span>}
-              {it.t !== "d" && <span style={{ fontSize: compact ? 12 : 14, color: ty.col, fontWeight: 700 }}>{it.t === "a" ? "+" : "→"} {it.v}</span>}
-            </div>
-            <div style={{ fontSize: compact ? 8 : 9, color: "#7c3aed", marginTop: 1 }}>{it.r}</div>
-            <div style={{ fontSize: compact ? 8 : 9, color: theme === "light" ? "#64748b" : "#475569", marginTop: 1 }}>{it.n}</div>
-          </div>
-        </div>);
-      })}
-    </div>
-  );
-}
+import { loadHafsData } from "./src/data-loader.js";
 
 /* norm, extractRoot, STOP imported from arabic-utils.js */
 
@@ -87,7 +55,7 @@ function getDescendants(nid, links) { const ch = new Set(), cm = {}; links.forEa
 function getPathToCenter(nid, pm) { const p = new Set(); let c = nid, s = 200; while (c && s-- > 0) { p.add(c); c = pm[c]; } return p; }
 
 /* ═══ Lazy Graph Builder ═══ */
-function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs) {
+function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode) {
   const nodes = [], links = [], loopLinks = [], parentMap = {};
   const addedNodes = new Set(), visitedVerses = new Set();
   const cv = verseData[centerKey]; if (!cv) return { nodes, links, loopLinks, parentMap };
@@ -95,16 +63,6 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
   const centerId = "v:" + centerKey;
   nodes.push({ id: centerId, type: "center", verseKey: centerKey, label: `${cv.sn} ${cv.a}`, text: cv.text, r: 28, color: "#fbbf24", fixed: true, depth: 0, words: cv.words });
   addedNodes.add(centerId); visitedVerses.add(centerKey);
-
-  // Add qiraat variant nodes for center
-  if (showQiraat && qiraatDiffs[centerKey]) {
-    qiraatDiffs[centerKey].forEach((qi, idx) => {
-      const qid = `q:${centerKey}:${idx}`;
-      const label = qi.t === "d" ? `−${qi.h}` : qi.t === "a" ? `+${qi.v}` : qi.v;
-      nodes.push({ id: qid, type: "qiraat", label, reader: qi.r, note: qi.n, qType: qi.t, hafs: qi.h, variant: qi.v, r: 14, color: QT[qi.t].col, depth: 0.5 });
-      addedNodes.add(qid); links.push({ source: centerId, target: qid, dist: 80 });
-    });
-  }
 
   const queue = [{ type: "show-words", verseId: centerId, verseKey: centerKey, depth: 0 }];
   expandedVerses.forEach(vk => { if (vk !== centerKey) queue.push({ type: "show-words", verseId: "v:" + vk, verseKey: vk, depth: -1 }); });
@@ -136,15 +94,6 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
           addedNodes.add(vid); parentMap[vid] = item.wordId;
         }
         links.push({ source: item.wordId, target: vid, dist: 95 });
-        // Qiraat for child verses
-        if (showQiraat && qiraatDiffs[vk]) {
-          qiraatDiffs[vk].forEach((qi, idx) => {
-            const qid = `q:${vk}:${idx}`; if (addedNodes.has(qid)) return;
-            const label = qi.t === "d" ? `−${qi.h}` : qi.t === "a" ? `+${qi.v}` : qi.v;
-            nodes.push({ id: qid, type: "qiraat", label, reader: qi.r, note: qi.n, qType: qi.t, hafs: qi.h, variant: qi.v, r: 10, color: QT[qi.t].col, depth: item.depth + 0.5 });
-            addedNodes.add(qid); links.push({ source: vid, target: qid, dist: 55 });
-          });
-        }
         if (isVE) queue.push({ type: "show-words", verseId: vid, verseKey: vk, depth: item.depth + 1 });
       });
     }
@@ -155,15 +104,11 @@ function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, expandedV
 /* ═══ MAIN ═══ */
 export default function QuranNetwork() {
   const [quranRaw, setQuranRaw] = useState(null);
-  const [qiraatDiffs, setQiraatDiffs] = useState({});
-  const [activeQiraa, setActiveQiraa] = useState("hafs");
-  const [narrationData, setNarrationData] = useState({});
   const [loading, setLoading] = useState(true);
   const [surah, setSurah] = useState(2); const [ayah, setAyah] = useState(228);
   const [maxBranch, setMaxBranch] = useState(10);
   const [hideStop, setHideStop] = useState(true); const [showLoops, setShowLoops] = useState(true);
   const [searchMode, setSearchMode] = useState("exact");
-  const [showQiraat, setShowQiraat] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [expandedWords, setExpandedWords] = useState(new Set());
   const [expandedVerses, setExpandedVerses] = useState(new Set());
@@ -180,18 +125,10 @@ export default function QuranNetwork() {
 
   useEffect(() => { const u = () => { if (containerRef.current) { const r = containerRef.current.getBoundingClientRect(); setDims({ w: r.width, h: r.height }); } }; u(); window.addEventListener("resize", u); return () => window.removeEventListener("resize", u); }, [loading]);
   useEffect(() => {
-    Promise.all([loadHafsData(), loadQiraatDiffs()])
-      .then(([hafs, diffs]) => { setQuranRaw(hafs); setQiraatDiffs(diffs || {}); setLoading(false); })
+    loadHafsData()
+      .then(hafs => { setQuranRaw(hafs); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
-
-  // Lazy-load narration text when switching Qira'a
-  useEffect(() => {
-    if (activeQiraa === "hafs" || narrationData[activeQiraa]) return;
-    loadNarrationText(activeQiraa).then(d => {
-      setNarrationData(prev => ({ ...prev, [activeQiraa]: d }));
-    });
-  }, [activeQiraa, narrationData]);
 
   const { w2v, r2v, verseData, surahList } = useMemo(() => {
     if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
@@ -204,18 +141,9 @@ export default function QuranNetwork() {
   const currentVerse = verseData[currentKey];
   const ayahCount = quranRaw?.find(s => s.id === surah)?.total_verses || 1;
 
-  // Get narration verse text if a non-Hafs qira'a is active
-  const activeNarr = NARRATION_MAP[activeQiraa];
-  const activeFont = activeQiraa !== "hafs" && activeNarr ? activeNarr.font : null;
-  const getNarrVerse = useCallback((suraId, ayaId) => {
-    if (activeQiraa === "hafs" || !narrationData[activeQiraa]) return null;
-    const sura = narrationData[activeQiraa].find(s => s.id === suraId);
-    return sura?.verses.find(v => v.id === ayaId);
-  }, [activeQiraa, narrationData]);
-
   const { graphNodes, graphLinks, loopLinks, parentMap } = useMemo(() => {
     if (!currentVerse) return { graphNodes: [], graphLinks: [], loopLinks: [], parentMap: {} };
-    const r = buildLazyGraph(currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs);
+    const r = buildLazyGraph(currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode);
     const newN = r.nodes.map(n => positions[n.id] ? { ...n, x: positions[n.id].x, y: positions[n.id].y } : { ...n });
     if (newN.some(n => !positions[n.id] && !n.fixed)) {
       const laid = forceLayout(newN, r.links, dims.w, dims.h, 140);
@@ -224,7 +152,7 @@ export default function QuranNetwork() {
       return { graphNodes: laid, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap };
     }
     return { graphNodes: newN, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap };
-  }, [currentVerse, currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, showQiraat, qiraatDiffs, dims]);
+  }, [currentVerse, currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, maxBranch, searchMode, dims]);
 
   useEffect(() => { const ids = new Set(graphNodes.map(n => n.id)); setPositions(prev => { const c = {}; for (const [k, v] of Object.entries(prev)) { if (ids.has(k)) c[k] = v; } return c; }); }, [graphNodes]);
 
@@ -302,12 +230,6 @@ export default function QuranNetwork() {
               <button onClick={() => { setSearchMode("exact"); reset(); }} style={{ ...SS.btn, border: "none", ...(searchMode === "exact" ? { background: "#1e40af33", color: "#60a5fa", fontWeight: 700 } : {}) }}>📝 كلمة</button>
               <button onClick={() => { setSearchMode("root"); reset(); }} style={{ ...SS.btn, border: "none", ...(searchMode === "root" ? { background: "#22c55e22", color: "#22c55e", fontWeight: 700 } : {}) }}>🌿 جذر</button>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 2, cursor: "pointer", fontSize: 9, color: T.textDim }}>
-              <input type="checkbox" checked={showQiraat} onChange={e => setShowQiraat(e.target.checked)} /><span style={{ color: "#a78bfa" }}>📜 قراءات</span>
-            </label>
-            <select value={activeQiraa} onChange={e => setActiveQiraa(e.target.value)} style={{ ...SS.sel, fontSize: 10, color: activeQiraa !== "hafs" ? "#a78bfa" : T.textDim }}>
-              {NARRATIONS.map(n => <option key={n.key} value={n.key}>{n.ar}</option>)}
-            </select>
             <div style={{ display: "flex", alignItems: "center", gap: 3, background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 6, padding: "2px 8px", border: `1px solid ${T.panelBorder}` }}>
               <span style={{ fontSize: 9, color: "#cc5de8" }}>لكل كلمة</span>
               <input type="range" min={3} max={50} value={maxBranch} onChange={e => setMaxBranch(+e.target.value)} style={{ width: 50, accentColor: "#cc5de8" }} />
@@ -331,7 +253,6 @@ export default function QuranNetwork() {
           <div style={{ background: theme === "light" ? "#f8fafc" : "#0a0e1a", borderRadius: 8, padding: "8px 12px", marginTop: 6, border: `1px solid ${T.panelBorder}`, fontSize: 11, lineHeight: 2.2, color: T.textDim }}>
             <b style={{ color: "#22c55e" }}>🌿 جذر:</b> يستخرج الجذر الثلاثي — أشهُر/شهور/شهر/الأشهر → ش ه ر<br />
             <b style={{ color: "#60a5fa" }}>📝 كلمة:</b> تطابق دقيق<br />
-            <b style={{ color: "#a78bfa" }}>📜 قراءات:</b> عُقد بنفسجية تظهر الاختلافات بين القراء (☆ = شاذة). فعّل/عطّل بالزر.<br />
             <b>اضغط كلمة</b> (في الآية أو الشبكة) → توسيع. مرة ثانية → طي تلقائي مع الفروع.
           </div>
         )}
@@ -350,16 +271,9 @@ export default function QuranNetwork() {
             <div style={{ fontSize: 17, lineHeight: 2.2, color: T.ayahText }}>
               <HighlightedAyah text={currentVerse.text} primaryWord={activeWord || (hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null)} interactive={true} onWordClick={(wn) => handleWordClick(wn, currentKey)} activeGraphWord={hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null} searchMode={searchMode} theme={theme} />
             </div>
-            {activeFont && (() => { const nv = getNarrVerse(surah, ayah); return nv ? (
-              <div style={{ fontSize: 19, lineHeight: 2.4, color: "#a78bfa", fontFamily: `"${activeFont}", Arial`, marginTop: 4, padding: "4px 8px", background: theme === "light" ? "#f5f0ff" : "#0d0f1a", borderRadius: 6, border: `1px solid ${theme === "light" ? "#d8b4fe" : "#2a1f3d"}` }}>
-                <span style={{ fontSize: 9, color: "#7c3aed" }}>{activeNarr.ar}:</span> {nv.text}
-              </div>
-            ) : null; })()}
             <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>
               {currentVerse.sn} — الآية {currentVerse.a}
-              {qiraatDiffs[currentKey] && <span style={{ color: "#a78bfa", marginRight: 8 }}>📜 {qiraatDiffs[currentKey].length} قراءة</span>}
             </div>
-            {qiraatDiffs[currentKey] && <QiraatPanel qiraatDiffs={qiraatDiffs} verseKey={currentKey} compact={true} theme={theme} />}
           </div>
         )}
 
@@ -369,16 +283,14 @@ export default function QuranNetwork() {
             {graphLinks.map((l, i) => {
               const s = nmap[l.source], t = nmap[l.target]; if (!s || !t) return null;
               const sp = getPos(s), tp = getPos(t);
-              const isQ = s.type === "qiraat" || t.type === "qiraat";
               const isC = s.type === "center" || t.type === "center";
               const onP = highlightLinks ? highlightLinks.has(i) : true;
               const onA = activeWordNodeIds.size > 0 && (activeWordNodeIds.has(l.source) || activeWordNodeIds.has(l.target));
               const bright = onP || onA;
               return <line key={`l${i}`} x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-                stroke={isQ ? "#a78bfa33" : bright ? (onA ? "#fcc41955" : isC ? T.linkCenter : T.link) : (theme === "light" ? "#e2e8f0" : "#0a1020")}
-                strokeWidth={isQ ? 0.8 : bright ? (isC ? 1.8 : 1) : 0.3}
-                strokeOpacity={bright ? 0.7 : 0.1}
-                strokeDasharray={isQ ? "3,3" : "none"} />;
+                stroke={bright ? (onA ? "#fcc41955" : isC ? T.linkCenter : T.link) : (theme === "light" ? "#e2e8f0" : "#0a1020")}
+                strokeWidth={bright ? (isC ? 1.8 : 1) : 0.3}
+                strokeOpacity={bright ? 0.7 : 0.1} />;
             })}
             {showLoops && loopLinks.map((l, i) => {
               const s = nmap[l.source], t = nmap[l.target]; if (!s || !t) return null;
@@ -396,7 +308,6 @@ export default function QuranNetwork() {
               const r = isH ? n.r * 1.35 : isS || isAW ? n.r * 1.2 : n.r;
               const isWE = n.type === "word" && n.isExpanded;
               const isVE = n.type === "verse" && n.isExpanded;
-              const isQN = n.type === "qiraat";
 
               return (
                 <g key={n.id} data-node="1" style={{ cursor: "pointer", opacity, transition: "opacity 0.25s" }}
@@ -408,28 +319,22 @@ export default function QuranNetwork() {
                     if (n.type === "center") { setSelected(null); setActiveWord(null); return; }
                     if (n.type === "word") { toggleWord(n.lookup || n.wordNorm, n.parentVerseKey); setActiveWord(n.lookup || n.wordNorm); setSelected(n.id); }
                     else if (n.type === "verse") { if (selected === n.id) toggleVerse(n.verseKey); else { setSelected(n.id); setActiveWord(null); } }
-                    else if (isQN) { setSelected(n.id); }
                   }}>
 
                   {(isWE || isVE) && <circle cx={p.x} cy={p.y} r={r + 7} fill="none" stroke={isWE ? "#22c55e" : "#cc5de8"} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
                   {(isS || isAW) && <circle cx={p.x} cy={p.y} r={r + 10} fill="none" stroke={isAW ? "#fcc419" : n.color} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
 
-                  {isQN ? (
-                    <rect x={p.x - r} y={p.y - r * 0.6} width={r * 2} height={r * 1.2} rx={4}
-                      fill={n.color + "22"} stroke={n.color} strokeWidth={isH ? 2 : 1.2} strokeDasharray="3,2" />
-                  ) : (
-                    <circle cx={p.x} cy={p.y} r={r}
-                      fill={isAW ? "#fcc41944" : isWE ? "#22c55e33" : isVE ? "#cc5de833" : n.color + T.nodeFill}
-                      stroke={isS ? (theme === "light" ? "#1e293b" : "#fff") : isAW ? "#fcc419" : isWE ? "#22c55e" : isVE ? "#cc5de8" : isH ? (theme === "light" ? "#1e293b" : "#fff") : n.color}
-                      strokeWidth={n.type === "center" ? 3 : isH || isS || isAW ? 2.5 : isWE || isVE ? 2 : n.type === "word" ? 1.8 : 1} />
-                  )}
+                  <circle cx={p.x} cy={p.y} r={r}
+                    fill={isAW ? "#fcc41944" : isWE ? "#22c55e33" : isVE ? "#cc5de833" : n.color + T.nodeFill}
+                    stroke={isS ? (theme === "light" ? "#1e293b" : "#fff") : isAW ? "#fcc419" : isWE ? "#22c55e" : isVE ? "#cc5de8" : isH ? (theme === "light" ? "#1e293b" : "#fff") : n.color}
+                    strokeWidth={n.type === "center" ? 3 : isH || isS || isAW ? 2.5 : isWE || isVE ? 2 : n.type === "word" ? 1.8 : 1} />
 
                   {n.type === "word" && <text x={p.x} y={p.y + 3.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill={theme === "light" ? "#1e293b" : "#fff"} style={{ pointerEvents: "none" }}>{n.count || ""}</text>}
                   {n.type === "verse" && (n.sharedCount || 0) > 1 && <text x={p.x} y={p.y + 3} textAnchor="middle" fontSize={7} fill="#fcc419" fontWeight="bold" style={{ pointerEvents: "none" }}>{n.sharedCount}</text>}
 
-                  <text x={p.x} y={isQN ? p.y + r * 0.6 + 11 : n.type === "word" ? p.y - r - 4 : p.y + r + 11}
-                    textAnchor="middle" fontSize={isQN ? 9 : n.type === "center" ? 12 : n.type === "word" ? 11 : 8}
-                    fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? (theme === "light" ? "#1e293b" : "#fff") : isQN ? n.color : n.type === "verse" ? T.textDim : n.color}
+                  <text x={p.x} y={n.type === "word" ? p.y - r - 4 : p.y + r + 11}
+                    textAnchor="middle" fontSize={n.type === "center" ? 12 : n.type === "word" ? 11 : 8}
+                    fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? (theme === "light" ? "#1e293b" : "#fff") : n.type === "verse" ? T.textDim : n.color}
                     direction="rtl" style={{ pointerEvents: "none" }}>{n.label}</text>
 
                   {n.type === "word" && n.rootLabel && n.rootLabel !== norm(n.label) && (
@@ -437,7 +342,6 @@ export default function QuranNetwork() {
                   )}
                   {n.type === "word" && !isWE && n.count > 1 && <text x={p.x + r + 3} y={p.y + 3} fontSize={10} fill={T.textFaint} style={{ pointerEvents: "none" }}>+</text>}
                   {isWE && <circle cx={p.x + r - 1} cy={p.y - r + 1} r={5} fill="#22c55e" stroke={T.bg} strokeWidth={1.5} />}
-                  {n.type === "verse" && qiraatDiffs[n.verseKey] && <g><circle cx={p.x - r} cy={p.y + r - 2} r={5} fill="#7c3aed" stroke={T.bg} strokeWidth={1.5} /><text x={p.x - r} y={p.y + r + 1} textAnchor="middle" fontSize={6} fill="#fff" style={{ pointerEvents: "none" }}>📜</text></g>}
                 </g>
               );
             })}
@@ -453,17 +357,10 @@ export default function QuranNetwork() {
                 {hovNode.rootLabel && <span style={{ fontSize: 12, color: "#22c55e" }}>جذر: {hovNode.rootLabel}</span>}
                 <span style={{ fontSize: 10, color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", padding: "1px 8px", borderRadius: 10 }}>{hovNode.count} آية</span>
               </div>
-            ) : hovNode.type === "qiraat" ? (
-              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: hovNode.color }}>{QT[hovNode.qType]?.ic} {hovNode.label}</span>
-                <span style={{ fontSize: 10, color: "#7c3aed" }}>{hovNode.reader}</span>
-                <span style={{ fontSize: 10, color: T.textFaint }}>{hovNode.note}</span>
-              </div>
             ) : (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
-                  {qiraatDiffs[hovNode.verseKey] && <span style={{ fontSize: 9, color: "#a78bfa" }}>📜 {qiraatDiffs[hovNode.verseKey].length}</span>}
                 </div>
                 <div style={{ fontSize: 15, lineHeight: 2, color: T.text }}>
                   <HighlightedAyah text={hovNode.text} primaryWord={getConnWord(hovNode)} sharedWords={hovNode.sharedWords || []} searchMode={searchMode} theme={theme}
@@ -489,14 +386,6 @@ export default function QuranNetwork() {
                 </div>
                 {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (<div style={{ background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 8, padding: "6px 10px" }}><div style={{ fontSize: 9, color: T.textFaint, marginBottom: 3 }}>من: {parent.label}</div><div style={{ fontSize: 15, lineHeight: 2, color: T.text }}><HighlightedAyah text={parent.text} primaryWord={selNode.lookup || selNode.wordNorm} searchMode={searchMode} theme={theme} interactive={true} onWordClick={(wn) => handleWordClick(wn, parent.verseKey)} /></div></div>); return null; })()}
               </>
-            ) : selNode.type === "qiraat" ? (
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 18, fontWeight: 700, color: selNode.color }}>{QT[selNode.qType]?.ic} {selNode.label}</span>
-                {selNode.hafs && <span style={{ color: T.textDim, textDecoration: "line-through" }}>{selNode.hafs}</span>}
-                <div style={{ fontSize: 11, color: "#7c3aed" }}>{selNode.reader}</div>
-                <div style={{ fontSize: 11, color: T.textDim }}>{selNode.note}</div>
-                <button onClick={() => { setSelected(null); }} style={{ ...SS.btn, fontSize: 11 }}>✕</button>
-              </div>
             ) : selNode.type === "verse" ? (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -519,7 +408,6 @@ export default function QuranNetwork() {
                     {selNode.sharedWords.map((w, i) => <span key={i} style={{ fontSize: 11, color: "#fcd34d", background: "#fcc41922", padding: "1px 7px", borderRadius: 5, border: "1px solid #fcc41933" }}>{w}</span>)}
                   </div>
                 )}
-                {selNode.verseKey && qiraatDiffs[selNode.verseKey] && <QiraatPanel qiraatDiffs={qiraatDiffs} verseKey={selNode.verseKey} theme={theme} />}
               </>
             ) : null}
           </div>

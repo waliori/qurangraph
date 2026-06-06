@@ -11,11 +11,3 @@ async function fetchJSON(url) {
 export function loadHafsData() {
   return fetchJSON("/data/quran-hafs.json");
 }
-
-export function loadQiraatDiffs() {
-  return fetchJSON("/data/qiraat-diffs.json");
-}
-
-export function loadNarrationText(key) {
-  return fetchJSON(`/data/kfgqpc/${key}.json`);
-}
