@@ -3,7 +3,7 @@ import { norm, rootKey, rootOf, setRootMap } from "./arabic-utils.js";
 import { loadHafsData, loadRoots, loadRootMeanings, loadRootMeaningsFull } from "./data-loader.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
-import { forceLayout } from "./graph/forceLayout.js";
+import { createSimulation } from "./graph/simulation.js";
 import { HighlightedAyah } from "./components/HighlightedAyah.jsx";
 import { GraphLayer } from "./components/GraphLayer.jsx";
 import { OccurrencesModal } from "./components/OccurrencesModal.jsx";
@@ -37,10 +37,14 @@ export default function QuranGraph() {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState(null);
   const [positions, setPositions] = useState({});
+  const positionsRef = useRef(positions);
   const [dragId, setDragId] = useState(null);
   const dragStartRef = useRef(null);
   const draggedRef = useRef(false); // true once a press turns into a real drag
+  const [sim] = useState(() => createSimulation(VW, VH)); // live force engine (stable)
+  const rafSimRef = useRef(0);
   const containerRef = useRef();
+  const toolsRef = useRef(null);
   const pointersRef = useRef(new Map()); // pointerId → {x, y}  (for pan / pinch)
   const pinchRef = useRef(null);
   const rafRef = useRef(0);
@@ -61,6 +65,24 @@ export default function QuranGraph() {
 
   // Translate that centres the virtual canvas in the current viewport.
   const homeView = useCallback(() => ({ x: (dims.w - VW) / 2, y: (dims.h - VH) / 2, k: 1 }), [dims.w, dims.h]);
+
+  // Drive the live layout: tick the simulation once per frame, pushing settled
+  // positions into state, until its energy decays to rest. Cheap to call from any
+  // interaction — it no-ops if a loop is already running.
+  const runSim = useCallback(() => {
+    if (rafSimRef.current) return;
+    const tick = () => {
+      const alive = sim.step();
+      if (alive) { setPositions(sim.getPositions()); rafSimRef.current = requestAnimationFrame(tick); }
+      else { setPositions(sim.getPositions()); rafSimRef.current = 0; }
+    };
+    rafSimRef.current = requestAnimationFrame(tick);
+  }, [sim]);
+  useEffect(() => () => { if (rafSimRef.current) cancelAnimationFrame(rafSimRef.current); }, []);
+  // Mirror the latest committed positions into a ref so the structure-sync effect
+  // can seed new nodes around their parent's CURRENT spot without taking positions
+  // as a dependency (which would re-fire it on every simulation frame).
+  useEffect(() => { positionsRef.current = positions; }, [positions]);
 
   useEffect(() => {
     let raf = 0;
@@ -118,6 +140,17 @@ export default function QuranGraph() {
   // the whole آيات.network shell — including body + boot screens — recolours.
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
+  // Dismiss the graph-tools popover on an outside click or Escape (the toggle
+  // button lives inside the same wrapper, so it still toggles normally).
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const onDown = (e) => { if (toolsRef.current && !toolsRef.current.contains(e.target)) setToolsOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setToolsOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [toolsOpen]);
+
   // Animate the inspector in: mount closed, then flip `is-open` next frame so the
   // mobile bottom sheet slides up (on desktop it's an in-flow column, so this is
   // a no-op visually). Driven by the selected node id.
@@ -168,57 +201,42 @@ export default function QuranGraph() {
   // Adjacency map reused across every subtree query (descendants / drag / highlight).
   const childMap = useMemo(() => buildChildMap(graphLinks), [graphLinks]);
 
-  // Prune positions of nodes that no longer exist. (Caching derived layout in
-  // state is intentional here — the no-op short-circuit prevents churn.)
+  // Feed the live simulation whenever the graph STRUCTURE changes (expand/collapse,
+  // navigate). Surviving nodes keep their settled position; newly-added nodes are
+  // pre-seeded in a phyllotaxis disk around their parent's CURRENT position, so a
+  // freshly-expanded — or re-expanded — fan always blooms into the space around the
+  // parent as it is now, never restoring an old arrangement. Reading positions via
+  // a ref keeps this off the per-frame render path (it must not re-run as the sim
+  // ticks positions in).
   useEffect(() => {
-    const ids = new Set(graphNodes.map((n) => n.id));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPositions((prev) => {
-      let changed = false;
-      const c = {};
-      for (const k in prev) { if (ids.has(k)) c[k] = prev[k]; else changed = true; }
-      return changed ? c : prev;
-    });
-  }, [graphNodes]);
-
-  // Lay out only the newly-added nodes; pin already-placed ones so the existing
-  // arrangement (incl. user drags) is preserved. Runs in the fixed virtual canvas.
-  useEffect(() => {
-    const missing = graphNodes.filter((n) => !n.fixed && !positions[n.id]);
-    if (missing.length === 0) return;
-    // Seed each new node in a ring around its parent (when the parent is already
-    // placed) so a freshly-expanded word's verses START clustered around it and
-    // the force pass only has to settle a tight local cloud — not drag a long
-    // column in from the centre.
+    const pos = positionsRef.current;
     const parentOf = {};
     for (const l of graphLinks) if (parentOf[l.target] === undefined) parentOf[l.target] = l.source;
+    const missing = graphNodes.filter((n) => !n.fixed && !pos[n.id]);
     const missingByParent = {};
     for (const n of missing) (missingByParent[parentOf[n.id]] ||= []).push(n.id);
     const seedAround = (n) => {
-      const pp = positions[parentOf[n.id]];
+      const pp = pos[parentOf[n.id]];
       if (!pp) return { x: n.x, y: n.y };
       const sibs = missingByParent[parentOf[n.id]];
       const idx = Math.max(0, sibs.indexOf(n.id));
-      const ang = idx * 2.399963; // golden angle → even spread, no overlap bias
-      const rad = 120 + Math.min(sibs.length, 80) * 2.4; // grows with sibling count
+      const ang = idx * 2.399963; // golden angle → even angular spread
+      // Phyllotaxis (sunflower) seed: radius grows with √idx so siblings fill a
+      // uniform-density DISK around the parent, not one overcrowded ring.
+      const rad = 110 + 36 * Math.sqrt(idx + 0.5);
       return { x: pp.x + Math.cos(ang) * rad, y: pp.y + Math.sin(ang) * rad };
     };
-    const work = graphNodes.map((n) => {
-      const s = positions[n.id];
-      if (s) return { ...n, x: s.x, y: s.y, fixed: true };
-      if (n.fixed) return { ...n, x: n.x, y: n.y, fixed: true };
-      const seed = seedAround(n);
-      return { ...n, x: seed.x, y: seed.y, fixed: false };
+    const seeded = graphNodes.map((n) => {
+      const s = pos[n.id];
+      if (s) return { ...n, x: s.x, y: s.y };
+      if (n.fixed) return n;
+      const sd = seedAround(n);
+      return { ...n, x: sd.x, y: sd.y };
     });
-    forceLayout(work, graphLinks, VW, VH, 140);
-    const missingIds = new Set(missing.map((n) => n.id));
-    const np = {};
-    for (const n of work) if (missingIds.has(n.id)) np[n.id] = { x: n.x, y: n.y };
-    // Caching the computed layout in state is the intent; the `missing` guard
-    // above makes this a no-op once everything is placed (no render cascade).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPositions((prev) => ({ ...prev, ...np }));
-  }, [graphNodes, graphLinks, positions]);
+    sim.sync(seeded, graphLinks);
+    sim.reheat(missing.length ? 1 : 0.45);
+    runSim();
+  }, [graphNodes, graphLinks, runSim, sim]);
 
   const nmap = useMemo(() => { const m = {}; graphNodes.forEach((n) => (m[n.id] = n)); return m; }, [graphNodes]);
   // The per-word branch slider caps how many āyāt each word fans out to. Rather
@@ -235,8 +253,50 @@ export default function QuranGraph() {
   const highlightLinks = useMemo(() => { if (!highlightSet) return null; const s = new Set(); graphLinks.forEach((l, i) => { if (highlightSet.has(l.source) && highlightSet.has(l.target)) s.add(i); }); return s; }, [highlightSet, graphLinks]);
   const activeWordNodeIds = useMemo(() => (!activeWord ? new Set() : new Set(wordToNodeIds[activeWord] || [])), [activeWord, wordToNodeIds]);
 
+  // Nodes the simulation pulls toward the selection: its DIRECT linked nodes —
+  // immediate children PLUS any āyah it shares via a loop link (parented to another
+  // word). Selecting a word gathers exactly these around it; selecting the other
+  // word a shared āyah belongs to makes it travel over there. Kept to the direct
+  // ring (not the whole subtree) so deeper nodes keep orbiting their own parents.
+  const gatherSet = useMemo(() => {
+    if (!selected) return new Set();
+    const s = new Set(childMap[selected] || []);
+    for (const l of loopLinks) if (l.source === selected) s.add(l.target);
+    return s;
+  }, [selected, childMap, loopLinks]);
+
+  // Push the current selection into the sim and reheat so the gather animates.
+  useEffect(() => {
+    sim.setSelected(selected, gatherSet);
+    sim.reheat(selected ? 0.7 : 0.3);
+    runSim();
+  }, [selected, gatherSet, runSim, sim]);
+
   const getConnWord = useCallback((n) => n?.connectingWord || (parentMap[n?.id] ? nmap[parentMap[n.id]]?.lookup || nmap[parentMap[n.id]]?.wordNorm : null), [parentMap, nmap]);
-  const reset = useCallback(() => { setExpandedWords(new Set()); setExpandedVerses(new Set()); setSelected(null); setActiveWord(null); setPositions({}); setTransform(homeView()); }, [homeView]);
+  // Fit-to-content: frame EVERYTHING currently on the canvas, not just the fixed
+  // virtual centre. Walks every node's live position (settled layout, falling back
+  // to its build-time seed), pads for the node's radius + its label, then returns
+  // the transform that centres that bounding box in the viewport and zooms to fit.
+  const fitView = useCallback(() => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of graphNodes) {
+      const p = positions[n.id] || { x: n.x, y: n.y };
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const pad = (n.r || 8) + 46; // node radius + room for the label drawn beside it
+      if (p.x - pad < minX) minX = p.x - pad;
+      if (p.x + pad > maxX) maxX = p.x + pad;
+      if (p.y - pad < minY) minY = p.y - pad;
+      if (p.y + pad > maxY) maxY = p.y + pad;
+    }
+    if (!Number.isFinite(minX)) return homeView();
+    const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+    const margin = 48;
+    const k = Math.max(0.08, Math.min(1.5, Math.min((dims.w - margin * 2) / bw, (dims.h - margin * 2) / bh)));
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    return { k, x: dims.w / 2 - cx * k, y: dims.h / 2 - cy * k };
+  }, [graphNodes, positions, dims.w, dims.h, homeView]);
+
+  const reset = useCallback(() => { sim.clearSticky(); setExpandedWords(new Set()); setExpandedVerses(new Set()); setSelected(null); setActiveWord(null); setPositions({}); setTransform(homeView()); }, [homeView, sim]);
   const navigate = useCallback((s, a) => { setHist((h) => [...h, { s: surah, a: ayah }]); setSurah(s); setAyah(a); reset(); }, [surah, ayah, reset, setSurah, setAyah]);
   const goBack = useCallback(() => { if (!hist.length) return; const p = hist[hist.length - 1]; setHist((h) => h.slice(0, -1)); setSurah(p.s); setAyah(p.a); reset(); }, [hist, reset, setSurah, setAyah]);
 
@@ -249,7 +309,18 @@ export default function QuranGraph() {
   }, [childMap]);
 
   const svgToWorld = useCallback((cx, cy) => { const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return { x: 0, y: 0 }; return { x: (cx - rect.left - transform.x) / transform.k, y: (cy - rect.top - transform.y) / transform.k }; }, [transform]);
-  const startDrag = useCallback((nodeId, clientX, clientY) => { const desc = getDescendants(nodeId, childMap); const wp = svgToWorld(clientX, clientY); const np = {}; desc.forEach((did) => { const n = nmap[did]; if (n) { const p = positions[did] || { x: n.x, y: n.y }; np[did] = { x: p.x, y: p.y }; } }); dragStartRef.current = { worldPos: wp, nodePositions: np, downX: clientX, downY: clientY }; setDragId(nodeId); }, [childMap, nmap, positions, svgToWorld]);
+  // Begin dragging a node: pin ONLY this node in the sim (grabbed at its current
+  // point, not snapped to the cursor). Its linked nodes are left free so they
+  // re-gather around it live as it moves, rather than being towed rigidly.
+  const startDrag = useCallback((nodeId, clientX, clientY) => {
+    const n = nmap[nodeId];
+    const np = positions[nodeId] || (n ? { x: n.x, y: n.y } : { x: 0, y: 0 });
+    const wp = svgToWorld(clientX, clientY);
+    dragStartRef.current = { offX: np.x - wp.x, offY: np.y - wp.y, downX: clientX, downY: clientY };
+    sim.pin(nodeId, np.x, np.y);
+    setDragId(nodeId);
+    runSim();
+  }, [nmap, positions, svgToWorld, runSim, sim]);
 
   const applyZoom = useCallback((factor, sx, sy) => {
     setTransform((t) => {
@@ -260,6 +331,8 @@ export default function QuranGraph() {
       return { k: nk, x: mx - (mx - t.x) * (nk / t.k), y: my - (my - t.y) * (nk / t.k) };
     });
   }, []);
+  // Zoom from the on-canvas buttons, anchored at the stage centre.
+  const zoomBy = useCallback((factor) => { const r = containerRef.current?.getBoundingClientRect(); if (r) applyZoom(factor, r.left + r.width / 2, r.top + r.height / 2); }, [applyZoom]);
 
   // Native non-passive wheel listener (React's onWheel is passive → can't preventDefault).
   useEffect(() => {
@@ -333,27 +406,40 @@ export default function QuranGraph() {
         // trailing click is suppressed and the node isn't toggled.
         if (!draggedRef.current && Math.hypot(cur.x - ds.downX, cur.y - ds.downY) > 4) draggedRef.current = true;
         const w = svgToWorld(cur.x, cur.y);
-        const dx = w.x - ds.worldPos.x, dy = w.y - ds.worldPos.y;
-        setPositions((prev) => { const next = { ...prev }; for (const [id, op] of Object.entries(dragStartRef.current.nodePositions)) next[id] = { x: op.x + dx, y: op.y + dy }; return next; });
+        // Move the grabbed node to follow the cursor (keeping the grab offset) and
+        // reheat — its linked nodes chase and re-cluster around its new position.
+        sim.pin(dragId, w.x + ds.offX, w.y + ds.offY);
+        sim.reheat(0.5);
+        runSim();
       } else if (isPanning && panStart) {
         setTransform((t) => ({ ...t, x: cur.x - panStart.x, y: cur.y - panStart.y }));
       }
     });
-  }, [dragId, isPanning, panStart, svgToWorld]);
+  }, [dragId, isPanning, panStart, svgToWorld, runSim, sim]);
+
+  // End a node drag: a node that was actually moved sticks where it was dropped
+  // (so it doesn't spring back to its parent); a mere press is released.
+  const endDrag = useCallback(() => {
+    if (!dragId) return;
+    if (draggedRef.current) sim.stick(dragId); else sim.unpin(dragId);
+    sim.reheat(0.4);
+    runSim();
+  }, [dragId, runSim, sim]);
 
   const onPointerUp = useCallback((e) => {
     const pts = pointersRef.current;
     pts.delete(e.pointerId);
     if (pts.size < 2) pinchRef.current = null;
-    if (pts.size === 0) { setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null); }
-  }, []);
+    if (pts.size === 0) { endDrag(); setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null); }
+  }, [endDrag]);
 
   // Pointer left the canvas mid-gesture → end it (mirrors mouse-leave behaviour).
   const onPointerLeave = useCallback(() => {
     pointersRef.current.clear();
     pinchRef.current = null;
+    endDrag();
     setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
-  }, []);
+  }, [endDrag]);
 
   const handleWordClick = useCallback((wordNorm, fromVerseKey) => {
     const lookup = searchMode === "root" ? rootKey(wordNorm) : wordNorm;
@@ -471,7 +557,7 @@ export default function QuranGraph() {
             </select>
           </div>
 
-          <div className="ag-tools">
+          <div className="ag-tools" ref={toolsRef}>
             <button type="button" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label="أدوات الرسم"
               aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>⚙</button>
             {toolsOpen && (
@@ -498,10 +584,6 @@ export default function QuranGraph() {
                   </label>
                 </div>
                 <div className="ag-pop-actions">
-                  <button type="button" className="ag-btn" aria-label="إعادة ضبط العرض" onClick={() => setTransform(homeView())}>⟲ توسيط</button>
-                  {totalExp > 0 && <button type="button" className="ag-btn is-warn" aria-label="طي الكل" onClick={reset}>↺ طي الكل</button>}
-                  {(selected || activeWord) && <button type="button" className="ag-btn is-gold" aria-label="إلغاء التحديد" onClick={() => { setSelected(null); setActiveWord(null); }}>✦ إلغاء التحديد</button>}
-                  {hist.length > 0 && <button type="button" className="ag-btn is-gold" aria-label="رجوع" onClick={goBack}>→ رجوع</button>}
                   <button type="button" className="ag-btn" aria-label="مساعدة" aria-pressed={showHelp} onClick={() => setShowHelp((h) => !h)}>؟ مساعدة</button>
                 </div>
                 {showHelp && (
@@ -542,6 +624,16 @@ export default function QuranGraph() {
             <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--lapis-500)" }} />كلمة</div>
             <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--viridian-500)" }} />جذر</div>
             <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "#a78bfa" }} />آية</div>
+          </div>
+
+          {/* On-canvas graph controls (fit / zoom / collapse / deselect / back) */}
+          <div className="ag-dock" data-panel="1">
+            <button type="button" className="ag-iconbtn is-gold" title="توسيط العرض" aria-label="توسيط العرض" onClick={() => setTransform(fitView())}>⤢</button>
+            <button type="button" className="ag-iconbtn" title="تكبير" aria-label="تكبير" onClick={() => zoomBy(1.2)}>＋</button>
+            <button type="button" className="ag-iconbtn" title="تصغير" aria-label="تصغير" onClick={() => zoomBy(0.83)}>－</button>
+            {(selected || activeWord) && <button type="button" className="ag-iconbtn is-gold" title="إلغاء التحديد" aria-label="إلغاء التحديد" onClick={() => { setSelected(null); setActiveWord(null); }}>✦</button>}
+            {hist.length > 0 && <button type="button" className="ag-iconbtn is-gold" title="رجوع" aria-label="رجوع" onClick={goBack}>↩</button>}
+            {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title="طي الكل" aria-label="طي الكل" onClick={reset}>↺</button>}
           </div>
 
           {/* Empty state */}

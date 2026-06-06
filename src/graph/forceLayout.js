@@ -24,6 +24,7 @@
 
 const CUTOFF2 = 300000;                       // pairs farther than this are ignored
 const CELL = Math.sqrt(CUTOFF2);              // grid cell size = cutoff radius
+const PAD = 48;                               // extra collision gap reserving room for node labels
 
 function hash(str) {
   let h = 2166136261;
@@ -113,8 +114,12 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
             let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
             if (d2 > CUTOFF2) continue;
             const dist = Math.sqrt(d2) || 1;
-            if (dist < a.r + b.r + 22) {
-              const f = (a.r + b.r + 22 - dist) / dist * 0.6 * al;
+            // Min gap is generous (not just r+r): every node carries a text label
+            // (~60-80px wide for an āyah ref) drawn beside it, so a radius-only
+            // collision still let labels overlap badly. PAD reserves room for the
+            // label, so a freshly-expanded fan settles into a readable disk.
+            if (dist < a.r + b.r + PAD) {
+              const f = (a.r + b.r + PAD - dist) / dist * 0.6 * al;
               if (!a.fixed) { a.vx -= dx * f; a.vy -= dy * f; }
               if (!b.fixed) { b.vx += dx * f; b.vy += dy * f; }
             }

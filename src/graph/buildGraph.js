@@ -128,6 +128,14 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         .sort((a, b) => b.shared.length - a.shared.length || a.vk.localeCompare(b.vk))
         .slice(0, maxBranch);
 
+      // Spring length for this word's verse fan-out. A fixed distance seats every
+      // verse on one ring around the word — fine for 3 verses, hopeless for 100
+      // (they'd overlap into an unreadable knot). Scaling with √count makes the
+      // target radius track the area the verses need, so the force pass spreads
+      // them into a roomy disk whose labels stay legible. √ (not linear) keeps a
+      // big fan-out compact rather than flinging it to the edge of the canvas.
+      const ring = Math.max(150, Math.round(36 * Math.sqrt(ranked.length)));
+
       ranked.forEach(({ vk, v, shared }) => {
         const vid = "v:" + vk;
         if (visitedVerses.has(vk)) {
@@ -141,7 +149,7 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
           addedNodes.add(vid);
           parentMap[vid] = item.wordId;
         }
-        links.push({ source: item.wordId, target: vid, dist: 130 });
+        links.push({ source: item.wordId, target: vid, dist: ring });
         if (isVE) queue.push({ type: "show-words", verseId: vid, verseKey: vk, depth: item.depth + 1 });
       });
     }
