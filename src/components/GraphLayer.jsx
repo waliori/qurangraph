@@ -27,27 +27,27 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
       onClick={(e) => onClick(n, e)}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } } : undefined}>
 
-      {(isWE || isVE) && <circle cx={x} cy={y} r={r + 7} fill="none" stroke={isWE ? "#22c55e" : "#cc5de8"} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
-      {(isS || isAW) && <circle cx={x} cy={y} r={r + 10} fill="none" stroke={isAW ? "#fcc419" : n.color} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
+      {(isWE || isVE) && <circle cx={x} cy={y} r={r + 7} fill="none" stroke={isWE ? "#34d8a8" : "#a78bfa"} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
+      {(isS || isAW) && <circle cx={x} cy={y} r={r + 10} fill="none" stroke={isAW ? "#fcd34d" : n.color} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
 
       <circle cx={x} cy={y} r={r}
-        fill={isAW ? "#fcc41944" : isWE ? "#22c55e33" : isVE ? "#cc5de833" : n.color + T.nodeFill}
-        stroke={isS ? (theme === "light" ? "#1e293b" : "#fff") : isAW ? "#fcc419" : isWE ? "#22c55e" : isVE ? "#cc5de8" : isH ? (theme === "light" ? "#1e293b" : "#fff") : n.color}
+        fill={isAW ? "#fcd34d44" : isWE ? "#34d8a833" : isVE ? "#a78bfa33" : n.color + T.nodeFill}
+        stroke={isS ? (theme === "light" ? "#2a2620" : "#fff") : isAW ? "#fcd34d" : isWE ? "#34d8a8" : isVE ? "#a78bfa" : isH ? (theme === "light" ? "#2a2620" : "#fff") : n.color}
         strokeWidth={n.type === "center" ? 3 : isH || isS || isAW ? 2.5 : isWE || isVE ? 2 : n.type === "word" ? 1.8 : 1} />
 
-      {n.type === "word" && <text x={x} y={y + 3.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill={theme === "light" ? "#1e293b" : "#fff"} style={{ pointerEvents: "none" }}>{n.count || ""}</text>}
-      {n.type === "verse" && (n.sharedCount || 0) > 1 && <text x={x} y={y + 3} textAnchor="middle" fontSize={7} fill="#fcc419" fontWeight="bold" style={{ pointerEvents: "none" }}>{n.sharedCount}</text>}
+      {n.type === "word" && <text x={x} y={y + 3.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill={theme === "light" ? "#2a2620" : "#fff"} style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.count || ""}</text>}
+      {n.type === "verse" && (n.sharedCount || 0) > 1 && <text x={x} y={y + 3} textAnchor="middle" fontSize={7} fill="#fcd34d" fontWeight="bold" style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.sharedCount}</text>}
 
       <text x={x} y={n.type === "word" ? y - r - 4 : y + r + 11}
-        textAnchor="middle" fontSize={n.type === "center" ? 12 : n.type === "word" ? 11 : 8}
-        fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? (theme === "light" ? "#1e293b" : "#fff") : n.type === "verse" ? T.textDim : n.color}
-        direction="rtl" style={{ pointerEvents: "none" }}>{n.label}</text>
+        textAnchor="middle" fontSize={n.type === "center" ? 12 : n.type === "word" ? 12 : 8}
+        fontWeight={n.type !== "verse" ? "bold" : "normal"} fill={isS || isAW ? (theme === "light" ? "#2a2620" : "#fff") : n.type === "verse" ? T.textDim : n.color}
+        direction="rtl" style={{ pointerEvents: "none", fontFamily: n.type === "verse" ? "var(--font-display)" : "var(--font-quran)" }}>{n.label}</text>
 
       {n.type === "word" && n.rootLabel && n.rootLabel !== norm(n.label) && (
-        <text x={x} y={y - r - 15} textAnchor="middle" fontSize={8} fill="#22c55e" opacity={0.7} direction="rtl" style={{ pointerEvents: "none" }}>({n.rootLabel})</text>
+        <text x={x} y={y - r - 15} textAnchor="middle" fontSize={8} fill="#34d8a8" opacity={0.75} direction="rtl" style={{ pointerEvents: "none", fontFamily: "var(--font-ui)" }}>({n.rootLabel})</text>
       )}
       {n.type === "word" && !isWE && n.count > 1 && <text x={x + r + 3} y={y + 3} fontSize={10} fill={T.textFaint} style={{ pointerEvents: "none" }}>+</text>}
-      {isWE && <circle cx={x + r - 1} cy={y - r + 1} r={5} fill="#22c55e" stroke={T.bg} strokeWidth={1.5} />}
+      {isWE && <circle cx={x + r - 1} cy={y - r + 1} r={5} fill="#34d8a8" stroke={T.bg} strokeWidth={1.5} />}
     </g>
   );
 });

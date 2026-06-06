@@ -49,6 +49,10 @@ export default function QuranGraph() {
   const [showHelp, setShowHelp] = useState(false);
   const [meanings, setMeanings] = useState(null); // root → { c, f } (lazy)
   const [meaningOpen, setMeaningOpen] = useState(false); // full-text toggle
+  const [toolsOpen, setToolsOpen] = useState(false); // graph-tools popover
+  const [query, setQuery] = useState(""); // toolbar search field
+  const [searchMiss, setSearchMiss] = useState(false); // last search found nothing
+  const [readerCollapsed, setReaderCollapsed] = useState(false); // bottom reader dock
   const T = THEMES[theme];
 
   // Translate that centres the virtual canvas in the current viewport.
@@ -66,7 +70,12 @@ export default function QuranGraph() {
     const onResize = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; measure(); }); };
     measure();
     window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); if (raf) cancelAnimationFrame(raf); };
+    // Observe the stage element itself so the canvas also re-measures when the
+    // layout (not just the window) changes — e.g. the inspector docks/undocks
+    // or the toolbar wraps on a narrow screen.
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    if (ro && containerRef.current) ro.observe(containerRef.current);
+    return () => { window.removeEventListener("resize", onResize); if (ro) ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, [loading]);
 
   // Centre the graph in the viewport once, after the first real measurement.
@@ -92,6 +101,10 @@ export default function QuranGraph() {
   useEffect(() => {
     if (searchMode === "root" && !meanings) loadRootMeanings().then(setMeanings).catch(() => {});
   }, [searchMode, meanings]);
+
+  // Drive the CSS design tokens (styles/theme.css) off the React theme state so
+  // the whole آيات.network shell — including body + boot screens — recolours.
+  useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
   const { w2v, r2v, verseData, surahList } = useMemo(() => {
     if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
@@ -299,6 +312,33 @@ export default function QuranGraph() {
     else { setActiveWord(lookup); const nids = wordToNodeIds[lookup]; if (nids?.length) setSelected(nids[0]); toggleWord(lookup, vk); }
   }, [activeWord, wordToNodeIds, toggleWord, currentKey, searchMode]);
 
+  // Toolbar search: normalise the query, find the first verse the word (or its
+  // root, in root mode) occurs in, jump there and highlight it. Marks a miss so
+  // the field can flash when nothing matches.
+  const runSearch = useCallback((e) => {
+    e?.preventDefault?.();
+    const q = norm(query);
+    if (q.length < 2) { setSearchMiss(true); return; }
+    let lookup, verses;
+    if (searchMode === "root") {
+      lookup = rootKey(q);
+      verses = r2v[lookup];
+    } else {
+      lookup = q; verses = w2v[q];
+      if (!verses?.length) {
+        // Forgiving fallback: first indexed word that contains the query.
+        const hit = Object.keys(w2v).find((k) => k.includes(q));
+        if (hit) { lookup = hit; verses = w2v[hit]; }
+      }
+    }
+    if (!verses?.length) { setSearchMiss(true); return; }
+    setSearchMiss(false);
+    const [s, a] = verses[0].split(":").map(Number);
+    navigate(s, a);
+    setActiveWord(lookup);
+    setToolsOpen(false);
+  }, [query, searchMode, w2v, r2v, navigate]);
+
   // Stable node handlers passed to the memoized GraphLayer.
   const onNodeEnter = useCallback((n) => { setHovered(n.id); if (n.type === "word") setActiveWord(n.lookup || n.wordNorm); }, []);
   const onNodeLeave = useCallback(() => { setHovered(null); if (!selected) setActiveWord(null); }, [selected]);
@@ -314,201 +354,275 @@ export default function QuranGraph() {
   const selNode = selected ? nmap[selected] : null;
 
   if (error) return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: T.bg, color: T.text, fontFamily: "Arial", gap: 14, padding: 20, textAlign: "center" }}>
-      <div style={{ fontSize: 44 }}>⚠️</div>
-      <div style={{ fontSize: 15, color: T.textDim, maxWidth: 360 }}>تعذّر تحميل بيانات القرآن.</div>
-      <div style={{ fontSize: 11, color: T.textFaint, maxWidth: 420, direction: "ltr", wordBreak: "break-word" }}>{error}</div>
-      <button onClick={loadData} style={{ background: "#1e40af33", color: "#60a5fa", border: "1px solid #1e40af", borderRadius: 6, padding: "6px 16px", cursor: "pointer", fontSize: 13 }}>إعادة المحاولة</button>
+    <div className="ag-boot">
+      <div className="ag-boot-glyph">۞</div>
+      <div className="ag-boot-msg">تعذّر تحميل بيانات القرآن.</div>
+      <div className="ag-boot-sub">{error}</div>
+      <button className="ag-btn is-gold" onClick={loadData}>إعادة المحاولة</button>
     </div>
   );
 
   if (loading) return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: T.bg, fontFamily: "Arial" }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🕸️</div>
-      <div style={{ fontSize: 15, color: T.textDim, letterSpacing: 2 }}>جارٍ تحميل الشبكة القرآنية...</div>
-      <div style={{ width: 220, height: 3, background: T.panelBorder, marginTop: 16, borderRadius: 2, overflow: "hidden" }}>
-        <div className="qg-shimmer" style={{ width: "100%", height: "100%", background: "linear-gradient(90deg, #3b82f6, #a855f7, #3b82f6)", backgroundSize: "200%", animation: "sh 1.5s infinite linear" }} />
-      </div>
-      <style>{`@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}@media (prefers-reduced-motion: reduce){.qg-shimmer{animation:none!important}}`}</style>
+    <div className="ag-boot">
+      <div className="ag-boot-glyph">۞</div>
+      <div className="ag-boot-msg">جارٍ نسج الشبكة القرآنية…</div>
+      <div className="ag-boot-bar"><div /></div>
     </div>
   );
 
   const totalExp = expandedWords.size + expandedVerses.size;
   const isEmpty = !!currentVerse && graphNodes.length <= 1;
-  const SS = {
-    sel: { background: theme === "light" ? "#f1f5f9" : "#070b14", color: T.text, border: `1px solid ${T.panelBorder}`, borderRadius: 5, padding: "2px 5px", fontSize: 11, direction: "rtl" },
-    btn: { background: theme === "light" ? "#f1f5f9" : "#0c1222", color: T.textDim, border: `1px solid ${T.panelBorder}`, borderRadius: 5, padding: "2px 7px", cursor: "pointer", fontSize: 10 },
-  };
+  const inspOpen = !!selNode;
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "Arial", overflow: "hidden" }}>
-      {/* Controls */}
-      <div style={{ background: T.panel, borderBottom: `1px solid ${T.panelBorder}`, padding: "6px 10px", flexShrink: 0, zIndex: 20, direction: "rtl" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 5 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontWeight: 800, color: "#60a5fa", fontSize: 13 }} role="img" aria-label="شبكة">🕸️</span>
-            <select aria-label="السورة" value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }} style={SS.sel}>
+    <div className="ag-app">
+      {/* ── Toolbar ── */}
+      <header className="ag-bar">
+        <button type="button" className="ag-brand" aria-label="آيات.network — العودة إلى البداية"
+          onClick={() => { setSelected(null); setActiveWord(null); setToolsOpen(false); setTransform(homeView()); }}>
+          <img src={`${import.meta.env.BASE_URL}logomark.svg`} alt="" className="ag-logo" />
+          <span className="ag-wordmark">آيات<i>.network</i></span>
+        </button>
+
+        <form className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search">
+          <button type="submit" className="ag-search-btn" aria-label="بحث" title="بحث">⌕</button>
+          <input className="ag-input" type="search" value={query} aria-label="بحث عن كلمة أو جذر"
+            placeholder={searchMode === "root" ? "ابحث عن جذر…" : "ابحث عن كلمة…"}
+            onChange={(e) => { setQuery(e.target.value); if (searchMiss) setSearchMiss(false); }} />
+        </form>
+
+        <div className="ag-controls">
+          <div className="ag-seg" role="group" aria-label="نمط البحث">
+            <button type="button" className={"" + (searchMode === "exact" ? "is-on" : "")} title="مطابقة الكلمة"
+              aria-pressed={searchMode === "exact"} onClick={() => { setSearchMode("exact"); reset(); }}>كلمة</button>
+            <button type="button" className={"is-root " + (searchMode === "root" ? "is-on" : "")} title="مطابقة الجذر"
+              aria-pressed={searchMode === "root"} onClick={() => { setSearchMode("root"); reset(); }}>جذر</button>
+          </div>
+
+          <div className="ag-select">
+            <select aria-label="السورة" value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
               {surahList.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
             </select>
-            <select aria-label="الآية" value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }} style={{ ...SS.sel, width: 55 }}>
+          </div>
+          <div className="ag-select is-ayah">
+            <select aria-label="الآية" value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
               {Array.from({ length: ayahCount }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
-          <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: 0, borderRadius: 6, overflow: "hidden", border: `1px solid ${T.panelBorder}` }} role="group" aria-label="نمط البحث">
-              <button title="مطابقة الكلمة" aria-pressed={searchMode === "exact"} onClick={() => { setSearchMode("exact"); reset(); }} style={{ ...SS.btn, border: "none", ...(searchMode === "exact" ? { background: "#1e40af33", color: "#60a5fa", fontWeight: 700 } : {}) }}>📝 كلمة</button>
-              <button title="مطابقة الجذر" aria-pressed={searchMode === "root"} onClick={() => { setSearchMode("root"); reset(); }} style={{ ...SS.btn, border: "none", ...(searchMode === "root" ? { background: "#22c55e22", color: "#22c55e", fontWeight: 700 } : {}) }}>🌿 جذر</button>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 3, background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 6, padding: "2px 8px", border: `1px solid ${T.panelBorder}` }}>
-              <span style={{ fontSize: 9, color: "#cc5de8" }}>لكل كلمة</span>
-              <input type="range" aria-label="عدد الآيات لكل كلمة" min={3} max={50} value={maxBranch} onChange={(e) => setMaxBranch(+e.target.value)} style={{ width: 50, accentColor: "#cc5de8" }} />
-              <span style={{ fontSize: 11, color: "#cc5de8", fontWeight: 700, minWidth: 16 }}>{maxBranch}</span>
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 2, cursor: "pointer", fontSize: 9, color: T.textDim }}><input type="checkbox" checked={hideStop} onChange={(e) => setHideStop(e.target.checked)} /> أدوات</label>
-            <label style={{ display: "flex", alignItems: "center", gap: 2, cursor: "pointer", fontSize: 9, color: T.textDim }}><input type="checkbox" checked={showLoops} onChange={(e) => setShowLoops(e.target.checked)} /> حلقات</label>
-            <button title="تبديل السمة" aria-label="تبديل السمة" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} style={{ ...SS.btn, fontSize: 12 }}>{theme === "dark" ? "☀️" : "🌙"}</button>
-            {totalExp > 0 && <button title="طي الكل" aria-label="طي الكل" onClick={reset} style={{ ...SS.btn, color: "#ff6b6b" }}>↺ طي</button>}
-            {(selected || activeWord) && <button title="إلغاء التحديد" aria-label="إلغاء التحديد" onClick={() => { setSelected(null); setActiveWord(null); }} style={{ ...SS.btn, color: "#fcc419" }}>✦</button>}
-            <button title="مساعدة" aria-label="مساعدة" aria-pressed={showHelp} onClick={() => setShowHelp((h) => !h)} style={{ ...SS.btn, color: showHelp ? "#60a5fa" : T.textFaint }}>؟</button>
-            <button title="إعادة ضبط العرض" aria-label="إعادة ضبط العرض" onClick={() => setTransform(homeView())} style={SS.btn}>⟲</button>
-            {hist.length > 0 && <button title="رجوع" aria-label="رجوع" onClick={goBack} style={{ ...SS.btn, color: "#fbbf24" }}>→</button>}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 3, fontSize: 9, color: T.textFaint, flexWrap: "wrap" }}>
-          <span>{graphNodes.length} عقدة · {graphLinks.length} رابط</span>
-          <span style={{ color: searchMode === "root" ? "#22c55e" : "#60a5fa" }}>{searchMode === "root" ? "🌿 جذر ثلاثي" : "📝 تطابق"}</span>
-        </div>
-        {showHelp && (
-          <div style={{ background: theme === "light" ? "#f8fafc" : "#0a0e1a", borderRadius: 8, padding: "8px 12px", marginTop: 6, border: `1px solid ${T.panelBorder}`, fontSize: 11, lineHeight: 2.2, color: T.textDim }}>
-            <b style={{ color: "#22c55e" }}>🌿 جذر:</b> الجذر الصرفي لكل كلمة (المدوّنة الصرفية للقرآن) مع معناه من «مقاييس اللغة» لابن فارس — أشهُر/شهور/شهر → ش ه ر<br />
-            <b style={{ color: "#60a5fa" }}>📝 كلمة:</b> تطابق دقيق<br />
-            <b>اضغط كلمة</b> (في الآية أو الشبكة) → توسيع. مرة ثانية → طي تلقائي مع الفروع.<br />
-            <span style={{ color: T.textFaint }}>اسحب للتحريك · عجلة الفأرة أو إصبعان للتكبير · اسحب العقدة لتحريكها.</span><br />
-            <span style={{ color: T.textFaint, fontSize: 9 }}>المصادر: نصّ حفص (تنزيل) · الجذور (المدوّنة الصرفية للقرآن) · المعاني (مقاييس اللغة لابن فارس، عبر OpenITI).</span>
-          </div>
-        )}
-      </div>
 
-      {/* Graph */}
-      <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "hidden", touchAction: "none", cursor: dragId ? "grabbing" : isPanning ? "grabbing" : "grab" }}
-        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onPointerLeave={onPointerLeave}>
-
-        <div style={{ position: "absolute", inset: 0, backgroundImage: `radial-gradient(circle, ${T.grid} 1px, transparent 1px)`, backgroundSize: "30px 30px", pointerEvents: "none" }} />
-
-        {/* Top ayah */}
-        {currentVerse && (
-          <div data-panel="1" style={{ position: "absolute", top: 6, left: 6, right: 6, background: T.panel + (theme === "dark" ? "ee" : "f0"), backdropFilter: "blur(8px)", borderRadius: 8, padding: "8px 12px", border: `1px solid ${T.panelBorder}`, direction: "rtl", zIndex: 5 }}>
-            <div style={{ fontSize: 17, lineHeight: 2.2, color: T.ayahText }}>
-              <HighlightedAyah text={currentVerse.text} primaryWord={activeWord || (hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null)} interactive={true} onWordClick={(wn) => handleWordClick(wn, currentKey)} activeGraphWord={hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null} searchMode={searchMode} theme={theme} />
-            </div>
-            <div style={{ fontSize: 9, color: T.textFaint, marginTop: 2 }}>
-              {currentVerse.sn} — الآية {currentVerse.a}
-            </div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {isEmpty && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", direction: "rtl" }}>
-            <div style={{ textAlign: "center", color: T.textFaint, fontSize: 13, maxWidth: 280 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🪶</div>
-              لا توجد كلمات قابلة للربط في هذه الآية{hideStop ? " (جرّب إظهار الأدوات)" : ""}.
-            </div>
-          </div>
-        )}
-
-        <svg width={dims.w} height={dims.h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          <defs><marker id="arrL" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6b6b" opacity="0.6" /></marker></defs>
-          <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`} style={{ pointerEvents: "auto" }}>
-            <GraphLayer
-              nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} positions={positions} nmap={nmap}
-              highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
-              hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme}
-              onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />
-          </g>
-        </svg>
-
-        {/* Hover tooltip */}
-        {hovNode && hovNode.type !== "center" && !selNode && (
-          <div data-panel="1" style={{ position: "absolute", bottom: 12, left: 12, right: 12, background: T.panel + (theme === "dark" ? "f5" : "f8"), backdropFilter: "blur(12px)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${hovNode.color}44`, direction: "rtl", zIndex: 30, pointerEvents: hovNode.type === "verse" ? "auto" : "none", maxHeight: "28vh", overflow: "auto" }}>
-            {hovNode.type === "word" ? (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
-                  {hovNode.rootLabel && <span style={{ fontSize: 12, color: "#22c55e" }}>جذر: {hovNode.rootLabel}</span>}
-                  <span style={{ fontSize: 10, color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", padding: "1px 8px", borderRadius: 10 }}>{hovNode.count} آية</span>
+          <div className="ag-tools">
+            <button type="button" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label="أدوات الرسم"
+              aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>⚙</button>
+            {toolsOpen && (
+              <div className="ag-popover" role="dialog" aria-label="أدوات الرسم">
+                <h3 className="ag-pop-h">أدوات الرسم</h3>
+                <div className="ag-range">
+                  <div className="ag-range-top">
+                    <span className="ag-range-lab">عدد الآيات لكل كلمة</span>
+                    <span className="ag-range-val">{maxBranch}</span>
+                  </div>
+                  <input type="range" aria-label="عدد الآيات لكل كلمة" min={3} max={50} value={maxBranch}
+                    onChange={(e) => setMaxBranch(+e.target.value)} />
                 </div>
-                {hovNode.root && meanings?.[hovNode.root] && (
-                  <div style={{ fontSize: 11, color: T.textDim, marginTop: 4, lineHeight: 1.8 }}>{meanings[hovNode.root].c}</div>
+                <div className="ag-pop-sec">
+                  <label className="ag-switch">
+                    <span>إخفاء حروف المعاني</span>
+                    <input type="checkbox" checked={hideStop} onChange={(e) => setHideStop(e.target.checked)} />
+                    <span className="ag-track" aria-hidden="true" />
+                  </label>
+                  <label className="ag-switch">
+                    <span>إظهار الحلقات</span>
+                    <input type="checkbox" checked={showLoops} onChange={(e) => setShowLoops(e.target.checked)} />
+                    <span className="ag-track" aria-hidden="true" />
+                  </label>
+                </div>
+                <div className="ag-pop-actions">
+                  <button type="button" className="ag-btn" aria-label="إعادة ضبط العرض" onClick={() => setTransform(homeView())}>⟲ توسيط</button>
+                  {totalExp > 0 && <button type="button" className="ag-btn is-warn" aria-label="طي الكل" onClick={reset}>↺ طي الكل</button>}
+                  {(selected || activeWord) && <button type="button" className="ag-btn is-gold" aria-label="إلغاء التحديد" onClick={() => { setSelected(null); setActiveWord(null); }}>✦ إلغاء التحديد</button>}
+                  {hist.length > 0 && <button type="button" className="ag-btn is-gold" aria-label="رجوع" onClick={goBack}>→ رجوع</button>}
+                  <button type="button" className="ag-btn" aria-label="مساعدة" aria-pressed={showHelp} onClick={() => setShowHelp((h) => !h)}>؟ مساعدة</button>
+                </div>
+                {showHelp && (
+                  <div className="ag-insp-card" style={{ fontSize: "var(--text-xs)", lineHeight: 2, color: "var(--text-muted)" }}>
+                    <b style={{ color: "var(--viridian-400)" }}>جذر:</b> الجذر الصرفي لكل كلمة مع معناه من «مقاييس اللغة» لابن فارس — أشهُر/شهور/شهر ← ش ه ر<br />
+                    <b style={{ color: "var(--lapis-400)" }}>كلمة:</b> تطابق دقيق<br />
+                    اضغط كلمة (في الآية أو الشبكة) ← توسيع، ومرة ثانية ← طي.<br />
+                    <span style={{ color: "var(--text-faint)" }}>اسحب للتحريك · العجلة أو إصبعان للتكبير.</span>
+                  </div>
                 )}
               </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
-                </div>
-                <div style={{ fontSize: 15, lineHeight: 2, color: T.text }}>
-                  <HighlightedAyah text={hovNode.text} primaryWord={getConnWord(hovNode)} sharedWords={hovNode.sharedWords || []} searchMode={searchMode} theme={theme}
-                    interactive={true} onWordClick={(wn) => handleWordClick(wn, hovNode.verseKey)} />
-                </div>
-              </>
             )}
           </div>
-        )}
 
-        {/* Selected panel */}
+          <button type="button" className="ag-iconbtn" title="تبديل السمة" aria-label="تبديل السمة"
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
+        </div>
+      </header>
+
+      {/* ── Body: stage + inspector ── */}
+      <div className="ag-body">
+        <main className="ag-stage" ref={containerRef}
+          style={{ cursor: dragId || isPanning ? "grabbing" : "grab" }}
+          onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp} onPointerLeave={onPointerLeave}>
+
+          <div className="ag-girih" />
+
+          {/* HUD: status + mode */}
+          <div className="ag-hud">
+            <span className="ag-chip">{graphNodes.length} عقدة · {graphLinks.length} رابط</span>
+            <span className={"ag-chip is-mode" + (searchMode === "root" ? " is-root" : "")}>{searchMode === "root" ? "جذر ثلاثي" : "تطابق الكلمة"}</span>
+          </div>
+
+          {/* Legend */}
+          <div className="ag-legend" aria-hidden="true">
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--gold-500)" }} />المركز</div>
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--lapis-500)" }} />كلمة</div>
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--viridian-500)" }} />جذر</div>
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "#a78bfa" }} />آية</div>
+          </div>
+
+          {/* Empty state */}
+          {isEmpty && (
+            <div className="ag-empty">
+              <div className="ag-empty-inner">
+                <div className="ag-empty-glyph">۞</div>
+                لا توجد كلمات قابلة للربط في هذه الآية{hideStop ? " (جرّب إيقاف «إخفاء حروف المعاني»)" : ""}.
+              </div>
+            </div>
+          )}
+
+          {/* SVG graph */}
+          <svg width={dims.w} height={dims.h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+            <defs><marker id="arrL" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185" opacity="0.6" /></marker></defs>
+            <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`} style={{ pointerEvents: "auto" }}>
+              <GraphLayer
+                nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} positions={positions} nmap={nmap}
+                highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
+                hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme}
+                onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />
+            </g>
+          </svg>
+
+          {/* Hover tooltip */}
+          {hovNode && hovNode.type !== "center" && !selNode && (
+            <div data-panel="1" className="ag-tooltip" style={{ pointerEvents: hovNode.type === "verse" ? "auto" : "none" }}>
+              {hovNode.type === "word" ? (
+                <div>
+                  <div className="ag-tip-word">{hovNode.label}</div>
+                  <div className="ag-tip-meta">
+                    {hovNode.rootLabel && <span className="ag-tag" style={{ background: "color-mix(in oklab, var(--viridian-500) 14%, transparent)", color: "var(--viridian-400)", borderColor: "color-mix(in oklab, var(--viridian-500) 30%, transparent)" }}>جذر {hovNode.rootLabel}</span>}
+                    <span className="ag-tag" style={{ color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", borderColor: fColor(hovNode.count) + "44" }}>{hovNode.count} آية</span>
+                  </div>
+                  {hovNode.root && meanings?.[hovNode.root] && <div className="ag-tip-mean">{meanings[hovNode.root].c}</div>}
+                </div>
+              ) : (
+                <>
+                  <div className="ag-ayah-ref" style={{ marginBottom: 4 }}><span className="ag-ayah-surah">{hovNode.label}</span></div>
+                  <div className="ag-insp-verse">
+                    <HighlightedAyah text={hovNode.text} primaryWord={getConnWord(hovNode)} sharedWords={hovNode.sharedWords || []} searchMode={searchMode} theme={theme}
+                      interactive={true} onWordClick={(wn) => handleWordClick(wn, hovNode.verseKey)} />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Reader dock — the current centre verse */}
+          {currentVerse && (
+            <div className="ag-reader-dock">
+              <div data-panel="1" className={"ag-reader" + (readerCollapsed ? " is-collapsed" : "")}>
+                <div className="ag-reader-head">
+                  <span className="ag-ayah-ref">
+                    <span className="ag-ayah-surah">{currentVerse.sn}</span>
+                    <span className="ag-ayah-num">{currentVerse.a}</span>
+                  </span>
+                  <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                    aria-label={readerCollapsed ? "إظهار الآية" : "إخفاء الآية"} aria-expanded={!readerCollapsed}
+                    onClick={() => setReaderCollapsed((c) => !c)}>{readerCollapsed ? "▴" : "▾"}</button>
+                </div>
+                <div className="ag-reader-body">
+                  <div className="ag-reader-text">
+                    <HighlightedAyah text={currentVerse.text} primaryWord={activeWord || (hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null)} interactive={true} onWordClick={(wn) => handleWordClick(wn, currentKey)} activeGraphWord={hovNode?.type === "word" ? (hovNode.lookup || hovNode.wordNorm) : null} searchMode={searchMode} theme={theme} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* Inspector — selected node detail (side panel ↔ mobile drawer) */}
+        <div className={"ag-scrim" + (inspOpen ? " is-open" : "")} onClick={() => { setSelected(null); setActiveWord(null); }} />
         {selNode && (
-          <div data-panel="1" style={{ position: "absolute", bottom: 6, left: 6, right: 6, background: T.panel + (theme === "dark" ? "f8" : "fa"), backdropFilter: "blur(12px)", borderRadius: 10, padding: 12, border: `1px solid ${selNode.color}55`, direction: "rtl", zIndex: 25, maxHeight: "32vh", overflow: "auto" }}>
+          <aside className={"ag-inspector is-open"} aria-label="لوحة التفصيل">
             {selNode.type === "word" ? (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 22, fontWeight: 700, color: selNode.color }}>{selNode.label}</span>
-                    {selNode.rootLabel && <span style={{ fontSize: 13, color: "#22c55e", background: "#22c55e22", padding: "2px 8px", borderRadius: 8 }}>جذر: {selNode.rootLabel}</span>}
-                    <span style={{ fontSize: 11, color: fColor(selNode.count), background: fColor(selNode.count) + "22", padding: "2px 10px", borderRadius: 10 }}>{selNode.count} آية</span>
+                <div className="ag-insp-head">
+                  <div className="ag-insp-title">
+                    <span className="ag-badge t-word">كلمة</span>
+                    <h2 className="ag-insp-word">{selNode.label}</h2>
+                    {selNode.rootLabel && <span className="ag-insp-root">جذر «{selNode.rootLabel}»</span>}
                   </div>
-                  <button title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }} style={{ ...SS.btn, fontSize: 11 }}>✕</button>
+                  <button type="button" className="ag-iconbtn" title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
                 </div>
-                {selNode.root && meanings?.[selNode.root] && (() => {
-                  const m = meanings[selNode.root];
-                  const hasMore = m.f && m.f !== m.c;
-                  return (
-                    <div style={{ background: theme === "light" ? "#f0fdf4" : "#0a140d", border: `1px solid ${theme === "light" ? "#bbf7d0" : "#14331f"}`, borderRadius: 8, padding: "6px 10px", marginBottom: 6 }}>
-                      <div style={{ fontSize: 14, lineHeight: 1.9, color: theme === "light" ? "#15803d" : "#86efac" }}>{meaningOpen && hasMore ? m.f : m.c}</div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
-                        <span style={{ fontSize: 8, color: T.textFaint }}>مقاييس اللغة — ابن فارس</span>
-                        {hasMore && <button onClick={() => setMeaningOpen((o) => !o)} style={{ ...SS.btn, fontSize: 10, color: "#22c55e" }}>{meaningOpen ? "أقل ▲" : "المزيد ▼"}</button>}
+                <div className="ag-insp-scroll">
+                  <div className="ag-insp-stat">
+                    <span className="ag-insp-num" style={{ color: fColor(selNode.count) }}>{selNode.count}</span>
+                    <span className="ag-insp-cap">آية وردت فيها</span>
+                  </div>
+                  {selNode.root && meanings?.[selNode.root] && (() => {
+                    const m = meanings[selNode.root];
+                    const hasMore = m.f && m.f !== m.c;
+                    return (
+                      <div className="ag-insp-card t-mean">
+                        <div className="ag-insp-mean">{meaningOpen && hasMore ? m.f : m.c}</div>
+                        <div className="ag-insp-card-h" style={{ marginBottom: 0, marginTop: 6 }}>
+                          <span className="ag-insp-card-lab">مقاييس اللغة — ابن فارس</span>
+                          {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? "أقل ▲" : "المزيد ▼"}</button>}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
-                {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (<div style={{ background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 8, padding: "6px 10px" }}><div style={{ fontSize: 9, color: T.textFaint, marginBottom: 3 }}>من: {parent.label}</div><div style={{ fontSize: 15, lineHeight: 2, color: T.text }}><HighlightedAyah text={parent.text} primaryWord={selNode.lookup || selNode.wordNorm} searchMode={searchMode} theme={theme} interactive={true} onWordClick={(wn) => handleWordClick(wn, parent.verseKey)} /></div></div>); return null; })()}
+                    );
+                  })()}
+                  {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (
+                    <div className="ag-insp-card">
+                      <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>من: {parent.label}</div>
+                      <div className="ag-insp-verse"><HighlightedAyah text={parent.text} primaryWord={selNode.lookup || selNode.wordNorm} searchMode={searchMode} theme={theme} interactive={true} onWordClick={(wn) => handleWordClick(wn, parent.verseKey)} /></div>
+                    </div>); return null; })()}
+                </div>
               </>
             ) : selNode.type === "verse" ? (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: selNode.color }}>📖 {selNode.label}</span>
+                <div className="ag-insp-head">
+                  <div className="ag-insp-title">
+                    <span className="ag-badge t-verse">آية</span>
+                    <h2 className="ag-insp-word" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)" }}>{selNode.label}</h2>
                   </div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button title={selNode.isExpanded ? "طي الكلمات" : "إظهار الكلمات"} onClick={() => toggleVerse(selNode.verseKey)} style={{ ...SS.btn, color: selNode.isExpanded ? "#ff6b6b" : "#cc5de8", fontSize: 11 }}>{selNode.isExpanded ? "⊖ طي" : "⊕ كلمات"}</button>
-                    <button title="اجعلها المركز" aria-label="اجعلها المركز" onClick={() => navigate(selNode.surahNum, selNode.ayahNum)} style={{ ...SS.btn, color: "#60a5fa", fontSize: 11 }}>🔍</button>
-                    <button title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }} style={{ ...SS.btn, fontSize: 11 }}>✕</button>
+                  <button type="button" className="ag-iconbtn" title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
+                </div>
+                <div className="ag-insp-scroll">
+                  <div className="ag-insp-card">
+                    <div className="ag-insp-verse">
+                      <HighlightedAyah text={selNode.text} primaryWord={getConnWord(selNode)} sharedWords={selNode.sharedWords || []} searchMode={searchMode} theme={theme}
+                        interactive={true} onWordClick={(wn) => handleWordClick(wn, selNode.verseKey)} />
+                    </div>
+                  </div>
+                  {(selNode.sharedWords || []).length > 0 && (
+                    <div>
+                      <div className="ag-insp-card-lab" style={{ marginBottom: 8 }}>كلمات مشتركة</div>
+                      <div className="ag-insp-tags">
+                        {selNode.sharedWords.map((w, i) => <span key={i} className="ag-tag">{w}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  <div className="ag-insp-actions">
+                    <button type="button" className="ag-btn is-gold" title={selNode.isExpanded ? "طي الكلمات" : "إظهار الكلمات"} onClick={() => toggleVerse(selNode.verseKey)}>{selNode.isExpanded ? "⊖ طي الكلمات" : "⊕ إظهار الكلمات"}</button>
+                    <button type="button" className="ag-btn" title="اجعلها المركز" aria-label="اجعلها المركز" onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ اجعلها المركز</button>
                   </div>
                 </div>
-                <div style={{ fontSize: 17, lineHeight: 2.2, color: T.ayahText }}>
-                  <HighlightedAyah text={selNode.text} primaryWord={getConnWord(selNode)} sharedWords={selNode.sharedWords || []} searchMode={searchMode} theme={theme}
-                    interactive={true} onWordClick={(wn) => handleWordClick(wn, selNode.verseKey)} />
-                </div>
-                {(selNode.sharedWords || []).length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                    <span style={{ fontSize: 10, color: "#fcc419" }}>مشتركة:</span>
-                    {selNode.sharedWords.map((w, i) => <span key={i} style={{ fontSize: 11, color: "#fcd34d", background: "#fcc41922", padding: "1px 7px", borderRadius: 5, border: "1px solid #fcc41933" }}>{w}</span>)}
-                  </div>
-                )}
               </>
             ) : null}
-          </div>
+          </aside>
         )}
       </div>
     </div>
