@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import QuranNetwork from '../quran_network_v8.jsx'
+import QuranGraph from './QuranGraph.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <QuranNetwork />
+    <QuranGraph />
   </StrictMode>,
 )

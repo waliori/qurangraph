@@ -1,6 +1,20 @@
-/* Arabic text normalization — shared across graph + network views */
+/* ═══ Arabic text normalization ═══
+ *
+ * Reduces a token to a consonantal "skeleton" for MATCHING (not display):
+ *   - strips all diacritics / harakat / quranic annotation marks and tatweel
+ *   - unifies the alif family (آ أ إ ٱ → ا) and hamza-carriers (ؤ → و, ئ → ي)
+ *   - folds ة → ه and alif-maqsura ى → ي
+ *   - drops anything outside the basic Arabic letter block
+ *
+ * The ة→ه, ى→ي and hamza folds are intentional: they let orthographic /
+ * inflectional variants of the same word match (the display text always uses
+ * the original `orig` token, so nothing is lost visually). This is a matching
+ * heuristic, not a linguistic transliteration.
+ */
 export function norm(w) {
   return w
+    // intentionally matches individual combining marks (harakat / annotation)
+    // eslint-disable-next-line no-misleading-character-class
     .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u08D4-\u08E1\u08F0-\u08F2\u0617-\u061A\u06E2-\u06E6\u06E8\u06EA-\u06EC]/g, "")
     .replace(/\u0640/g, "")
     .replace(/[\u0671\u0622\u0623\u0625]/g, "\u0627")
@@ -12,11 +26,35 @@ export function norm(w) {
     .trim();
 }
 
-/* Trilateral root extraction (from quran_network_v8) */
+/* ═══ Triliteral root extraction ═══
+ *
+ * A HEURISTIC stemmer — not a full morphological analyzer. It strips the
+ * common Arabic prefixes/suffixes then applies pattern rules for length-4/5/6
+ * stems (weak letters, gemination, augmentation patterns like است / م / ت).
+ * It is right for the great majority of regular forms but will be wrong for
+ * some irregular / weak / hamzated roots; a real analyzer (Farasa, AraMorph,
+ * ISRI) would be the proper long-term replacement.
+ *
+ * `ROOT_OVERRIDES` is a small hand-curated correction table for high-frequency
+ * Quranic words the heuristic mis-stems — consulted before the algorithm so
+ * the common cases are always right.
+ */
+const ROOT_OVERRIDES = {
+  "الله": "اله", "اله": "اله", "اللهم": "اله",
+  "الرحمن": "رحم", "الرحيم": "رحم", "رحمن": "رحم", "رحيم": "رحم",
+  "انسان": "انس", "الانسان": "انس", "ناس": "نوس", "الناس": "نوس",
+  "سماوات": "سمو", "السماوات": "سمو", "سماء": "سمو", "السماء": "سمو",
+  "صلاه": "صلو", "الصلاه": "صلو", "زكاه": "زكو", "الزكاه": "زكو",
+  "كتاب": "كتب", "الكتاب": "كتب", "مومنون": "امن", "المومنون": "امن",
+  "مومنين": "امن", "ايمان": "امن", "الايمان": "امن",
+  "ملائكه": "ملك", "الملائكه": "ملك",
+};
+
 const ROOT_CACHE = {};
 export function extractRoot(w) {
   const n = norm(w);
   if (ROOT_CACHE[n]) return ROOT_CACHE[n];
+  if (ROOT_OVERRIDES[n]) { ROOT_CACHE[n] = ROOT_OVERRIDES[n]; return ROOT_OVERRIDES[n]; }
   let r = n;
   const prefixes = ["واستال","فاستال","باستال","واست","فاست","باست","والت","فالت","بالت","وانت","فانت","والم","فالم","بالم","وال","فال","بال","كال","است","انت","افت","الت","لل","ال","وت","فت","وي","في","ون","فن","بت","لت","لي","لن","سي","سن","وا","فا","با","لا","كا","و","ف","ب","ل","ك","س"];
   for (const p of prefixes) { if (r.length > p.length + 2 && r.startsWith(p)) { r = r.slice(p.length); break; } }
