@@ -14,16 +14,24 @@ export function getUW(v, hideStop, mode) {
     .map((w) => ({ ...w, lookup: mode === "root" ? rootKey(w.norm) : w.norm }));
 }
 
-/* All nodes reachable from `nid` following links downward (inclusive). */
-export function getDescendants(nid, links) {
+/* source → [targets] adjacency map. Build once per graph and reuse across the
+ * many descendant/drag/highlight queries instead of re-scanning links each time. */
+export function buildChildMap(links) {
   const children = {};
-  for (const l of links) {
-    (children[l.source] ||= []).push(l.target);
-  }
+  for (const l of links) (children[l.source] ||= []).push(l.target);
+  return children;
+}
+
+/* All nodes reachable from `nid` following links downward (inclusive).
+ * `linksOrMap` may be the raw links array or a prebuilt `buildChildMap` result. */
+export function getDescendants(nid, linksOrMap) {
+  const children = Array.isArray(linksOrMap) ? buildChildMap(linksOrMap) : linksOrMap;
   const out = new Set();
   const q = [nid];
-  while (q.length) {
-    const c = q.shift();
+  let head = 0;
+  while (head < q.length) {
+    const c = q[head++];
+    if (out.has(c)) continue;
     out.add(c);
     for (const x of children[c] || []) if (!out.has(x)) q.push(x);
   }

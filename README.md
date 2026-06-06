@@ -54,16 +54,20 @@ root — the rest are particles/proper nouns with none; ≈92 % of the Quran's
 
 ```
 src/
-  main.jsx                 React entry
+  main.jsx                 React entry (wraps the app in an ErrorBoundary)
   QuranGraph.jsx           top-level component: state, interaction, rendering
   arabic-utils.js          norm() + precomputed root lookup + STOP words
-  data-loader.js           fetch + cache the JSON artifacts
+  data-loader.js           fetch + cache the JSON artifacts (BASE_URL-relative)
   theme.js                 colour themes + frequency/depth colour scales
+  hooks/
+    usePersistedState.js   localStorage-backed, sanitized UI preferences
   components/
     HighlightedAyah.jsx    verse text with clickable / highlighted words
+    GraphLayer.jsx         memoized SVG nodes/links (pan/hover don't re-render all)
+    ErrorBoundary.jsx      recoverable fallback for render-time crashes
   graph/
-    buildGraph.js          lazy graph builder + traversal helpers
-    forceLayout.js          deterministic force-directed layout
+    buildGraph.js          lazy graph builder + traversal helpers (buildChildMap)
+    forceLayout.js          deterministic force-directed layout (spatial-hash grid)
 scripts/                   data download / transform / root build (Node)
   lib/parse.js             morphology + Maqayis parsing helpers (unit-tested)
 ```
