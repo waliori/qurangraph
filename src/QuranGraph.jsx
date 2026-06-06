@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import { norm, normStrict, groupKey, rootKey, rootOf, setRootMap, setLemmaMap, lemmaKey, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFull } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard } from "./data-loader.js";
+import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
 import { createSimulation } from "./graph/simulation.js";
@@ -15,6 +16,8 @@ import { ContextModal } from "./components/ContextModal.jsx";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { DistributionModal } from "./components/DistributionModal.jsx";
+import { PhraseModal } from "./components/PhraseModal.jsx";
+import { buildSeedIndex } from "./analytics/phrases.js";
 import { HelpModal } from "./components/HelpModal.jsx";
 import { usePersistedState } from "./hooks/usePersistedState.js";
 
@@ -94,7 +97,8 @@ export default function QuranGraph() {
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showHelp, setShowHelp] = useState(false);
   const [meanings, setMeanings] = useState(null); // active lexicon: root → { c, f } (lazy)
-  const [meaningsFull, setMeaningsFull] = useState(null); // active lexicon: root → full article (lazy)
+  const [meaningsFull, setMeaningsFull] = useState(null); // active lexicon: root → full article (accumulated per fetched shard)
+  const [fullLoaded, setFullLoaded] = useState(() => new Set()); // "lexicon:shard" keys already fetched (so a miss doesn't spin forever)
   const [lexicons, setLexicons] = useState(null); // manifest [{id,label,license,hasFull}]
   const [lemmaMap, setLemmaMapState] = useState(null); // normForm → lemma (lazy, for lemma mode)
   const [morph, setMorph] = useState(null); // columnar per-token morphology (lazy)
@@ -102,6 +106,9 @@ export default function QuranGraph() {
   const [occ, setOcc] = useState(null); // occurrences popup: { lookup, label, mode, keys }
   const [dist, setDist] = useState(null); // distribution/collocation modal: { lookup, label, mode }
   const [ctx, setCtx] = useState(null); // context reader modal: { centerKey }
+  const [phrase, setPhrase] = useState(null); // shared-phrase (mutashābihāt) modal: { centerKey }
+  const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
+  const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
   const [linkCopied, setLinkCopied] = useState(false); // share-link confirmation flash
   const svgRef = useRef(null); // live stage <svg>, for export
   const [hydrated, setHydrated] = useState(false); // URL state applied once after data load
@@ -280,17 +287,11 @@ export default function QuranGraph() {
     if (!meaningsWanted) return;
     let live = true;
     setMeanings(null); setMeaningsFull(null); setMeaningOpen(false);
+    setFullLoaded(new Set()); // full-article shards are per-lexicon
     loadLexicon(activeLexicon).then((m) => { if (live) setMeanings(m); }).catch(() => {});
     return () => { live = false; };
   }, [meaningsWanted, activeLexicon]);
   /* eslint-enable react-hooks/set-state-in-effect */
-
-  // Lazy-load the active lexicon's FULL articles the first time "show more" is hit
-  // (only if that lexicon ships a full file).
-  useEffect(() => {
-    const hasFull = lexicons?.find((L) => L.id === activeLexicon)?.hasFull;
-    if (meaningOpen && !meaningsFull && hasFull) loadLexiconFull(activeLexicon).then(setMeaningsFull).catch(() => {});
-  }, [meaningOpen, meaningsFull, activeLexicon, lexicons]);
 
   // Lazy-load the normForm→lemma map the first time lemma mode is used; install it
   // into arabic-utils so groupKey('lemma') resolves, and keep a copy in state so
@@ -603,6 +604,14 @@ export default function QuranGraph() {
   const reset = useCallback(() => { sim.clearSticky(); setExpandedWords(new Set()); setExpandedVerses(new Set()); setSelected(null); setActiveWord(null); setPositions({}); setTransform(homeView()); }, [homeView, sim]);
   const navigate = useCallback((s, a) => { setSurah(s); setAyah(a); reset(); }, [reset, setSurah, setAyah]);
 
+  // Open the shared-phrase (mutashābihāt) view for a verse. The corpus-wide trigram
+  // seed index is heavy (~one entry per word), so build it lazily on first use and
+  // rebuild only if the verse data itself changed (e.g. precision toggle).
+  const openPhrases = useCallback((centerKey) => {
+    if (seedVdRef.current !== verseData) { seedVdRef.current = verseData; setSeedIndex(buildSeedIndex(verseData)); }
+    setPhrase({ centerKey });
+  }, [verseData]);
+
   const toggleWord = useCallback((lookup, fromVerseKey) => {
     const key = `${lookup}@${fromVerseKey}`;
     setExpandedWords((prev) => { const n = new Set(prev); if (n.has(key)) { const wid = `w:${lookup}@${fromVerseKey}`; const desc = getDescendants(wid, childMap); const nw = new Set(n); nw.delete(key); nw.forEach((ek) => { const vk = ek.split("@").slice(1).join("@"); if (desc.has(`v:${vk}`)) nw.delete(ek); }); setExpandedVerses((p2) => { const nv = new Set(p2); desc.forEach((d) => { if (d.startsWith("v:")) nv.delete(d.slice(2)); }); return nv; }); return nw; } else { n.add(key); return n; } });
@@ -807,6 +816,26 @@ export default function QuranGraph() {
 
   const hovNode = hovered ? nmap[hovered] : null;
   const selNode = selected ? nmap[selected] : null;
+  // The root whose full lexicon article the inspector might show, and how many
+  // shards the active lexicon's full articles are split into (0 = no full text).
+  const selRoot = selNode?.type === "word" ? (selNode.root || rootOf(selNode.wordNorm)) : null;
+  const activeShards = lexicons?.find((L) => L.id === activeLexicon)?.fullShards || 0;
+
+  // Lazy-load just the ONE shard the selected root falls in, the first time "show
+  // more" is hit for it. A shard is a small slice of the lexicon's full articles,
+  // so this fetches a few hundred KB instead of the whole (multi-MB) lexicon. The
+  // fetched shard's roots are merged into meaningsFull; the shard key is remembered
+  // so a root with no full article doesn't re-fetch (or spin) forever.
+  useEffect(() => {
+    if (!meaningOpen || !selRoot || !activeShards) return;
+    const shard = shardOf(selRoot, activeShards);
+    const key = `${activeLexicon}:${shard}`;
+    if (fullLoaded.has(key)) return;
+    let live = true;
+    const done = (mp) => { if (!live) return; setFullLoaded((p) => new Set(p).add(key)); setMeaningsFull((p) => ({ ...(p || {}), ...(mp || {}) })); };
+    loadLexiconFullShard(activeLexicon, shard).then(done).catch(() => done(null));
+    return () => { live = false; };
+  }, [meaningOpen, selRoot, activeLexicon, activeShards, fullLoaded]);
 
   if (error) return (
     <div className="ag-boot">
@@ -1012,7 +1041,9 @@ export default function QuranGraph() {
           )}
 
           {/* SVG graph */}
-          <svg ref={svgRef} width={dims.w} height={dims.h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          <svg ref={svgRef} width={dims.w} height={dims.h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+            role="group" aria-roledescription="شبكة بيانية"
+            aria-label={`شبكة الآية ${currentVerse?.sn || ""} ${safeAyah}: ${graphNodes.length} عقدة و${graphLinks.length} رابط، بنمط ${searchMode === "root" ? "الجذر" : searchMode === "lemma" ? "الصيغة" : "الكلمة"}. تنقّل بين العقد بمفتاح Tab.`}>
             <defs><marker id="arrL" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185" opacity="0.6" /></marker></defs>
             <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`} style={{ pointerEvents: "auto" }}>
               <GraphLayer
@@ -1057,6 +1088,8 @@ export default function QuranGraph() {
                     <span className="ag-ayah-num">{currentVerse.a}</span>
                   </span>
                   <span style={{ display: "flex", gap: 4 }}>
+                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                      aria-label="العبارات المشتركة (المتشابهات)" title="العبارات المشتركة (المتشابهات)" onClick={() => openPhrases(currentKey)}>⧉</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label="اقرأ في السياق" title="اقرأ في السياق" onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
@@ -1111,10 +1144,14 @@ export default function QuranGraph() {
                     const sr = selNode.root || rootOf(selNode.wordNorm); // derive root in exact mode too
                     if (!sr) return null; // no root at all → nothing lexical to show
                     const m = meanings?.[sr];        // undefined if this lexicon lacks the root
-                    const full = meaningsFull?.[sr];
-                    const hasMore = m ? ((m.f && m.f !== m.c) || !!full) : false;
+                    const full = meaningsFull?.[sr]; // populated once sr's shard is fetched
+                    const shard = activeShards ? shardOf(sr, activeShards) : -1;
+                    const shardLoaded = shard >= 0 && fullLoaded.has(`${activeLexicon}:${shard}`);
+                    // "Show more" offered whenever a fuller concise text exists OR the lexicon
+                    // ships full articles (we only learn if THIS root has one after fetching).
+                    const hasMore = m ? ((m.f && m.f !== m.c) || activeShards > 0) : false;
                     const body = m ? (meaningOpen ? (full || m.f) : m.c) : null;
-                    const loadingFull = meaningOpen && !meaningsFull && hasMore;
+                    const loadingFull = meaningOpen && shard >= 0 && full === undefined && !shardLoaded;
                     // The section ALWAYS shows (with the lexicon switcher) even when the
                     // active mu'jam has no entry for this root — so the user can switch.
                     return (
@@ -1144,8 +1181,16 @@ export default function QuranGraph() {
                     const POS_AR = { noun: "اسم", verb: "فعل", particle: "حرف", pn: "اسم علم", pron: "ضمير", adj: "صفة", actpcpl: "اسم فاعل", passpcpl: "اسم مفعول" };
                     const PERSON_AR = { 1: "متكلّم", 2: "مخاطَب", 3: "غائب" }, GEN_AR = { m: "مذكّر", f: "مؤنّث" }, NUM_AR = { s: "مفرد", d: "مثنّى", p: "جمع" };
                     const pgn = [PERSON_AR[m.person], GEN_AR[m.gender], NUM_AR[m.number]].filter(Boolean).join(" ");
+                    // The root the corpus assigns to THIS occurrence (position-correct),
+                    // vs. the majority-vote grouping root the graph links by. When they
+                    // differ this surface form is a homograph: it's grouped under its
+                    // commoner reading, but here it's a different root — flag it so the
+                    // researcher isn't misled by the grouping or the lexicon gloss above.
+                    const groupRoot = selNode.root || rootOf(selNode.wordNorm);
+                    const divergent = m.root && groupRoot && m.root !== groupRoot;
                     const rows = [
                       ["النوع", POS_AR[m.pos]],
+                      ["الجذر (هنا)", m.root],
                       ["الوزن", m.vf ? `الصيغة ${formRoman(m.vf)}` : null],
                       ["الزمن", { perf: "ماضٍ", impf: "مضارع", impv: "أمر" }[m.aspect]],
                       ["البناء", { act: "معلوم", pass: "مجهول" }[m.voice]],
@@ -1160,6 +1205,11 @@ export default function QuranGraph() {
                         <div className="ag-morph-rows">
                           {rows.map(([k, v]) => <div className="ag-morph-row" key={k}><span className="ag-morph-k">{k}</span><span className="ag-morph-v">{v}</span></div>)}
                         </div>
+                        {divergent && (
+                          <div className="ag-insp-note" style={{ marginTop: 8, fontSize: "var(--text-xs)", color: "var(--rubric-400)", lineHeight: 1.6 }}>
+                            ⚠ مشترك لفظي: جذر التجميع «{groupRoot}» (بالأغلبية)، أمّا في هذه الآية فالجذر «{m.root}». المعنى المعجمي أعلاه لجذر التجميع.
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -1197,6 +1247,7 @@ export default function QuranGraph() {
                   <div className="ag-insp-actions">
                     <button type="button" className="ag-btn is-gold" title={selNode.isExpanded ? "طي الكلمات" : "إظهار الكلمات"} onClick={() => toggleVerse(selNode.verseKey)}>{selNode.isExpanded ? "⊖ طي الكلمات" : "⊕ إظهار الكلمات"}</button>
                     <button type="button" className="ag-btn" title="اقرأ في السياق" onClick={() => setCtx({ centerKey: selNode.verseKey })}>☰ السياق</button>
+                    <button type="button" className="ag-btn" title="العبارات المشتركة (المتشابهات)" onClick={() => openPhrases(selNode.verseKey)}>⧉ متشابهات</button>
                     <button type="button" className="ag-btn" title="اجعلها المركز" aria-label="اجعلها المركز" onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ اجعلها المركز</button>
                   </div>
                 </div>
@@ -1238,6 +1289,9 @@ export default function QuranGraph() {
         <ContextModal ctx={ctx} orderedKeys={orderedKeys} verseData={verseData}
           onNavigate={(s, a) => { navigate(s, a); setCtx(null); }} onClose={() => setCtx(null)} />
       )}
+
+      <PhraseModal phrase={phrase} seedIndex={seedIndex} verseData={verseData}
+        onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />
 
       <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </div>

@@ -625,6 +625,32 @@ body {
   .ag-legend { display: none; }
 }
 
+/* Shared-phrase (المتشابهات) modal */
+.ag-phrase-sec { margin-block-end: var(--space-4); padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--border); }
+.ag-phrase-sec:last-child { border-block-end: 0; }
+.ag-phrase-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  margin-block-end: var(--space-2); }
+.ag-phrase-text { font-size: var(--text-xl); color: var(--gold-300); line-height: 1.9; }
+.ag-phrase-meta { display: flex; gap: var(--space-1); margin-inline-start: auto; }
+.ag-phrase-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ag-phrase-verse { line-height: 2; }
+.ag-phrase-hit { color: var(--gold-300); font-weight: 700;
+  background: color-mix(in oklab, var(--gold-500) 14%, transparent); border-radius: 4px; padding: 0 2px; }
+
+/* Visible keyboard focus for graph nodes (SVG <g>): an outline + a halo ring so a
+ * keyboard user can always see which node is focused — invisible before. */
+[data-node]:focus { outline: none; }
+[data-node]:focus-visible { outline: none; }
+[data-node]:focus-visible > circle:nth-of-type(1) {
+  stroke: var(--gold-400); stroke-width: 3.5px;
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--gold-500) 70%, transparent)); }
+
+/* Screen-reader-only text (visually hidden but announced). */
+.ag-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }

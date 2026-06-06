@@ -37,19 +37,7 @@ export function loadMorphology() {
   return fetchJSON("data/morphology.json");
 }
 
-// Precomputed root → { c, f } Ibn Faris meanings (lazy — only when first shown).
-export function loadRootMeanings() {
-  return fetchJSON("data/root-meanings.json");
-}
-
-// Precomputed root → full Maqāyīs al-Lugha article (lazy — only fetched when the
-// user asks to read the complete entry via "show more"). ~1.6MB, so kept out of
-// the default meanings payload.
-export function loadRootMeaningsFull() {
-  return fetchJSON("data/root-meanings-full.json");
-}
-
-// Lexicon manifest: [{ id, label, license, hasFull, coverage }] — the swappable
+// Lexicon manifest: [{ id, label, license, hasFull, fullShards, coverage }] — the swappable
 // Arabic dictionaries (Maqāyīs / Mufradāt / Lisān …). Tiny; load to build the switcher.
 export function loadLexiconManifest() {
   return fetchJSON("data/lexicons/index.json");
@@ -60,7 +48,10 @@ export function loadLexicon(id) {
   return fetchJSON(`data/lexicons/${id}.json`);
 }
 
-// A lexicon's full root → article map (lazy; large, fetched on "show more").
-export function loadLexiconFull(id) {
-  return fetchJSON(`data/lexicons/${id}-full.json`);
+// One shard of a lexicon's full articles ({ root → article }), fetched on demand
+// when the user asks to read a root's complete entry. The shard a root falls in is
+// computed by shardOf(); each shard is a small fraction of the whole lexicon, so
+// "show more" pulls a few hundred KB at most instead of the multi-MB monolith.
+export function loadLexiconFullShard(id, shard) {
+  return fetchJSON(`data/lexicons/${id}-full/${shard}.json`);
 }

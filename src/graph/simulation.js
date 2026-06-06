@@ -24,6 +24,10 @@
 const CUTOFF2 = 300000;            // pairs farther than this are ignored
 const CELL = Math.sqrt(CUTOFF2);   // grid cell size = cutoff radius
 const PAD = 48;                    // extra collision gap reserving room for labels
+// Default link spring rest length. MUST agree with forceLayout.js's
+// DEFAULT_LINK_DIST — the live sim and the batch layout share one force model,
+// so a divergent default makes a settled live layout differ from the batch one.
+const DEFAULT_LINK_DIST = 130;
 
 export function createSimulation(W = 1600, H = 1100) {
   const cx = W / 2, cy = H / 2;
@@ -45,7 +49,9 @@ export function createSimulation(W = 1600, H = 1100) {
   function sync(nodes, lnks) {
     parentId = {};
     for (const l of lnks) if (parentId[l.target] === undefined) parentId[l.target] = l.source;
-    links = lnks.map((l) => ({ s: l.source, t: l.target, dist: l.dist || 130 }));
+    // Falsy-zero trap: a 0-length spring is nonsensical, so treat only a finite
+    // positive dist as intentional; everything else falls back to the shared default.
+    links = lnks.map((l) => ({ s: l.source, t: l.target, dist: Number.isFinite(l.dist) && l.dist > 0 ? l.dist : DEFAULT_LINK_DIST }));
     const next = [], nmap = {};
     for (const n of nodes) {
       let b = map[n.id];
@@ -157,8 +163,18 @@ export function createSimulation(W = 1600, H = 1100) {
       if (b.fixed || b.pinned) continue;
       b.vx *= 0.65; b.vy *= 0.65;
       b.x += b.vx; b.y += b.vy;
+      // Explicit NaN/Inf repair: the clamp below CANNOT sanitize a non-finite
+      // value (Math.max(lo, Math.min(hi, NaN)) === NaN), and one NaN body would
+      // poison every neighbour next frame. Zero the offending velocity and, if a
+      // coordinate went non-finite, snap it back to the last finite value or the
+      // canvas centre. The layout must never propagate NaN.
+      if (!Number.isFinite(b.vx)) b.vx = 0;
+      if (!Number.isFinite(b.vy)) b.vy = 0;
+      if (!Number.isFinite(b.x)) { b.x = Number.isFinite(b.lastX) ? b.lastX : cx; b.vx = 0; }
+      if (!Number.isFinite(b.y)) { b.y = Number.isFinite(b.lastY) ? b.lastY : cy; b.vy = 0; }
       b.x = Math.max(-3 * W, Math.min(4 * W, b.x));
       b.y = Math.max(-3 * H, Math.min(4 * H, b.y));
+      b.lastX = b.x; b.lastY = b.y; // remembered finite fallback for the next step
     }
     alpha *= 0.94;
     return true;

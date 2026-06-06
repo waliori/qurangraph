@@ -130,3 +130,20 @@ console.log(`Verses with token-count mismatch (used surface fallback): ${mismatc
 console.log(`Distinct Quran roots: ${presentRoots.size}`);
 console.log(`Morphology verses: ${Object.keys(morphV).length}`);
 console.log(`→ roots.json, lemmas.json, morphology.json`);
+
+/* ── Coverage tripwires ──
+ * A healthy build lands around ~0.65 root / ~0.96 lemma coverage. These floors
+ * sit well under that — they are NOT quality gates, just tripwires that catch a
+ * broken alignment (e.g. a morphology format change that stops matching tokens),
+ * so a gutted dataset can never silently ship. */
+const ROOT_FLOOR = 0.45, LEMMA_FLOOR = 0.85;
+const rootCov = contentTokens ? rootedTokens / contentTokens : 0;
+const lemmaCov = contentTokens ? lemmatizedTokens / contentTokens : 0;
+if (rootCov < ROOT_FLOOR || lemmaCov < LEMMA_FLOOR) {
+  console.error(
+    `ERROR: coverage below sanity floor — root ${(rootCov * 100).toFixed(1)}% (min ${ROOT_FLOOR * 100}%), ` +
+    `lemma ${(lemmaCov * 100).toFixed(1)}% (min ${LEMMA_FLOOR * 100}%). ` +
+    `The corpus↔morphology alignment is likely broken; refusing to ship a gutted dataset.`
+  );
+  process.exit(1);
+}

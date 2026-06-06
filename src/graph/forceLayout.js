@@ -25,6 +25,11 @@
 const CUTOFF2 = 300000;                       // pairs farther than this are ignored
 const CELL = Math.sqrt(CUTOFF2);              // grid cell size = cutoff radius
 const PAD = 48;                               // extra collision gap reserving room for node labels
+// Default link spring rest length. MUST agree with simulation.js's
+// DEFAULT_LINK_DIST — the batch layout and the live sim share one force model,
+// so a divergent default makes the settled layouts differ. 130 is the value the
+// live sim uses, i.e. what users actually see.
+const DEFAULT_LINK_DIST = 130;
 
 function hash(str) {
   let h = 2166136261;
@@ -136,7 +141,10 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
       const s = nm[l.source], t = nm[l.target];
       if (!s || !t) continue;
       let dx = t.x - s.x, dy = t.y - s.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const f = (dist - (l.dist || 110)) / dist * 0.06 * al;
+      // Falsy-zero trap: a 0-length spring is nonsensical, so only a finite
+      // positive dist counts as intentional; else the shared default applies.
+      const rest = Number.isFinite(l.dist) && l.dist > 0 ? l.dist : DEFAULT_LINK_DIST;
+      const f = (dist - rest) / dist * 0.06 * al;
       if (!s.fixed) { s.vx += dx * f; s.vy += dy * f; }
       if (!t.fixed) { t.vx -= dx * f; t.vy -= dy * f; }
     }
@@ -149,8 +157,18 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
       if (n.fixed) continue;
       n.vx *= 0.65; n.vy *= 0.65;
       n.x += n.vx; n.y += n.vy;
+      // Explicit NaN/Inf repair: the clamp below CANNOT sanitize a non-finite
+      // value (Math.max(lo, Math.min(hi, NaN)) === NaN), so one NaN node would
+      // poison every neighbour on the next iteration. Zero the offending velocity
+      // and, if a coordinate went non-finite, snap it back to the last finite
+      // value or the canvas centre. The layout must never propagate NaN.
+      if (!Number.isFinite(n.vx)) n.vx = 0;
+      if (!Number.isFinite(n.vy)) n.vy = 0;
+      if (!Number.isFinite(n.x)) { n.x = Number.isFinite(n._lastX) ? n._lastX : cx; n.vx = 0; }
+      if (!Number.isFinite(n.y)) { n.y = Number.isFinite(n._lastY) ? n._lastY : cy; n.vy = 0; }
       n.x = Math.max(-3 * W, Math.min(4 * W, n.x));
       n.y = Math.max(-3 * H, Math.min(4 * H, n.y));
+      n._lastX = n.x; n._lastY = n.y; // remembered finite fallback for the next iter
     }
   }
 

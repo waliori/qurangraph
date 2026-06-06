@@ -67,8 +67,9 @@ describe("QuranGraph", () => {
     localStorage.setItem("qg.ayah", JSON.stringify(1));
     render(<QuranGraph />);
     await screen.findByLabelText("السورة");
-    // The graph word node is labelled "<word> (<count>)"; "العالمين" occurs twice.
-    fireEvent.click(screen.getByLabelText("العالمين (2)"));
+    // The graph word node carries a descriptive aria-label ("كلمة <word>، وردت في
+    // <count> آية…"); "العالمين" occurs twice.
+    fireEvent.click(screen.getByLabelText(/كلمة العالمين، وردت في 2 آية/));
     // Selection panel (with its close button) appears and stays — the node is selected.
     expect(screen.getByLabelText("إغلاق")).toBeTruthy();
   });

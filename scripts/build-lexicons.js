@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "fs";
 import { parseMaqayisEntry, parseLexiconText, matchNorm, matchRoot } from "./lib/parse.js";
+import { FULL_SHARDS, shardOf } from "../src/lexiconShard.js";
 
 /* ═══ Build swappable Arabic lexicons ═══
  *
@@ -58,12 +59,25 @@ for (const lex of LEXICONS) {
       matched++;
     }
   }
-  const hasFull = Object.keys(full).length > 0;
+  const fullRoots = Object.keys(full);
+  const hasFull = fullRoots.length > 0;
   writeFileSync(`${OUT}/${lex.id}.json`, JSON.stringify(meanings));
-  if (hasFull) writeFileSync(`${OUT}/${lex.id}-full.json`, JSON.stringify(full));
+  // Full articles are sharded by a stable hash of the root, so the app fetches one
+  // small bucket per "show more" instead of the whole (multi-MB) file. The old
+  // monolithic `${id}-full.json` is removed if present.
+  const oldMono = `${OUT}/${lex.id}-full.json`;
+  if (existsSync(oldMono)) rmSync(oldMono);
+  if (hasFull) {
+    const dir = `${OUT}/${lex.id}-full`;
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const buckets = Array.from({ length: FULL_SHARDS }, () => ({}));
+    for (const r of fullRoots) buckets[shardOf(r)][r] = full[r];
+    buckets.forEach((b, i) => { if (Object.keys(b).length) writeFileSync(`${dir}/${i}.json`, JSON.stringify(b)); });
+  }
   const cov = ((100 * matched) / presentRoots.size).toFixed(1);
-  manifest.push({ id: lex.id, label: lex.label, license: lex.license, hasFull, coverage: +cov });
-  console.log(`${lex.id}: ${Object.keys(entries).length} entries → ${matched}/${presentRoots.size} roots matched (${cov}%)`);
+  manifest.push({ id: lex.id, label: lex.label, license: lex.license, hasFull, fullShards: hasFull ? FULL_SHARDS : 0, coverage: +cov });
+  console.log(`${lex.id}: ${Object.keys(entries).length} entries → ${matched}/${presentRoots.size} roots matched (${cov}%)${hasFull ? `, ${fullRoots.length} full → ${FULL_SHARDS} shards` : ""}`);
 }
 
 writeFileSync(`${OUT}/index.json`, JSON.stringify(manifest));

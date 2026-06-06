@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { distributionBySura, collocations } from "./stats.js";
+import { distributionBySura, collocations, association } from "./stats.js";
 
 const w = (s) => ({ orig: s, norm: s, exact: s });
 const verseData = {
@@ -32,5 +32,35 @@ describe("collocations", () => {
     expect(map["في"]).toBeUndefined(); // stop word excluded
     expect(map["نور"]).toBeUndefined(); // the term itself excluded
     expect(c[0].key).toBe("سماء"); // ranked by count
+  });
+
+  it("attaches PMI + signed log-likelihood to every neighbour", () => {
+    const c = collocations("نور", "exact", index, verseData, stop, 99, { sort: "ll" });
+    const m = Object.fromEntries(c.map((x) => [x.key, x]));
+    expect(m["سماء"].pmi).toBeTypeOf("number");
+    expect(m["سماء"].ll).toBeTypeOf("number");
+    // نور saturates this toy corpus (every verse), so its neighbours sit exactly at
+    // chance — the figures are finite zeros, not NaN. (Positivity is covered below.)
+    expect(Number.isFinite(m["سماء"].pmi)).toBe(true);
+    expect(Number.isFinite(m["سماء"].ll)).toBe(true);
+  });
+});
+
+describe("association", () => {
+  it("is ~0 for an independent pair and positive when drawn together", () => {
+    // Independent: k = a·b/N exactly → PMI 0, G² 0.
+    expect(association(10, 100, 100, 1000).pmi).toBeCloseTo(0, 6);
+    expect(association(10, 100, 100, 1000).ll).toBeCloseTo(0, 6);
+    // Over-represented co-occurrence → both measures positive.
+    const over = association(50, 100, 100, 1000);
+    expect(over.pmi).toBeGreaterThan(0);
+    expect(over.ll).toBeGreaterThan(0);
+  });
+  it("signs the log-likelihood negative when a pair co-occurs less than chance", () => {
+    expect(association(1, 100, 100, 1000).ll).toBeLessThan(0);
+  });
+  it("returns zeros for degenerate inputs", () => {
+    expect(association(0, 5, 5, 100)).toEqual({ pmi: 0, ll: 0 });
+    expect(association(3, 0, 5, 100)).toEqual({ pmi: 0, ll: 0 });
   });
 });

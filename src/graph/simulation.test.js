@@ -92,6 +92,28 @@ describe("createSimulation", () => {
     expect(dBwhenB).toBeLessThan(dAwhenB);    // …and it gathers around w:b
   });
 
+  it("repairs a NaN-positioned body instead of propagating NaN", () => {
+    // Sync a node whose position is NaN (?? only catches null/undefined, so NaN
+    // survives into the body). Add a coincident sibling to exercise the
+    // divide-by-zero path too. After stepping, the integrator's explicit guard
+    // must have snapped every body finite — the old clamp could not.
+    const sim = createSimulation(1600, 1100);
+    const ns = [
+      { id: "center", r: 28, fixed: true, x: 800, y: 550 },
+      { id: "w:a", r: 10, x: NaN, y: NaN },
+      { id: "v:1", r: 8, x: 900, y: 600 },
+      { id: "v:2", r: 8, x: 900, y: 600 }, // coincident with v:1
+    ];
+    sim.sync(ns, links, []);
+    sim.reheat(1);
+    for (let i = 0; i < 20; i++) sim.step();
+    const p = sim.getPositions();
+    for (const id of ["center", "w:a", "v:1", "v:2"]) {
+      expect(Number.isFinite(p[id].x)).toBe(true);
+      expect(Number.isFinite(p[id].y)).toBe(true);
+    }
+  });
+
   it("is deterministic for identical input (no Math.random)", () => {
     const a = createSimulation(1600, 1100); a.sync(nodes(), links, []); settle(a);
     const b = createSimulation(1600, 1100); b.sync(nodes(), links, []); settle(b);

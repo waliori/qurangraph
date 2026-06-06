@@ -2,6 +2,31 @@ import { memo } from "react";
 import { norm } from "../arabic-utils.js";
 import { fColor, dColor, eColor, eWidth } from "../theme.js";
 
+// Evaluated once at load — users rarely toggle the OS setting mid-session, and a
+// constant lets the memoized nodes skip it as a dependency. SMIL <animate> is NOT
+// covered by the CSS reduced-motion rule, so the pulse ring must be gated here.
+const REDUCE_MOTION = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// A descriptive, action-bearing label for assistive tech — the bare word/ref alone
+// gave a screen reader no type, frequency, relationship, or affordance.
+function nodeAria(n) {
+  if (n.type === "center") return `الآية المركزية: ${n.label}`;
+  if (n.type === "word") {
+    const parts = [`كلمة ${n.label}`, `وردت في ${n.count} آية`];
+    if (n.rootLabel) parts.push(`جذر ${n.rootLabel}`);
+    parts.push(n.isExpanded ? "موسَّعة، اضغط للطي" : "اضغط للتوسيع");
+    return parts.join("، ");
+  }
+  if (n.type === "verse") {
+    const parts = [`آية ${n.label}`];
+    if (n.connectingWord) parts.push(`متّصلة عبر «${n.connectingWord}»`);
+    if (n.sharedCount > 1) parts.push(`تشارك ${n.sharedCount} كلمة`);
+    parts.push(n.isExpanded ? "موسَّعة" : "اضغط للتحديد");
+    return parts.join("، ");
+  }
+  return n.label;
+}
+
 /* ═══ Memoized SVG graph render ═══
  *
  * Structure & visual flags (hover / selection / theme) go through React; per-frame
@@ -36,16 +61,17 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   return (
     <g ref={ref} data-node={n.id} transform={`translate(${x},${y})`}
       style={{ cursor: "pointer", opacity, transition: "opacity 0.25s" }}
-      role={clickable ? "button" : undefined}
+      role={clickable ? "button" : "img"}
       tabIndex={clickable ? 0 : undefined}
-      aria-label={n.type === "word" ? `${n.label} (${n.count})` : n.label}
+      aria-label={nodeAria(n)}
+      aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
       onMouseEnter={() => onEnter(n)}
       onMouseLeave={() => onLeave(n)}
       onClick={(e) => onClick(n, e)}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } } : undefined}>
 
       {(isWE || isVE) && <circle cx={0} cy={0} r={r + 7} fill="none" stroke={isWE ? cVir : cPur} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
-      {(isS || isAW) && <circle cx={0} cy={0} r={r + 10} fill="none" stroke={isAW ? cGold : col} strokeWidth={2} opacity={0.3}><animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" /></circle>}
+      {(isS || isAW) && <circle cx={0} cy={0} r={r + 10} fill="none" stroke={isAW ? cGold : col} strokeWidth={2} opacity={0.3}>{!REDUCE_MOTION && <animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" />}</circle>}
 
       <circle cx={0} cy={0} r={r}
         fill={isAW ? cGold + "44" : isWE ? cVir + "33" : isVE ? cPur + "33" : col + T.nodeFill}

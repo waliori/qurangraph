@@ -47,4 +47,25 @@ describe("forceLayout", () => {
       expect(Number.isFinite(n.y)).toBe(true);
     }
   });
+
+  it("repairs a NaN seed coordinate instead of propagating it", () => {
+    // A node handed in with NaN x/y must not poison the layout: the integrator's
+    // explicit guard snaps it finite. (The old clamp alone could not — it returns
+    // NaN for a NaN input.) Coincident bodies also exercise the divide-by-zero path.
+    const nodes = [
+      { id: "center", r: 28, fixed: true, depth: 0 },
+      { id: "w:a", r: 10, depth: 1, x: NaN, y: NaN },
+      { id: "w:b", r: 10, depth: 1, x: 400, y: 300 },
+      { id: "v:1", r: 8, depth: 2, x: 400, y: 300 }, // coincident with w:b
+    ];
+    const lk = [
+      { source: "center", target: "w:a", dist: 130 },
+      { source: "w:a", target: "v:1", dist: 95 },
+    ];
+    forceLayout(nodes, lk, 800, 600, 60);
+    for (const n of nodes) {
+      expect(Number.isFinite(n.x)).toBe(true);
+      expect(Number.isFinite(n.y)).toBe(true);
+    }
+  });
 });
