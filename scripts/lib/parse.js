@@ -59,9 +59,11 @@ function capAtSentence(s, max) {
 }
 
 /* Turn the body lines of one Maqayis entry (the lines after a
- * `### | (root)` header, up to the next header) into { c, f }:
- *   c = concise core sense (first sentence)
- *   f = the full opening prose paragraph (cleaned, length-capped)
+ * `### | (root)` header, up to the next header) into { c, f, full }:
+ *   c    = concise core sense (first sentence)
+ *   f    = the full opening prose paragraph (cleaned, length-capped)
+ *   full = the COMPLETE entry — every content/continuation line joined and
+ *          cleaned, uncapped (the entire Maqāyīs al-Lugha article for the root).
  * Returns null if no usable prose is found. */
 export function parseMaqayisEntry(lines, maxFull = 600) {
   let i = 0;
@@ -73,10 +75,16 @@ export function parseMaqayisEntry(lines, maxFull = 600) {
   let j = i + 1;
   while (j < lines.length && /^~~/.test(lines[j])) { para.push(lines[j]); j++; }
 
-  const full = cleanProse(para.join(" "));
-  if (!full) return null;
-  const dot = full.indexOf(".");
-  const c = dot > 0 ? full.slice(0, dot).trim() : full;
-  const f = capAtSentence(full, maxFull);
-  return { c, f };
+  const opening = cleanProse(para.join(" "));
+  if (!opening) return null;
+  const dot = opening.indexOf(".");
+  const c = dot > 0 ? opening.slice(0, dot).trim() : opening;
+  const f = capAtSentence(opening, maxFull);
+
+  // The complete article: all content + continuation lines (skipping page /
+  // metadata markers), in order.
+  const body = lines.filter((l) => (/^#\s*\S/.test(l) || /^~~/.test(l)) && !PAGE_RE.test(l) && !META_RE.test(l));
+  const full = cleanProse(body.join(" ")) || opening;
+
+  return { c, f, full };
 }

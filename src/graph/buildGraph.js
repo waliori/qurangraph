@@ -83,7 +83,7 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
   const place = (depth, fixed) => {
     if (fixed) return { x: cx, y: cy };
     const a = seed * 2.399963; // golden-angle spread, deterministic
-    const r = 110 + depth * 90;
+    const r = 150 + depth * 130;
     seed++;
     return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
   };
@@ -113,7 +113,7 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         nodes.push({ id: wid, type: "word", wordNorm: w.norm, lookup: w.lookup, label: w.orig, count, r: Math.min(7 + Math.log2(count + 1) * 3, 20), color: fColor(count), depth: item.depth + 1, isExpanded: isExp, parentVerseKey: item.verseKey, rootLabel: realRoot, root: realRoot, ...place(item.depth + 1) });
         addedNodes.add(wid);
         parentMap[wid] = item.verseId;
-        links.push({ source: item.verseId, target: wid, dist: 130 });
+        links.push({ source: item.verseId, target: wid, dist: 160 });
         if (isExp) queue.push({ type: "show-verses", wordId: wid, lookup: w.lookup, fromVerseKey: item.verseKey, depth: item.depth + 1 });
       });
     } else if (item.type === "show-verses") {
@@ -141,7 +141,7 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
           addedNodes.add(vid);
           parentMap[vid] = item.wordId;
         }
-        links.push({ source: item.wordId, target: vid, dist: 95 });
+        links.push({ source: item.wordId, target: vid, dist: 130 });
         if (isVE) queue.push({ type: "show-words", verseId: vid, verseKey: vk, depth: item.depth + 1 });
       });
     }

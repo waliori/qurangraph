@@ -38,6 +38,14 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
   const cx = W / 2, cy = H / 2;
   const nm = {};
 
+  // Each node's parent (the source of the link pointing at it). Used to make
+  // children orbit their parent — so a word's many verses cluster tightly
+  // AROUND the word instead of streaming back toward the global centre in a
+  // long column. The chain of parents ends at the pinned centre, so every
+  // subtree stays anchored and finite.
+  const parentOf = {};
+  for (const l of links) if (parentOf[l.target] === undefined) parentOf[l.target] = l.source;
+
   nodes.forEach((n, i) => {
     nm[n.id] = n;
     if (n.x === undefined || n.y === undefined) {
@@ -72,11 +80,22 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
   for (let it = 0; it < iters; it++) {
     const al = (1 - it / iters) * 0.85;
 
-    // Gravity toward centre
+    // Gravity: a node with a parent orbits ONLY that parent — no pull toward the
+    // global centre. A global pull would bias every child toward the centre side
+    // of its parent and, with sibling repulsion, collapse a large fan-out into a
+    // vertical column whenever the parent sits off-centre. Pure parent-anchoring
+    // lets children spread symmetrically into a radial burst around the word.
+    // The parent chain ends at the pinned centre, so subtrees stay anchored.
     for (const n of nodes) {
       if (n.fixed) continue;
-      n.vx += (cx - n.x) * 0.002 * al;
-      n.vy += (cy - n.y) * 0.002 * al;
+      const p = parentOf[n.id] !== undefined ? nm[parentOf[n.id]] : null;
+      if (p) {
+        n.vx += (p.x - n.x) * 0.016 * al;
+        n.vy += (p.y - n.y) * 0.016 * al;
+      } else {
+        n.vx += (cx - n.x) * 0.002 * al;
+        n.vy += (cy - n.y) * 0.002 * al;
+      }
     }
 
     // Pairwise repulsion + collision, bucketed by spatial grid.
@@ -117,13 +136,16 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
       if (!t.fixed) { t.vx -= dx * f; t.vy -= dy * f; }
     }
 
-    // Integrate
+    // Integrate. No hard rectangle: confining nodes to the W×H canvas is what
+    // forced a large fan-out to pile up along an edge into a column. Clusters
+    // now spread freely (pan/zoom reaches them); a very generous guard only
+    // stops a pathological NaN/runaway from escaping to infinity.
     for (const n of nodes) {
       if (n.fixed) continue;
       n.vx *= 0.65; n.vy *= 0.65;
       n.x += n.vx; n.y += n.vy;
-      n.x = Math.max(40, Math.min(W - 40, n.x));
-      n.y = Math.max(40, Math.min(H - 40, n.y));
+      n.x = Math.max(-3 * W, Math.min(4 * W, n.x));
+      n.y = Math.max(-3 * H, Math.min(4 * H, n.y));
     }
   }
 

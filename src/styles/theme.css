@@ -389,6 +389,46 @@ body {
   font-size: var(--text-xs); background: color-mix(in oklab, var(--gold-500) 12%, transparent);
   color: var(--gold-400); border: var(--bw-hair) solid color-mix(in oklab, var(--gold-500) 26%, transparent); }
 .ag-insp-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.ag-insp-mean { word-break: break-word; }
+.ag-occ-btn { width: 100%; justify-content: center; font-size: var(--text-sm); padding: 9px 12px; }
+
+/* ═══════════ Occurrences popup ═══════════ */
+.ag-modal-scrim { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: var(--space-5); background: rgba(4,6,12,.64); backdrop-filter: blur(5px);
+  opacity: 0; pointer-events: none; }
+.ag-modal-scrim.is-open { opacity: 1; pointer-events: auto; animation: ag-fade var(--dur-base) var(--ease-out); }
+@keyframes ag-fade { from { opacity: 0; } to { opacity: 1; } }
+.ag-modal { width: min(720px, 100%); max-height: min(82vh, 920px); display: flex; flex-direction: column;
+  direction: rtl; background: var(--ink-850); border: var(--bw-hair) solid var(--border-default);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-3); overflow: hidden;
+  animation: ag-pop var(--dur-base) var(--ease-out); }
+.ag-modal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-4) var(--space-5); border-block-end: var(--bw-hair) solid var(--border-subtle); }
+.ag-modal-title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; flex-wrap: wrap; }
+.ag-modal-word { font-family: var(--font-quran); font-size: var(--text-2xl); color: var(--text-strong); margin: 0; line-height: 1.2; }
+.ag-modal-count { font-size: var(--text-sm); color: var(--text-muted); }
+.ag-modal-count b { color: var(--gold-400); font-family: var(--font-mono); }
+.ag-modal-list { list-style: none; margin: 0; padding: var(--space-2); overflow-y: auto; flex: 1 1 auto;
+  display: block; }
+/* Row spacing lives as padding INSIDE each <li> so it's included in the
+   measured height the virtualizer uses for its offsets (margins would not be). */
+.ag-modal-list > li { padding-block-end: var(--space-1); }
+.ag-modal-list > li.ag-vspace { padding: 0; }
+.ag-modal-row { width: 100%; display: flex; align-items: flex-start; gap: var(--space-3); text-align: start;
+  padding: var(--space-3) var(--space-4); background: transparent; border: var(--bw-hair) solid transparent;
+  border-radius: var(--radius-md); cursor: pointer; color: var(--text-body);
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
+.ag-modal-row:hover { background: var(--ink-800); border-color: var(--border-subtle); }
+.ag-modal-row.is-current { background: color-mix(in oklab, var(--gold-500) 9%, transparent);
+  border-color: color-mix(in oklab, var(--gold-500) 28%, transparent); }
+.ag-modal-row .ag-ayah-ref { flex: 0 0 auto; padding-block-start: 4px; }
+.ag-modal-text { flex: 1 1 auto; font-family: var(--font-quran); font-size: var(--text-lg); line-height: 2; min-width: 0; }
+.ag-btn:disabled { opacity: .4; cursor: default; }
+@media (max-width: 860px) {
+  .ag-modal-scrim { padding: 0; align-items: flex-end; }
+  .ag-modal { max-height: 90vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .ag-modal-text { font-size: var(--text-base); }
+}
 
 /* ═══════════ Loading / error ═══════════ */
 .ag-boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;

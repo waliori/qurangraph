@@ -115,18 +115,24 @@ for (const [n, counts] of Object.entries(tally)) {
 
 /* ── 4. Root → meaning, only for roots present in the Quran ── */
 const presentRoots = new Set(Object.values(roots));
-const meanings = {};
+const meanings = {};       // root → { c, f }     (concise + capped opening)
+const meaningsFull = {};   // root → full article (uncapped; lazy "show more")
 let matched = 0;
 const unmatched = [];
 for (const root of presentRoots) {
   const header = matchRoot(root, headerSet, normMap);
-  if (header && entries[header]) { meanings[root] = entries[header]; matched++; }
-  else unmatched.push(root);
+  if (header && entries[header]) {
+    const e = entries[header];
+    meanings[root] = { c: e.c, f: e.f };
+    if (e.full && e.full !== e.f) meaningsFull[root] = e.full;
+    matched++;
+  } else unmatched.push(root);
 }
 
 /* ── 5. Write artifacts ── */
 writeFileSync("public/data/roots.json", JSON.stringify(roots));
 writeFileSync("public/data/root-meanings.json", JSON.stringify(meanings));
+writeFileSync("public/data/root-meanings-full.json", JSON.stringify(meaningsFull));
 
 /* ── Report ── */
 const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : "0") + "%";
@@ -136,4 +142,5 @@ console.log(`Verses with token-count mismatch (used surface fallback): ${mismatc
 console.log(`Distinct Quran roots: ${presentRoots.size}`);
 console.log(`Roots matched to Maqayis: ${matched}/${presentRoots.size} (${pct(matched, presentRoots.size)})`);
 if (unmatched.length) console.log(`  unmatched sample: ${unmatched.slice(0, 25).join(" ")}`);
-console.log(`→ public/data/roots.json, public/data/root-meanings.json`);
+console.log(`Roots with a full article: ${Object.keys(meaningsFull).length}`);
+console.log(`→ public/data/roots.json, public/data/root-meanings.json, public/data/root-meanings-full.json`);

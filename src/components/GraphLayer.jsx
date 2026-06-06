@@ -11,7 +11,7 @@ import { norm } from "../arabic-utils.js";
  */
 
 const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, onEnter, onLeave, onClick }) {
-  const opacity = dim ? 0.1 : 1;
+  const opacity = dim ? 0.42 : 1;
   const r = isH ? n.r * 1.35 : isS || isAW ? n.r * 1.2 : n.r;
   const isWE = n.type === "word" && n.isExpanded;
   const isVE = n.type === "verse" && n.isExpanded;
@@ -66,9 +66,9 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, highlightSe
         const onA = activeWordNodeIds.size > 0 && (activeWordNodeIds.has(l.source) || activeWordNodeIds.has(l.target));
         const bright = onP || onA;
         return <line key={`l${i}`} x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-          stroke={bright ? (onA ? "#fcc41955" : isC ? T.linkCenter : T.link) : (theme === "light" ? "#e2e8f0" : "#0a1020")}
-          strokeWidth={bright ? (isC ? 1.8 : 1) : 0.3}
-          strokeOpacity={bright ? 0.7 : 0.1} />;
+          stroke={bright ? (onA ? "#fcd34d77" : isC ? T.linkCenter : T.link) : (theme === "light" ? "#cbbfa0" : "#243150")}
+          strokeWidth={bright ? (isC ? 1.8 : 1) : 0.5}
+          strokeOpacity={bright ? 0.7 : 0.32} />;
       })}
       {showLoops && loopLinks.map((l, i) => {
         const s = nmap[l.source], t = nmap[l.target]; if (!s || !t) return null;

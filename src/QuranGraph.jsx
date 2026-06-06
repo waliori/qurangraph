@@ -1,17 +1,18 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { norm, rootKey, setRootMap } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadRootMeanings } from "./data-loader.js";
+import { norm, rootKey, rootOf, setRootMap } from "./arabic-utils.js";
+import { loadHafsData, loadRoots, loadRootMeanings, loadRootMeaningsFull } from "./data-loader.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
 import { forceLayout } from "./graph/forceLayout.js";
 import { HighlightedAyah } from "./components/HighlightedAyah.jsx";
 import { GraphLayer } from "./components/GraphLayer.jsx";
+import { OccurrencesModal } from "./components/OccurrencesModal.jsx";
 import { usePersistedState } from "./hooks/usePersistedState.js";
 
 // Fixed virtual canvas the graph is laid out in. Decoupling layout from the
 // live viewport size means a window resize never rebuilds the graph or shifts
 // settled nodes — the pan/zoom transform maps this canvas onto the screen.
-const VW = 900, VH = 600;
+const VW = 1600, VH = 1100;
 const isInt = (v) => Number.isInteger(v);
 
 /* ═══ MAIN ═══ */
@@ -21,7 +22,7 @@ export default function QuranGraph() {
   const [error, setError] = useState(null);
   const [surah, setSurah] = usePersistedState("qg.surah", 2, (v, f) => (isInt(v) && v >= 1 && v <= 114 ? v : f));
   const [ayah, setAyah] = usePersistedState("qg.ayah", 228, (v, f) => (isInt(v) && v >= 1 ? v : f));
-  const [maxBranch, setMaxBranch] = usePersistedState("qg.maxBranch", 10, (v, f) => (isInt(v) && v >= 3 && v <= 50 ? v : f));
+  const [maxBranch, setMaxBranch] = usePersistedState("qg.maxBranch", 10, (v, f) => (isInt(v) && v >= 3 && v <= 2000 ? v : f));
   const [hideStop, setHideStop] = usePersistedState("qg.hideStop", true, (v) => !!v);
   const [showLoops, setShowLoops] = usePersistedState("qg.showLoops", true, (v) => !!v);
   const [searchMode, setSearchMode] = usePersistedState("qg.searchMode", "exact", (v, f) => (v === "exact" || v === "root" ? v : f));
@@ -48,7 +49,9 @@ export default function QuranGraph() {
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showHelp, setShowHelp] = useState(false);
   const [meanings, setMeanings] = useState(null); // root → { c, f } (lazy)
+  const [meaningsFull, setMeaningsFull] = useState(null); // root → full article (lazy, on "show more")
   const [meaningOpen, setMeaningOpen] = useState(false); // full-text toggle
+  const [occ, setOcc] = useState(null); // occurrences popup: { lookup, label, isRoot, keys }
   const [toolsOpen, setToolsOpen] = useState(false); // graph-tools popover
   const [query, setQuery] = useState(""); // toolbar search field
   const [searchMiss, setSearchMiss] = useState(false); // last search found nothing
@@ -98,10 +101,18 @@ export default function QuranGraph() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Lazy-load Ibn Faris meanings the first time root mode is used.
+  // Lazy-load Ibn Faris meanings the first time they're needed — either root
+  // mode (roots shown everywhere) or as soon as any node is selected, so a
+  // word's root meaning can be surfaced in the inspector even in exact mode.
   useEffect(() => {
-    if (searchMode === "root" && !meanings) loadRootMeanings().then(setMeanings).catch(() => {});
-  }, [searchMode, meanings]);
+    if ((searchMode === "root" || selected != null) && !meanings) loadRootMeanings().then(setMeanings).catch(() => {});
+  }, [searchMode, meanings, selected]);
+
+  // Lazy-load the FULL Maqāyīs al-Lugha articles the first time the reader asks
+  // to expand a meaning ("show more"). ~1.6MB, so deferred until truly wanted.
+  useEffect(() => {
+    if (meaningOpen && !meaningsFull) loadRootMeaningsFull().then(setMeaningsFull).catch(() => {});
+  }, [meaningOpen, meaningsFull]);
 
   // Drive the CSS design tokens (styles/theme.css) off the React theme state so
   // the whole آيات.network shell — including body + boot screens — recolours.
@@ -175,9 +186,29 @@ export default function QuranGraph() {
   useEffect(() => {
     const missing = graphNodes.filter((n) => !n.fixed && !positions[n.id]);
     if (missing.length === 0) return;
+    // Seed each new node in a ring around its parent (when the parent is already
+    // placed) so a freshly-expanded word's verses START clustered around it and
+    // the force pass only has to settle a tight local cloud — not drag a long
+    // column in from the centre.
+    const parentOf = {};
+    for (const l of graphLinks) if (parentOf[l.target] === undefined) parentOf[l.target] = l.source;
+    const missingByParent = {};
+    for (const n of missing) (missingByParent[parentOf[n.id]] ||= []).push(n.id);
+    const seedAround = (n) => {
+      const pp = positions[parentOf[n.id]];
+      if (!pp) return { x: n.x, y: n.y };
+      const sibs = missingByParent[parentOf[n.id]];
+      const idx = Math.max(0, sibs.indexOf(n.id));
+      const ang = idx * 2.399963; // golden angle → even spread, no overlap bias
+      const rad = 120 + Math.min(sibs.length, 80) * 2.4; // grows with sibling count
+      return { x: pp.x + Math.cos(ang) * rad, y: pp.y + Math.sin(ang) * rad };
+    };
     const work = graphNodes.map((n) => {
       const s = positions[n.id];
-      return { ...n, x: s ? s.x : n.x, y: s ? s.y : n.y, fixed: n.fixed || !!s };
+      if (s) return { ...n, x: s.x, y: s.y, fixed: true };
+      if (n.fixed) return { ...n, x: n.x, y: n.y, fixed: true };
+      const seed = seedAround(n);
+      return { ...n, x: seed.x, y: seed.y, fixed: false };
     });
     forceLayout(work, graphLinks, VW, VH, 140);
     const missingIds = new Set(missing.map((n) => n.id));
@@ -190,6 +221,15 @@ export default function QuranGraph() {
   }, [graphNodes, graphLinks, positions]);
 
   const nmap = useMemo(() => { const m = {}; graphNodes.forEach((n) => (m[n.id] = n)); return m; }, [graphNodes]);
+  // The per-word branch slider caps how many āyāt each word fans out to. Rather
+  // than a fixed 50, the ceiling tracks the busiest word currently on the canvas
+  // (so the most-frequent word can fan out to *all* its occurrences), floored at
+  // 10 and hard-capped for rendering sanity.
+  const branchMax = useMemo(() => {
+    let m = 10;
+    for (const n of graphNodes) if (n.type === "word" && n.count > m) m = n.count;
+    return Math.min(m, 250);
+  }, [graphNodes]);
   const wordToNodeIds = useMemo(() => { const m = {}; graphNodes.forEach((n) => { if (n.type === "word") { const key = n.lookup || n.wordNorm; (m[key] ||= []).push(n.id); } }); return m; }, [graphNodes]);
   const highlightSet = useMemo(() => { if (!selected) return null; return new Set([...getPathToCenter(selected, parentMap), ...getDescendants(selected, childMap)]); }, [selected, parentMap, childMap]);
   const highlightLinks = useMemo(() => { if (!highlightSet) return null; const s = new Set(); graphLinks.forEach((l, i) => { if (highlightSet.has(l.source) && highlightSet.has(l.target)) s.add(i); }); return s; }, [highlightSet, graphLinks]);
@@ -326,29 +366,39 @@ export default function QuranGraph() {
   // Toolbar search: normalise the query, find the first verse the word (or its
   // root, in root mode) occurs in, jump there and highlight it. Marks a miss so
   // the field can flash when nothing matches.
+  // Open the occurrences popup for a word/root: lists every āyah it occurs in,
+  // current verse first, then mushaf order. Used by search and the inspector.
+  const openOcc = useCallback((lookup, label, isRoot) => {
+    const idx = isRoot ? r2v : w2v;
+    const all = idx[lookup];
+    if (!all?.length) return false;
+    const ord = [...all].sort((a, b) => {
+      const [sa, aa] = a.split(":").map(Number), [sb, ab] = b.split(":").map(Number);
+      return sa - sb || aa - ab;
+    });
+    const keys = ord.includes(currentKey) ? [currentKey, ...ord.filter((k) => k !== currentKey)] : ord;
+    setOcc({ lookup, label, isRoot, keys });
+    return true;
+  }, [w2v, r2v, currentKey]);
+
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
     const q = norm(query);
     if (q.length < 2) { setSearchMiss(true); return; }
-    let lookup, verses;
-    if (searchMode === "root") {
-      lookup = rootKey(q);
-      verses = r2v[lookup];
-    } else {
-      lookup = q; verses = w2v[q];
-      if (!verses?.length) {
-        // Forgiving fallback: first indexed word that contains the query.
-        const hit = Object.keys(w2v).find((k) => k.includes(q));
-        if (hit) { lookup = hit; verses = w2v[hit]; }
-      }
+    let lookup = searchMode === "root" ? rootKey(q) : q;
+    let label = query.trim();
+    const isRoot = searchMode === "root";
+    if (!isRoot && !w2v[q]) {
+      // Forgiving fallback: first indexed word that contains the query.
+      const hit = Object.keys(w2v).find((k) => k.includes(q));
+      if (hit) { lookup = hit; label = hit; }
     }
-    if (!verses?.length) { setSearchMiss(true); return; }
-    setSearchMiss(false);
-    const [s, a] = verses[0].split(":").map(Number);
-    navigate(s, a);
-    setActiveWord(lookup);
     setToolsOpen(false);
-  }, [query, searchMode, w2v, r2v, navigate]);
+    // Show ALL āyāt for the term directly (no node is selected until the user
+    // picks one from the list).
+    if (openOcc(lookup, label, isRoot)) { setSearchMiss(false); setActiveWord(lookup); }
+    else setSearchMiss(true);
+  }, [query, searchMode, w2v, openOcc]);
 
   // Stable node handlers passed to the memoized GraphLayer.
   const onNodeEnter = useCallback((n) => { setHovered(n.id); if (n.type === "word") setActiveWord(n.lookup || n.wordNorm); }, []);
@@ -430,9 +480,9 @@ export default function QuranGraph() {
                 <div className="ag-range">
                   <div className="ag-range-top">
                     <span className="ag-range-lab">عدد الآيات لكل كلمة</span>
-                    <span className="ag-range-val">{maxBranch}</span>
+                    <span className="ag-range-val">{Math.min(maxBranch, branchMax)}<span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}> / {branchMax}</span></span>
                   </div>
-                  <input type="range" aria-label="عدد الآيات لكل كلمة" min={3} max={50} value={maxBranch}
+                  <input type="range" aria-label="عدد الآيات لكل كلمة" min={3} max={branchMax} value={Math.min(maxBranch, branchMax)}
                     onChange={(e) => setMaxBranch(+e.target.value)} />
                 </div>
                 <div className="ag-pop-sec">
@@ -583,14 +633,25 @@ export default function QuranGraph() {
                     <span className="ag-insp-num" style={{ color: fColor(selNode.count) }}>{selNode.count}</span>
                     <span className="ag-insp-cap">آية وردت فيها</span>
                   </div>
-                  {selNode.root && meanings?.[selNode.root] && (() => {
-                    const m = meanings[selNode.root];
-                    const hasMore = m.f && m.f !== m.c;
+                  {selNode.count > 1 && (
+                    <button type="button" className="ag-btn is-gold ag-occ-btn"
+                      onClick={() => openOcc(selNode.lookup || selNode.wordNorm, selNode.label, searchMode === "root")}>
+                      ⌖ عرض كل الآيات ({selNode.count})
+                    </button>
+                  )}
+                  {(() => {
+                    const sr = selNode.root || rootOf(selNode.wordNorm); // derive root in exact mode too
+                    if (!sr || !meanings?.[sr]) return null;
+                    const m = meanings[sr];
+                    const full = meaningsFull?.[sr];
+                    const hasMore = (m.f && m.f !== m.c) || !!full;
+                    const body = meaningOpen ? (full || m.f) : m.c;
+                    const loadingFull = meaningOpen && !meaningsFull && hasMore;
                     return (
                       <div className="ag-insp-card t-mean">
-                        <div className="ag-insp-mean">{meaningOpen && hasMore ? m.f : m.c}</div>
+                        <div className="ag-insp-mean">{body}{loadingFull ? " …" : ""}</div>
                         <div className="ag-insp-card-h" style={{ marginBottom: 0, marginTop: 6 }}>
-                          <span className="ag-insp-card-lab">مقاييس اللغة — ابن فارس</span>
+                          <span className="ag-insp-card-lab">مقاييس اللغة — ابن فارس · جذر {sr}</span>
                           {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? "أقل ▲" : "المزيد ▼"}</button>}
                         </div>
                       </div>
@@ -637,6 +698,10 @@ export default function QuranGraph() {
           </aside>
         )}
       </div>
+
+      {/* Occurrences popup — every āyah a word/root occurs in, paginated */}
+      <OccurrencesModal occ={occ} verseData={verseData} searchMode={searchMode} theme={theme}
+        onNavigate={(s, a) => { navigate(s, a); setOcc(null); }} onClose={() => setOcc(null)} />
     </div>
   );
 }

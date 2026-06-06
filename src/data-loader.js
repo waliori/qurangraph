@@ -30,3 +30,10 @@ export function loadRoots() {
 export function loadRootMeanings() {
   return fetchJSON("data/root-meanings.json");
 }
+
+// Precomputed root → full Maqāyīs al-Lugha article (lazy — only fetched when the
+// user asks to read the complete entry via "show more"). ~1.6MB, so kept out of
+// the default meanings payload.
+export function loadRootMeaningsFull() {
+  return fetchJSON("data/root-meanings-full.json");
+}
