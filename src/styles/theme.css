@@ -356,6 +356,11 @@ body {
   background: var(--ink-850); border-inline-start: var(--bw-hair) solid var(--border-subtle);
   box-shadow: var(--shadow-2);
 }
+/* Drag handle — only shown when the inspector is a bottom sheet (mobile). */
+.ag-sheet-grab { display: none; width: 42px; height: 4px; flex: 0 0 auto; align-self: center;
+  margin: var(--space-2) auto 0; border: 0; padding: 0; border-radius: var(--radius-pill);
+  background: var(--ink-600); cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
+.ag-sheet-grab:hover { background: var(--ink-400); }
 .ag-insp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
   padding: var(--space-5) var(--space-5) var(--space-4); border-block-end: var(--bw-hair) solid var(--border-subtle); }
 .ag-insp-title { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
@@ -406,13 +411,20 @@ body {
   .ag-search { order: 3; flex-basis: 100%; max-width: none; margin: 0; }
   .ag-controls { margin-inline-start: auto; gap: var(--space-2); }
 
+  /* Inspector → bottom sheet: slides up from the bottom edge, rounded top,
+     with a grab handle and scrim. Far friendlier than a side drawer on a phone. */
   .ag-inspector {
-    position: fixed; inset-block: 0; inset-inline-end: 0; width: min(90vw, 380px); z-index: 60;
-    transform: translateX(100%); transition: transform var(--dur-base) var(--ease-out);
-    border-inline-start: var(--bw-hair) solid var(--border-default);
+    position: fixed; inset-inline: 0; inset-block-end: 0; top: auto; width: 100%; max-width: none;
+    max-height: 86vh; z-index: 60;
+    border-inline-start: 0; border-top: var(--bw-hair) solid var(--border-default);
+    border-start-start-radius: var(--radius-lg); border-start-end-radius: var(--radius-lg);
+    box-shadow: 0 -24px 70px rgba(0,0,0,.6); overflow: hidden;
+    transform: translateY(100%); transition: transform var(--dur-base) var(--ease-out);
+    padding-block-end: env(safe-area-inset-bottom);
   }
-  html[dir="rtl"] .ag-inspector { transform: translateX(-100%); }
-  .ag-inspector.is-open { transform: translateX(0); }
+  .ag-inspector.is-open { transform: translateY(0); }
+  .ag-sheet-grab { display: block; }
+  .ag-insp-head { padding-block-start: var(--space-3); }
   .ag-scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(4,6,12,.6);
     opacity: 0; pointer-events: none; transition: opacity var(--dur-base) var(--ease-out); }
   .ag-scrim.is-open { opacity: 1; pointer-events: auto; }

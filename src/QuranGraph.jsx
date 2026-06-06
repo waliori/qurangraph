@@ -53,6 +53,7 @@ export default function QuranGraph() {
   const [query, setQuery] = useState(""); // toolbar search field
   const [searchMiss, setSearchMiss] = useState(false); // last search found nothing
   const [readerCollapsed, setReaderCollapsed] = useState(false); // bottom reader dock
+  const [sheetOpen, setSheetOpen] = useState(false); // inspector slide-in (mobile sheet)
   const T = THEMES[theme];
 
   // Translate that centres the virtual canvas in the current viewport.
@@ -105,6 +106,16 @@ export default function QuranGraph() {
   // Drive the CSS design tokens (styles/theme.css) off the React theme state so
   // the whole آيات.network shell — including body + boot screens — recolours.
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
+
+  // Animate the inspector in: mount closed, then flip `is-open` next frame so the
+  // mobile bottom sheet slides up (on desktop it's an in-flow column, so this is
+  // a no-op visually). Driven by the selected node id.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (selected == null) { setSheetOpen(false); return; }
+    const id = requestAnimationFrame(() => setSheetOpen(true));
+    return () => cancelAnimationFrame(id);
+  }, [selected]);
 
   const { w2v, r2v, verseData, surahList } = useMemo(() => {
     if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
@@ -553,9 +564,10 @@ export default function QuranGraph() {
         </main>
 
         {/* Inspector — selected node detail (side panel ↔ mobile drawer) */}
-        <div className={"ag-scrim" + (inspOpen ? " is-open" : "")} onClick={() => { setSelected(null); setActiveWord(null); }} />
+        <div className={"ag-scrim" + (inspOpen && sheetOpen ? " is-open" : "")} onClick={() => { setSelected(null); setActiveWord(null); }} />
         {selNode && (
-          <aside className={"ag-inspector is-open"} aria-label="لوحة التفصيل">
+          <aside className={"ag-inspector" + (sheetOpen ? " is-open" : "")} aria-label="لوحة التفصيل">
+            <button type="button" className="ag-sheet-grab" aria-label="إغلاق اللوحة" onClick={() => { setSelected(null); setActiveWord(null); }} />
             {selNode.type === "word" ? (
               <>
                 <div className="ag-insp-head">
