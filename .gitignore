@@ -1,4 +1,12 @@
 .claude
 node_modules
 dist
-data/source/
+
+# Built data artifacts — reconstructed from the tracked corpora in data/source/
+# via `npm run data:transform && npm run data:roots` (and inside the Dockerfile).
+# data/source/ itself IS tracked: it holds the necessary, non-reconstructable
+# inputs the build needs.
+/public/data/quran-hafs.json
+/public/data/roots.json
+/public/data/root-meanings.json
+/public/data/root-meanings-full.json

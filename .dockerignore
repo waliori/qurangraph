@@ -1,0 +1,14 @@
+# Keep the build context small and force the data to be (re)built in-image.
+node_modules
+dist
+.git
+.github
+.claude
+*.log
+npm-debug.log*
+
+# Built data artifacts — regenerated from data/source/ during the image build.
+public/data/quran-hafs.json
+public/data/roots.json
+public/data/root-meanings.json
+public/data/root-meanings-full.json
