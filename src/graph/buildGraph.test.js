@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLazyGraph, getDescendants, getPathToCenter } from "./buildGraph.js";
+import { setRootMap } from "../arabic-utils.js";
 
 function word(s) { return { orig: s, norm: s }; }
 
@@ -51,6 +52,26 @@ describe("buildLazyGraph", () => {
       expect(Number.isFinite(n.x)).toBe(true);
       expect(Number.isFinite(n.y)).toBe(true);
     }
+  });
+});
+
+describe("root mode (precomputed roots)", () => {
+  const vd = {
+    "1:1": { text: "يتربصن يتربص في", s: 1, a: 1, sn: "س", words: [word("يتربصن"), word("يتربص"), word("في")] },
+  };
+  const idx = { "ربص": ["1:1"], "في": ["1:1"] };
+
+  it("groups different surface forms of one root into a single word node, leaves no-root tokens ungrouped", () => {
+    setRootMap({ "يتربصن": "ربص", "يتربص": "ربص" }); // "في" intentionally unmapped
+    const { nodes } = buildLazyGraph("1:1", vd, idx, idx, new Set(), new Set(), false, 10, "root");
+    const words = nodes.filter((n) => n.type === "word");
+    const lookups = words.map((n) => n.lookup).sort();
+    expect(lookups).toEqual(["ربص", "في"]); // two forms of ربص collapsed to one
+    const rabs = words.find((n) => n.lookup === "ربص");
+    const fi = words.find((n) => n.lookup === "في");
+    expect(rabs.rootLabel).toBe("ربص");   // real root → labelled
+    expect(fi.rootLabel).toBe(null);       // no root → ungrouped, no label
+    setRootMap(null);
   });
 });
 

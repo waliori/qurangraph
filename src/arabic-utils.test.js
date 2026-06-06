@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { norm, extractRoot, STOP } from "./arabic-utils.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { norm, setRootMap, rootOf, rootKey, extractRoot, STOP } from "./arabic-utils.js";
 
 describe("norm", () => {
   it("strips diacritics to a consonantal skeleton", () => {
@@ -21,24 +21,26 @@ describe("norm", () => {
   });
 });
 
-describe("extractRoot", () => {
-  it("groups the same triliteral family to one root", () => {
-    const r = extractRoot("شهر");
-    expect(extractRoot("شهور")).toBe(r);
-    expect(extractRoot("الأشهر")).toBe(r);
-    expect(r).toBe("شهر");
+describe("precomputed root lookup", () => {
+  beforeEach(() => setRootMap({ "يتربصن": "ربص", "شهور": "شهر", "السماوات": "سمو" }));
+
+  it("rootOf returns the mapped root or null", () => {
+    expect(rootOf("شهور")).toBe("شهر");
+    expect(rootOf("السماوات")).toBe("سمو");
+    expect(rootOf("في")).toBe(null); // no-root token
   });
-  it("is deterministic / cached", () => {
-    expect(extractRoot("الكتاب")).toBe(extractRoot("كتاب"));
+  it("rootKey returns the root, or the word itself when ungrouped", () => {
+    expect(rootKey("يتربصن")).toBe("ربص");
+    expect(rootKey("في")).toBe("في");
   });
-  it("applies curated overrides for common words", () => {
-    expect(extractRoot("الرحمن")).toBe("رحم");
-    expect(extractRoot("الرحيم")).toBe("رحم");
-    expect(extractRoot("المؤمنون")).toBe("امن");
-    expect(extractRoot("السماوات")).toBe("سمو");
+  it("extractRoot normalises then looks up", () => {
+    expect(extractRoot("شُهُورٌ")).toBe("شهر");
+    expect(extractRoot("مِن")).toBe("من"); // ungrouped passthrough
   });
-  it("returns a non-empty string for any token", () => {
-    expect(extractRoot("في").length).toBeGreaterThan(0);
+  it("setRootMap(null) clears the map safely", () => {
+    setRootMap(null);
+    expect(rootOf("شهور")).toBe(null);
+    expect(rootKey("شهور")).toBe("شهور");
   });
 });
 

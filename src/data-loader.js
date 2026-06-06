@@ -12,3 +12,13 @@ async function fetchJSON(url) {
 export function loadHafsData() {
   return fetchJSON("/data/quran-hafs.json");
 }
+
+// Precomputed normForm → root map (eager — needed for root-mode grouping).
+export function loadRoots() {
+  return fetchJSON("/data/roots.json");
+}
+
+// Precomputed root → { c, f } Ibn Faris meanings (lazy — only when first shown).
+export function loadRootMeanings() {
+  return fetchJSON("/data/root-meanings.json");
+}

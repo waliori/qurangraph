@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "data:download": "node scripts/download-data.js",
     "data:transform": "node scripts/transform-data.js",
-    "data:build": "npm run data:download && npm run data:transform"
+    "data:roots": "node scripts/build-roots.js",
+    "data:build": "npm run data:download && npm run data:transform && npm run data:roots"
   },
   "dependencies": {
     "react": "^19.1.0",

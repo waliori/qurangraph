@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { norm, extractRoot } from "./arabic-utils.js";
-import { loadHafsData } from "./data-loader.js";
+import { norm, rootKey, setRootMap } from "./arabic-utils.js";
+import { loadHafsData, loadRoots, loadRootMeanings } from "./data-loader.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
 import { forceLayout } from "./graph/forceLayout.js";
@@ -45,6 +45,8 @@ export default function QuranGraph() {
   const pinchRef = useRef(null);
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showHelp, setShowHelp] = useState(false);
+  const [meanings, setMeanings] = useState(null); // root → { c, f } (lazy)
+  const [meaningOpen, setMeaningOpen] = useState(false); // full-text toggle
   const T = THEMES[theme];
 
   // Persist UI preferences
@@ -75,13 +77,18 @@ export default function QuranGraph() {
   const loadData = useCallback(() => {
     setLoading(true);
     setError(null);
-    loadHafsData()
-      .then((hafs) => { setQuranRaw(hafs); setLoading(false); })
+    Promise.all([loadHafsData(), loadRoots()])
+      .then(([hafs, roots]) => { setRootMap(roots); setQuranRaw(hafs); setLoading(false); })
       .catch((e) => { setError(e?.message || "Failed to load Quran data."); setLoading(false); });
   }, []);
   // Fetch the corpus on mount (external system — a legitimate effect).
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Lazy-load Ibn Faris meanings the first time root mode is used.
+  useEffect(() => {
+    if (searchMode === "root" && !meanings) loadRootMeanings().then(setMeanings).catch(() => {});
+  }, [searchMode, meanings]);
 
   const { w2v, r2v, verseData, surahList } = useMemo(() => {
     if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
@@ -97,7 +104,7 @@ export default function QuranGraph() {
           if (n.length < 2) continue;
           words.push({ orig: raw, norm: n });
           if (!seenN.has(n)) { seenN.add(n); (w2v[n] ||= []).push(vk); }
-          const root = extractRoot(n);
+          const root = rootKey(n);
           if (!seenR.has(root)) { seenR.add(root); (r2v[root] ||= []).push(vk); }
         }
         vd[vk] = { text: v.text, s: s.id, a: v.id, sn: s.name, words };
@@ -263,8 +270,9 @@ export default function QuranGraph() {
   }, []);
 
   const handleWordClick = useCallback((wordNorm, fromVerseKey) => {
-    const lookup = searchMode === "root" ? extractRoot(wordNorm) : wordNorm;
+    const lookup = searchMode === "root" ? rootKey(wordNorm) : wordNorm;
     const vk = fromVerseKey || currentKey;
+    setMeaningOpen(false);
     if (activeWord === lookup) { setActiveWord(null); setSelected(null); }
     else { setActiveWord(lookup); const nids = wordToNodeIds[lookup]; if (nids?.length) setSelected(nids[0]); toggleWord(lookup, vk); }
   }, [activeWord, wordToNodeIds, toggleWord, currentKey, searchMode]);
@@ -339,10 +347,11 @@ export default function QuranGraph() {
         </div>
         {showHelp && (
           <div style={{ background: theme === "light" ? "#f8fafc" : "#0a0e1a", borderRadius: 8, padding: "8px 12px", marginTop: 6, border: `1px solid ${T.panelBorder}`, fontSize: 11, lineHeight: 2.2, color: T.textDim }}>
-            <b style={{ color: "#22c55e" }}>🌿 جذر:</b> يستخرج الجذر الثلاثي — أشهُر/شهور/شهر/الأشهر → ش ه ر<br />
+            <b style={{ color: "#22c55e" }}>🌿 جذر:</b> الجذر الصرفي لكل كلمة (المدوّنة الصرفية للقرآن) مع معناه من «مقاييس اللغة» لابن فارس — أشهُر/شهور/شهر → ش ه ر<br />
             <b style={{ color: "#60a5fa" }}>📝 كلمة:</b> تطابق دقيق<br />
             <b>اضغط كلمة</b> (في الآية أو الشبكة) → توسيع. مرة ثانية → طي تلقائي مع الفروع.<br />
-            <span style={{ color: T.textFaint }}>اسحب للتحريك · عجلة الفأرة أو إصبعان للتكبير · اسحب العقدة لتحريكها.</span>
+            <span style={{ color: T.textFaint }}>اسحب للتحريك · عجلة الفأرة أو إصبعان للتكبير · اسحب العقدة لتحريكها.</span><br />
+            <span style={{ color: T.textFaint, fontSize: 9 }}>المصادر: نصّ حفص (تنزيل) · الجذور (المدوّنة الصرفية للقرآن) · المعاني (مقاييس اللغة لابن فارس، عبر OpenITI).</span>
           </div>
         )}
       </div>
@@ -414,7 +423,7 @@ export default function QuranGraph() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (n.type === "center") { setSelected(null); setActiveWord(null); return; }
-                    if (n.type === "word") { toggleWord(n.lookup || n.wordNorm, n.parentVerseKey); setActiveWord(n.lookup || n.wordNorm); setSelected(n.id); }
+                    if (n.type === "word") { setMeaningOpen(false); toggleWord(n.lookup || n.wordNorm, n.parentVerseKey); setActiveWord(n.lookup || n.wordNorm); setSelected(n.id); }
                     else if (n.type === "verse") { if (selected === n.id) toggleVerse(n.verseKey); else { setSelected(n.id); setActiveWord(null); } }
                   }}>
 
@@ -449,10 +458,15 @@ export default function QuranGraph() {
         {hovNode && hovNode.type !== "center" && !selNode && (
           <div data-panel="1" style={{ position: "absolute", bottom: 12, left: 12, right: 12, background: T.panel + (theme === "dark" ? "f5" : "f8"), backdropFilter: "blur(12px)", borderRadius: 10, padding: "10px 14px", border: `1px solid ${hovNode.color}44`, direction: "rtl", zIndex: 30, pointerEvents: hovNode.type === "verse" ? "auto" : "none", maxHeight: "28vh", overflow: "auto" }}>
             {hovNode.type === "word" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
-                {hovNode.rootLabel && <span style={{ fontSize: 12, color: "#22c55e" }}>جذر: {hovNode.rootLabel}</span>}
-                <span style={{ fontSize: 10, color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", padding: "1px 8px", borderRadius: 10 }}>{hovNode.count} آية</span>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: hovNode.color }}>{hovNode.label}</span>
+                  {hovNode.rootLabel && <span style={{ fontSize: 12, color: "#22c55e" }}>جذر: {hovNode.rootLabel}</span>}
+                  <span style={{ fontSize: 10, color: fColor(hovNode.count), background: fColor(hovNode.count) + "22", padding: "1px 8px", borderRadius: 10 }}>{hovNode.count} آية</span>
+                </div>
+                {hovNode.root && meanings?.[hovNode.root] && (
+                  <div style={{ fontSize: 11, color: T.textDim, marginTop: 4, lineHeight: 1.8 }}>{meanings[hovNode.root].c}</div>
+                )}
               </div>
             ) : (
               <>
@@ -481,6 +495,19 @@ export default function QuranGraph() {
                   </div>
                   <button title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }} style={{ ...SS.btn, fontSize: 11 }}>✕</button>
                 </div>
+                {selNode.root && meanings?.[selNode.root] && (() => {
+                  const m = meanings[selNode.root];
+                  const hasMore = m.f && m.f !== m.c;
+                  return (
+                    <div style={{ background: theme === "light" ? "#f0fdf4" : "#0a140d", border: `1px solid ${theme === "light" ? "#bbf7d0" : "#14331f"}`, borderRadius: 8, padding: "6px 10px", marginBottom: 6 }}>
+                      <div style={{ fontSize: 14, lineHeight: 1.9, color: theme === "light" ? "#15803d" : "#86efac" }}>{meaningOpen && hasMore ? m.f : m.c}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                        <span style={{ fontSize: 8, color: T.textFaint }}>مقاييس اللغة — ابن فارس</span>
+                        {hasMore && <button onClick={() => setMeaningOpen((o) => !o)} style={{ ...SS.btn, fontSize: 10, color: "#22c55e" }}>{meaningOpen ? "أقل ▲" : "المزيد ▼"}</button>}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (<div style={{ background: theme === "light" ? "#f1f5f9" : "#0a0e1a", borderRadius: 8, padding: "6px 10px" }}><div style={{ fontSize: 9, color: T.textFaint, marginBottom: 3 }}>من: {parent.label}</div><div style={{ fontSize: 15, lineHeight: 2, color: T.text }}><HighlightedAyah text={parent.text} primaryWord={selNode.lookup || selNode.wordNorm} searchMode={searchMode} theme={theme} interactive={true} onWordClick={(wn) => handleWordClick(wn, parent.verseKey)} /></div></div>); return null; })()}
               </>
             ) : selNode.type === "verse" ? (

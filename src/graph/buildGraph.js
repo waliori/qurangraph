@@ -1,4 +1,4 @@
-import { extractRoot, STOP } from "../arabic-utils.js";
+import { rootKey, rootOf, STOP } from "../arabic-utils.js";
 import { fColor, dColor } from "../theme.js";
 
 /* Unique, non-stop words of a verse, keyed by exact-norm or root. */
@@ -6,12 +6,12 @@ export function getUW(v, hideStop, mode) {
   const seen = new Set();
   return v.words
     .filter((w) => {
-      const key = mode === "root" ? extractRoot(w.norm) : w.norm;
+      const key = mode === "root" ? rootKey(w.norm) : w.norm;
       if (seen.has(key)) return false;
       seen.add(key);
       return !(hideStop && STOP.has(w.norm));
     })
-    .map((w) => ({ ...w, lookup: mode === "root" ? extractRoot(w.norm) : w.norm }));
+    .map((w) => ({ ...w, lookup: mode === "root" ? rootKey(w.norm) : w.norm }));
 }
 
 /* All nodes reachable from `nid` following links downward (inclusive). */
@@ -40,7 +40,7 @@ export function getPathToCenter(nid, parentMap) {
 
 /* The `lookup` key (exact norm or root) for a word, per search mode. */
 function lookupOf(wordNorm, mode) {
-  return mode === "root" ? extractRoot(wordNorm) : wordNorm;
+  return mode === "root" ? rootKey(wordNorm) : wordNorm;
 }
 
 /* ═══ Lazy graph builder ═══
@@ -101,7 +101,8 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         const count = (index[w.lookup] || []).length;
         const expKey = `${w.lookup}@${item.verseKey}`;
         const isExp = expandedWords.has(expKey);
-        nodes.push({ id: wid, type: "word", wordNorm: w.norm, lookup: w.lookup, label: w.orig, count, r: Math.min(7 + Math.log2(count + 1) * 3, 20), color: fColor(count), depth: item.depth + 1, isExpanded: isExp, parentVerseKey: item.verseKey, rootLabel: searchMode === "root" ? w.lookup : null, ...place(item.depth + 1) });
+        const realRoot = searchMode === "root" ? rootOf(w.norm) : null;
+        nodes.push({ id: wid, type: "word", wordNorm: w.norm, lookup: w.lookup, label: w.orig, count, r: Math.min(7 + Math.log2(count + 1) * 3, 20), color: fColor(count), depth: item.depth + 1, isExpanded: isExp, parentVerseKey: item.verseKey, rootLabel: realRoot, root: realRoot, ...place(item.depth + 1) });
         addedNodes.add(wid);
         parentMap[wid] = item.verseId;
         links.push({ source: item.verseId, target: wid, dist: 130 });
