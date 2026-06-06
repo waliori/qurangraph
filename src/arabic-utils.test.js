@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { norm, setRootMap, rootOf, rootKey, extractRoot, STOP } from "./arabic-utils.js";
+import { norm, normStrict, setRootMap, setLemmaMap, rootOf, rootKey, lemmaOf, lemmaKey, groupKey, extractRoot, STOP, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 
 describe("norm", () => {
   it("strips diacritics to a consonantal skeleton", () => {
@@ -44,10 +44,42 @@ describe("precomputed root lookup", () => {
   });
 });
 
-describe("STOP", () => {
-  it("contains common particles", () => {
+describe("norm precision", () => {
+  it("strict mode keeps ة / ى / hamza distinct (no folding)", () => {
+    expect(normStrict("صلاة")).toBe("صلاة");      // loose folds to صلاه
+    expect(normStrict("موسى")).toBe("موسى");      // loose folds to موسي
+    expect(norm("صلاة", { fold: false })).toBe("صلاة");
+    // alif family + diacritics are still normalised even in strict mode
+    expect(normStrict("ٱلرَّحْمَٰنِ")).toBe("الرحمن");
+  });
+  it("loose and strict differ only on the foldable letters", () => {
+    expect(norm("آية")).toBe("ايه");
+    expect(normStrict("آية")).toBe("اية");
+  });
+});
+
+describe("lemma lookup + groupKey", () => {
+  beforeEach(() => { setRootMap({ "استغفر": "غفر", "غفور": "غفر" }); setLemmaMap({ "استغفر": "استغفر", "غفور": "غفور" }); });
+  it("lemmaOf / lemmaKey mirror the root API", () => {
+    expect(lemmaOf("استغفر")).toBe("استغفر");
+    expect(lemmaOf("في")).toBe(null);
+    expect(lemmaKey("غفور")).toBe("غفور");
+    expect(lemmaKey("في")).toBe("في");
+  });
+  it("groupKey selects the key for the active mode", () => {
+    expect(groupKey("استغفر", "exact")).toBe("استغفر");
+    expect(groupKey("استغفر", "lemma")).toBe("استغفر");
+    expect(groupKey("استغفر", "root")).toBe("غفر");
+  });
+});
+
+describe("STOP groups", () => {
+  it("particles and content defaults are separate, union is the default STOP", () => {
+    expect(STOP_PARTICLES.has("في")).toBe(true);
+    expect(STOP_CONTENT_DEFAULT.has("الله")).toBe(true);
+    expect(STOP_PARTICLES.has("الله")).toBe(false);
     expect(STOP.has("في")).toBe(true);
-    expect(STOP.has("من")).toBe(true);
+    expect(STOP.has("الله")).toBe(true);
     expect(STOP.has("شهر")).toBe(false);
   });
 });

@@ -26,6 +26,17 @@ export function loadRoots() {
   return fetchJSON("data/roots.json");
 }
 
+// Precomputed normForm → lemma map (lazy — only when lemma mode is first used).
+export function loadLemmas() {
+  return fetchJSON("data/lemmas.json");
+}
+
+// Columnar per-verse morphology { legend, lemmas, roots, v } (lazy — fetched the
+// first time the morphology filter, lemma mode, or the inspector card needs it).
+export function loadMorphology() {
+  return fetchJSON("data/morphology.json");
+}
+
 // Precomputed root → { c, f } Ibn Faris meanings (lazy — only when first shown).
 export function loadRootMeanings() {
   return fetchJSON("data/root-meanings.json");
@@ -36,4 +47,20 @@ export function loadRootMeanings() {
 // the default meanings payload.
 export function loadRootMeaningsFull() {
   return fetchJSON("data/root-meanings-full.json");
+}
+
+// Lexicon manifest: [{ id, label, license, hasFull, coverage }] — the swappable
+// Arabic dictionaries (Maqāyīs / Mufradāt / Lisān …). Tiny; load to build the switcher.
+export function loadLexiconManifest() {
+  return fetchJSON("data/lexicons/index.json");
+}
+
+// A lexicon's concise root → { c, f } map (lazy; only the active lexicon is fetched).
+export function loadLexicon(id) {
+  return fetchJSON(`data/lexicons/${id}.json`);
+}
+
+// A lexicon's full root → article map (lazy; large, fetched on "show more").
+export function loadLexiconFull(id) {
+  return fetchJSON(`data/lexicons/${id}-full.json`);
 }
