@@ -1,24 +1,26 @@
-import { norm, extractRoot } from "../arabic-utils.js";
+import { norm, normStrict, groupKey } from "../arabic-utils.js";
 import { THEMES } from "../theme.js";
 
 /* Renders verse text with the primary / shared words highlighted, and
- * (optionally) each word clickable to drive the graph. */
-export function HighlightedAyah({ text, primaryWord, sharedWords = [], interactive, onWordClick, activeGraphWord, searchMode, theme = "dark" }) {
+ * (optionally) each word clickable to drive the graph. Matching is by the active
+ * mode's grouping key (exact surface | lemma | root); exact mode honours the
+ * precision setting. primaryWord/activeGraphWord are already lookup keys, so we
+ * compare them against each token's key — and emit that same key on click so the
+ * handler selects the matching node. */
+export function HighlightedAyah({ text, primaryWord, sharedWords = [], interactive, onWordClick, activeGraphWord, searchMode, precision = "loose", theme = "dark" }) {
   if (!text) return null;
   const T = THEMES[theme];
-  const matchFn = searchMode === "root"
-    ? (n) => (primaryWord && extractRoot(n) === primaryWord) || (activeGraphWord && extractRoot(n) === activeGraphWord)
-    : (n) => (primaryWord && n === primaryWord) || (activeGraphWord && n === activeGraphWord);
-  const sharedFn = searchMode === "root"
-    ? (n) => sharedWords.some((w) => extractRoot(norm(w)) === extractRoot(n) || norm(w) === n)
-    : (n) => sharedWords.some((w) => norm(w) === n || w === n);
+  const keyOf = (raw) => searchMode === "exact" ? (precision === "strict" ? normStrict(raw) : norm(raw)) : groupKey(norm(raw), searchMode);
+  const matchFn = (k) => (primaryWord && k === primaryWord) || (activeGraphWord && k === activeGraphWord);
+  const sharedFn = (raw, k) => sharedWords.some((w) => keyOf(w) === k || norm(w) === norm(raw));
 
   return (
     <span>{text.split(/(\s+)/).map((p, i) => {
       if (/^\s+$/.test(p)) return <span key={i}> </span>;
       const n = norm(p);
-      const isPri = matchFn(n);
-      const isShared = !isPri && sharedFn(n);
+      const k = keyOf(p);
+      const isPri = matchFn(k);
+      const isShared = !isPri && sharedFn(p, k);
       const click = interactive && n.length >= 2;
       let bg = "transparent", color = T.text, fw = "normal", bd = "none";
       if (isPri) { bg = theme === "light" ? "#fca5a544" : "#ef444455"; color = theme === "light" ? "#dc2626" : "#fca5a5"; fw = "700"; bd = `1px solid ${theme === "light" ? "#dc262644" : "#ef444488"}`; }
@@ -29,8 +31,8 @@ export function HighlightedAyah({ text, primaryWord, sharedWords = [], interacti
           tabIndex={click ? 0 : undefined}
           aria-label={click ? p : undefined}
           style={{ background: bg, color, fontWeight: fw, borderRadius: 4, padding: bg !== "transparent" ? "1px 4px" : "0", border: bd, cursor: click ? "pointer" : "default", transition: "all 0.15s" }}
-          onClick={click ? (e) => { e.stopPropagation(); onWordClick?.(n); } : undefined}
-          onKeyDown={click ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onWordClick?.(n); } } : undefined}
+          onClick={click ? (e) => { e.stopPropagation(); onWordClick?.(k); } : undefined}
+          onKeyDown={click ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onWordClick?.(k); } } : undefined}
           onMouseEnter={click ? (e) => { if (!isPri && !isShared) { e.target.style.background = theme === "light" ? "#e2e8f044" : "#ffffff15"; e.target.style.borderBottom = `1px dashed ${theme === "light" ? "#3b82f6" : "#60a5fa"}`; } } : undefined}
           onMouseLeave={click ? (e) => { if (!isPri && !isShared) { e.target.style.background = "transparent"; e.target.style.borderBottom = "none"; } } : undefined}
         >{p}</span>
