@@ -1,6 +1,14 @@
-# آيات.network — QuranGraph
+<div align="center">
 
-An interactive, force-directed graph of the Qurʾān. Pick a verse and it becomes
+<img src="public/logomark.svg" alt="" width="92" height="92" />
+
+# QuranGraph · آيات.network
+
+**An interactive, force-directed graph of the Qurʾān — explore where the text reuses the same word, lemma, and root.**
+
+</div>
+
+Pick a verse and it becomes
 the centre of a network; expand its words to discover every other verse that
 shares the same **word**, the same **lemma** (صيغة), or the same triliteral
 **root** (جذر) — and keep expanding outward. A pure Qurʾān↔Qurʾān + Arabic-language
