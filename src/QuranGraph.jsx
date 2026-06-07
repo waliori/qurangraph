@@ -506,8 +506,11 @@ export default function QuranGraph() {
     applyPositions(registry, seedPos);
     canvasApiRef.current?.draw();
     if (pendMap) {
-      // Pin the restored layout so it matches the source; the user can drag or reset.
-      for (const n of graphNodes) if (!n.fixed) sim.stick(n.id);
+      // Reproduce the shared arrangement as the STARTING layout, then leave the nodes
+      // FREE — so they follow their centre when it's dragged, can be moved, and re-flow
+      // under the live forces. (Previously they were stuck `fixed`, which froze them in
+      // place: they couldn't be dragged and ignored their centre.) A gentle reheat just
+      // relaxes any integer-rounding overlap from the encoded positions.
       pendingPosRef.current = null;
       sim.reheat(0.04);
     } else {
@@ -1505,7 +1508,18 @@ export default function QuranGraph() {
         <DistributionModal dist={dist}
           index={dist.mode === "root" ? r2v : dist.mode === "lemma" ? (l2v || {}) : w2v}
           verseData={verseData} surahList={surahList} stopSet={stopSet} theme={theme}
-          onNavigate={(s, a) => { setDist(null); navigate(s, a); }}
+          onSurah={(sura, suraName) => {
+            // Show every āyah in THIS sūrah where the term occurs — same list view as
+            // the occurrences popup (downloadable, savable), with a back button to the
+            // distribution. Sorted by āyah (all share the one sūrah).
+            const idx = dist.mode === "root" ? r2v : dist.mode === "lemma" ? (l2v || {}) : w2v;
+            const keys = (idx[dist.lookup] || [])
+              .filter((vk) => verseData[vk]?.s === sura)
+              .sort((a, b) => Number(a.split(":")[1]) - Number(b.split(":")[1]));
+            const back = dist;
+            setDist(null);
+            setOcc({ lookup: dist.lookup, label: t("dist.surahLabel", { label: dist.label, name: suraName }), mode: dist.mode, keys, back });
+          }}
           onCompare={(term) => { setDist(null); setCmp({ A: term, B: null }); }}
           onPick={(key, label) => {
             // Show only the verses where the neighbour co-occurs WITH the original

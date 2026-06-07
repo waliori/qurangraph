@@ -15,11 +15,12 @@ export const ar = {
   "dist.fileColloc": "مجاورات-{label}.csv",
 
   "dist.bySurah": "التوزيع حسب السورة",
-  "dist.clickSurahHint": "اضغط سورة لتنتقل إلى أول ورودٍ فيها.",
+  "dist.clickSurahHint": "اضغط سورة لعرض آياتها التي ورد فيها.",
   "dist.colSurah": "السورة",
   "dist.colName": "الاسم",
   "dist.colCount": "العدد",
-  "dist.jumpTo": "انتقل إلى {name} {ayah}",
+  "dist.showInSurah": "اعرض {count} آية في {name}",
+  "dist.surahLabel": "{label} في {name}",
 
   "dist.collocates": "الكلمات المجاورة (داخل الآية)",
   "dist.colWord": "الكلمة",
@@ -65,11 +66,12 @@ export const en = {
   "dist.fileColloc": "collocates-{label}.csv",
 
   "dist.bySurah": "Distribution by sūrah",
-  "dist.clickSurahHint": "Click a sūrah to jump to its first occurrence.",
+  "dist.clickSurahHint": "Click a sūrah to view its verses where the word occurs.",
   "dist.colSurah": "Sūrah",
   "dist.colName": "Name",
   "dist.colCount": "Count",
-  "dist.jumpTo": "Go to {name} {ayah}",
+  "dist.showInSurah": "Show {count} verses in {name}",
+  "dist.surahLabel": "{label} in {name}",
 
   "dist.collocates": "Collocates (within the verse)",
   "dist.colWord": "Word",

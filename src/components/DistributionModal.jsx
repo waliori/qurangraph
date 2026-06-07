@@ -10,8 +10,8 @@ import { fColor } from "../theme.js";
  *
  * Pure Qur'an-internal stats for a word/lemma/root: how it spreads across the
  * sūrahs (bar list) and which content words it co-occur with inside verses
- * (ranked). Both panels are interactive — a sūrah row jumps the graph to the
- * term's first occurrence there; a neighbour chip opens that word's verses — and
+ * (ranked). Both panels are interactive — a sūrah row opens the list of its
+ * āyāt where the term occurs; a neighbour chip opens that word's verses — and
  * exportable to CSV. `dist = { lookup, label, mode }`.
  */
 // Ranking of the neighbour list: raw shared-verse count, or one of two
@@ -19,7 +19,7 @@ import { fColor } from "../theme.js";
 // Labels/titles are resolved per id via t() inside the component (hook scope).
 const COLLOC_SORT_IDS = ["count", "ll", "pmi"];
 
-export function DistributionModal({ dist, index, verseData, surahList, stopSet, theme, onNavigate, onPick, onCompare, onClose }) {
+export function DistributionModal({ dist, index, verseData, surahList, stopSet, theme, onSurah, onPick, onCompare, onClose }) {
   const { t } = useI18n();
   const ws = useWorkspace();
   const [collocSort, setCollocSort] = useState("ll");
@@ -29,17 +29,14 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
     const colloc = collocations(dist.lookup, dist.mode, index, verseData, stopSet, 99, { sort: collocSort }).slice(0, 60);
     const total = distribution.reduce((s, d) => s + d.count, 0);
     const max = distribution.reduce((m, d) => Math.max(m, d.count), 1);
-    // First occurrence of the term in each sūrah → lets a row jump the graph there.
-    const firstInSura = {};
-    for (const vk of index[dist.lookup] || []) { const s = verseData[vk]?.s; if (s != null && !firstInSura[s]) firstInSura[s] = vk; }
-    return { distribution, colloc, total, max, firstInSura };
+    return { distribution, colloc, total, max };
   }, [dist, index, verseData, surahList, stopSet, collocSort]);
 
   const dialogRef = useRef(null);
   useModalFocus(!!dist, dialogRef, { onEscape: onClose });
 
   if (!dist || !data) return null;
-  const { distribution, colloc, total, max, firstInSura } = data;
+  const { distribution, colloc, total, max } = data;
   // The association figure shown on each chip tracks the active sort.
   const metricOf = (c) => collocSort === "pmi" ? c.pmi : collocSort === "ll" ? c.ll : null;
   const fmtMetric = (v) => (v == null ? "" : Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1));
@@ -79,17 +76,14 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
               <span />
             </div>
             <div className="ag-dist-bars">
-              {distribution.map((d) => {
-                const vk = firstInSura[d.sura]; const v = vk && verseData[vk];
-                return (
-                  <button type="button" className="ag-dist-row ag-dist-rowbtn" key={d.sura}
-                    onClick={() => v && onNavigate?.(v.s, v.a)} title={v ? t("dist.jumpTo", { name: d.name, ayah: v.a }) : undefined}>
-                    <span className="ag-dist-name">{d.sura}. {d.name}</span>
-                    <span className="ag-dist-num">{d.count}</span>
-                    <span className="ag-dist-barwrap"><span className="ag-dist-bar" style={{ width: `${(d.count / max) * 100}%`, background: fColor(d.count, theme) }} /></span>
-                  </button>
-                );
-              })}
+              {distribution.map((d) => (
+                <button type="button" className="ag-dist-row ag-dist-rowbtn" key={d.sura}
+                  onClick={() => onSurah?.(d.sura, d.name)} title={t("dist.showInSurah", { count: d.count, name: d.name })}>
+                  <span className="ag-dist-name">{d.sura}. {d.name}</span>
+                  <span className="ag-dist-num">{d.count}</span>
+                  <span className="ag-dist-barwrap"><span className="ag-dist-bar" style={{ width: `${(d.count / max) * 100}%`, background: fColor(d.count, theme) }} /></span>
+                </button>
+              ))}
             </div>
           </div>
 
