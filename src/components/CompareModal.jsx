@@ -4,6 +4,7 @@ import { distributionBySura, collocations, mergeCollocations } from "../analytic
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* ═══ Compare two terms ═══
  *
@@ -75,6 +76,7 @@ function TermSlot({ term, color, indices, precision, onSet }) {
 
 export function CompareModal({ cmp, indices, verseData, surahList, stopSet, precision, onNavigate, onPick, onClose }) {
   const { t } = useI18n();
+  const ws = useWorkspace();
   const [A, setA] = useState(cmp?.A || null);
   const [B, setB] = useState(cmp?.B || null);
   const [sort, setSort] = useState("ll");
@@ -138,6 +140,10 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
             {ready && <span className="ag-modal-count"><b style={{ color: A_COLOR }}>{data.totalA}</b> · <b style={{ color: B_COLOR }}>{data.totalB}</b></span>}
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            {ready && (
+              <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+                onClick={() => { ws.saveItem({ type: "compare", title: `${A.label} ⇄ ${B.label}`, payload: { A, B } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
+            )}
             {ready && (
               <button type="button" className="ag-btn" title={t("cmp.exportTitle")}
                 onClick={() => exportJsonFile({

@@ -3,6 +3,7 @@ import { findSharedPhrases } from "../analytics/phrases.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* ═══ Shared-phrase (المتشابهات) modal ═══
  *
@@ -34,6 +35,7 @@ function PhraseVerse({ words, phraseNorm }) {
 
 export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose }) {
   const { t } = useI18n();
+  const ws = useWorkspace();
   const centerKey = phrase?.centerKey;
   const phrases = useMemo(
     () => (centerKey && seedIndex ? findSharedPhrases(centerKey, verseData, seedIndex) : []),
@@ -56,6 +58,8 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
             <span className="ag-modal-count"><b>{phrases.length}</b> {t("phrase.sharedPhrases")}</span>
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            {cv && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+              onClick={() => { ws.saveItem({ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }); ws.toast(t("ws.saved")); }}>★</button>}
             {phrases.length > 0 && (
               <button type="button" className="ag-btn" title={t("phrase.exportCsv")}
                 onClick={() => exportCsvFile(

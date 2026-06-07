@@ -18,7 +18,8 @@ export function HighlightedAyah({ text, primaryWord, sharedWords = [], interacti
   const sharedFn = (raw, k) => sharedWords.some((w) => keyOf(w) === k || norm(w) === norm(raw));
 
   return (
-    <span>{text.split(/(\s+)/).map((p, i) => {
+    // Qur'anic text is always RTL, regardless of the UI language direction.
+    <span dir="rtl">{text.split(/(\s+)/).map((p, i) => {
       if (/^\s+$/.test(p)) return <span key={i}> </span>;
       const n = norm(p);
       const k = keyOf(p);

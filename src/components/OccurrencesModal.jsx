@@ -5,6 +5,7 @@ import { wordGroupKey } from "../arabic-utils.js";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* OccurrencesModal — a scrollable popup listing every āyah a word (or its root)
  * occurs in, the current verse first. Each row is clickable to re-centre the
@@ -12,6 +13,7 @@ import { useI18n } from "../i18n/index.js";
  * virtualized (useVirtualRows) so even اللّٰه (~2700 occurrences) opens instantly. */
 export function OccurrencesModal({ occ, verseData, searchMode, precision = "loose", theme, onNavigate, onBack, onClose }) {
   const { t } = useI18n();
+  const ws = useWorkspace();
   const n = occ?.keys?.length || 0;
   const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
     useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${n}` });
@@ -56,6 +58,8 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             {occ.morphNote && <span className="ag-chip is-morph" title={t("occ.morphNoteTitle")}>⚙ {occ.morphNote}</span>}
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+              onClick={() => { ws.saveItem({ type: "occ", title: occ.label, payload: { lookup: occ.lookup, label: occ.label, mode: occ.mode } }); ws.toast(t("ws.saved")); }}>★</button>
             <button type="button" className="ag-btn" title={t("occ.exportCsv")}
               onClick={() => exportCsvFile([["السورة", "الآية", "المرجع", "النص"], ...keys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `آيات-${occ.label}.csv`)}>⤓ CSV</button>
             <button type="button" className="ag-btn" title={t("occ.exportKwic")}

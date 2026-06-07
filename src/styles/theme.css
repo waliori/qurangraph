@@ -197,7 +197,7 @@ body {
   height: 36px; padding-inline: var(--space-3) var(--space-6);
   background: var(--ink-850); color: var(--text-body);
   border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md);
-  font-family: var(--font-ui); font-size: var(--text-sm); cursor: pointer; outline: none; direction: rtl;
+  font-family: var(--font-ui); font-size: var(--text-sm); cursor: pointer; outline: none; direction: inherit;
   transition: border-color var(--dur-fast) var(--ease-standard);
 }
 .ag-select select:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
@@ -411,6 +411,55 @@ body {
   margin-block: 4px 2px; }
 .ag-cmp-coll-h b { font-family: var(--font-mono); margin-inline-start: 4px; }
 
+/* Workspace drawer (saved items + notes) */
+.ag-ws-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px;
+  padding: 0 3px; margin-inline-start: 3px; font-size: 9px; font-family: var(--font-mono); line-height: 1;
+  background: var(--gold-500); color: #1a1205; border-radius: var(--radius-pill); }
+.ag-ws-drawer { position: fixed; inset-block: 0; inset-inline-end: 0; width: min(420px, 100%);
+  display: flex; flex-direction: column; background: var(--surface-1, var(--ink-900)); border-inline-start: var(--bw-hair) solid var(--border-default);
+  box-shadow: var(--shadow-2, 0 0 40px rgba(0,0,0,.5)); z-index: 60; }
+.ag-ws-body { flex: 1; overflow-y: auto; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+.ag-ws-card { border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-2);
+  display: flex; flex-direction: column; gap: 6px; background: color-mix(in oklab, var(--ink-800) 60%, transparent); }
+.ag-ws-cardhead { display: flex; align-items: center; gap: 6px; }
+.ag-ws-cardhead .ag-input { flex: 1; min-width: 0; }
+.ag-ws-title { flex: 1; min-width: 0; text-align: start; background: none; border: none; color: var(--text-strong); font: inherit;
+  font-weight: var(--fw-semibold); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-ws-title:hover { color: var(--gold-400); }
+.ag-ws-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ag-ws-actions .ag-iconbtn { width: 28px; height: 28px; font-size: 13px; }
+.ag-ws-gloss { font-size: var(--text-sm); color: var(--viridian-400); line-height: 1.7; max-height: 80px; overflow-y: auto; }
+.ag-ws-noteinput { width: 100%; resize: vertical; background: var(--ink-850, rgba(0,0,0,.2)); color: var(--text-body);
+  border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px 8px; font: inherit; font-size: var(--text-sm); }
+.ag-ws-foot { display: flex; gap: var(--space-2); padding: var(--space-3); border-block-start: var(--bw-hair) solid var(--border-subtle); }
+.ag-ws-foot .ag-btn { flex: 1; }
+.ag-ws-filter { display: flex; flex-direction: column; gap: 6px; padding: var(--space-2) var(--space-3) 0; }
+.ag-ws-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ag-tag-btn.is-on { background: var(--gold-500); color: #1a1205; border-color: var(--gold-500); font-weight: var(--fw-semibold); }
+
+/* Canvas-anchored sticky notes */
+.ag-sticky { position: absolute; z-index: 8; width: 190px; transform: translate(-50%, -100%);
+  background: color-mix(in oklab, var(--gold-500) 16%, var(--ink-900)); color: var(--text-body);
+  border: var(--bw-hair) solid var(--gold-500); border-radius: var(--radius-md); box-shadow: var(--shadow-2, 0 6px 20px rgba(0,0,0,.4)); font-size: var(--text-sm); }
+.ag-sticky-bar { display: flex; align-items: center; gap: 6px;
+  padding: 3px 6px; border-block-end: var(--bw-hair) solid color-mix(in oklab, var(--gold-500) 40%, transparent); }
+.ag-sticky-grip { font-size: var(--text-sm); color: var(--gold-400); cursor: grab; touch-action: none; padding: 0 2px; }
+.ag-sticky-grip:active { cursor: grabbing; }
+.ag-sticky-titlein { flex: 1; min-width: 0; background: none; border: none; color: var(--text-strong);
+  font: inherit; font-weight: var(--fw-semibold); outline: none; }
+.ag-sticky-titlein:focus { border-bottom: 1px solid var(--gold-500); }
+.ag-sticky-x { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 12px; }
+.ag-sticky-x:hover { color: var(--rubric-400); }
+.ag-sticky-bodyin { width: 100%; box-sizing: border-box; resize: vertical; background: none; color: var(--text-body);
+  border: none; outline: none; padding: 6px 8px 8px; font: inherit; font-size: var(--text-sm); max-height: 200px; }
+
+/* Save toast */
+.ag-toast { position: fixed; inset-block-end: var(--space-5); inset-inline: 0; margin-inline: auto; width: max-content; max-width: 80%;
+  z-index: 90; background: var(--ink-800); color: var(--text-strong); border: var(--bw-hair) solid var(--gold-500);
+  border-radius: var(--radius-pill); padding: 8px 16px; font-size: var(--text-sm); box-shadow: var(--shadow-2, 0 6px 20px rgba(0,0,0,.4));
+  animation: ag-toast-in var(--dur-fast, .2s) var(--ease-standard, ease); }
+@keyframes ag-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 /* Context reader (āya in its full muṣḥaf context) */
 .ag-ctx-list { padding: var(--space-2) var(--space-3); }
 .ag-ctx-surahead { position: sticky; inset-block-start: 0; z-index: 1;
@@ -493,7 +542,7 @@ body {
   max-width: min(340px, 70vw); pointer-events: none;
   background: color-mix(in oklab, var(--ink-850) 92%, transparent); backdrop-filter: blur(12px);
   border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-2); padding: var(--space-3) var(--space-4); direction: rtl;
+  box-shadow: var(--shadow-2); padding: var(--space-3) var(--space-4); direction: inherit;
 }
 .ag-tip-word { font-family: var(--font-quran); font-size: var(--text-2xl); color: var(--text-strong); line-height: 1.2; }
 .ag-tip-meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-block-start: 3px; }
@@ -503,7 +552,7 @@ body {
 .ag-reader-dock { position: absolute; inset-inline: 0; inset-block-end: 0; z-index: 12;
   padding: var(--space-4); pointer-events: none; }
 .ag-reader {
-  pointer-events: auto; max-width: 880px; margin-inline: auto; direction: rtl;
+  pointer-events: auto; max-width: 880px; margin-inline: auto; direction: inherit;
   background: color-mix(in oklab, var(--ink-850) 90%, transparent); backdrop-filter: blur(16px) saturate(1.1);
   border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2); overflow: hidden;
@@ -526,7 +575,7 @@ body {
 .ag-scrim { display: none; }
 .ag-inspector {
   position: relative; z-index: 15; flex: 0 0 340px; width: 340px;
-  display: flex; flex-direction: column; min-height: 0; direction: rtl;
+  display: flex; flex-direction: column; min-height: 0; direction: inherit;
   background: var(--ink-850); border-inline-start: var(--bw-hair) solid var(--border-subtle);
   box-shadow: var(--shadow-2);
 }
@@ -555,7 +604,9 @@ body {
 .ag-insp-card { background: var(--ink-800); border: var(--bw-hair) solid var(--border-subtle);
   border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
 .ag-insp-card.t-mean { background: color-mix(in oklab, var(--viridian-500) 8%, var(--ink-800)); border-color: color-mix(in oklab, var(--viridian-500) 22%, transparent); }
-.ag-insp-card-h { display: flex; align-items: center; justify-content: space-between; margin-block-end: 6px; }
+.ag-insp-card-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-block-end: 6px; }
+.ag-insp-card-h > .ag-insp-card-lab { min-width: 0; flex: 1 1 auto; }
+.ag-insp-card-h .ag-lex-select { max-width: 100%; }
 .ag-insp-card-lab { font-size: var(--text-xs); color: var(--text-faint); }
 .ag-insp-cite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px;
   font-size: var(--text-xs); color: var(--text-faint); line-height: 1.6; }
@@ -582,7 +633,7 @@ body {
 .ag-modal-scrim.is-open { opacity: 1; pointer-events: auto; animation: ag-fade var(--dur-base) var(--ease-out); }
 @keyframes ag-fade { from { opacity: 0; } to { opacity: 1; } }
 .ag-modal { width: min(720px, 100%); max-height: min(82vh, 920px); display: flex; flex-direction: column;
-  direction: rtl; background: var(--ink-850); border: var(--bw-hair) solid var(--border-default);
+  direction: inherit; background: var(--ink-850); border: var(--bw-hair) solid var(--border-default);
   border-radius: var(--radius-lg); box-shadow: var(--shadow-3); overflow: hidden;
   animation: ag-pop var(--dur-base) var(--ease-out); }
 .ag-modal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);

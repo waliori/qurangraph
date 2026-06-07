@@ -4,13 +4,16 @@ import './styles/theme.css'
 import QuranGraph from './QuranGraph.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 import { I18nProvider } from './i18n/index.js'
+import { WorkspaceProvider } from './hooks/useWorkspace.js'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <I18nProvider>
-      <ErrorBoundary>
-        <QuranGraph />
-      </ErrorBoundary>
+      <WorkspaceProvider>
+        <ErrorBoundary>
+          <QuranGraph />
+        </ErrorBoundary>
+      </WorkspaceProvider>
     </I18nProvider>
   </StrictMode>,
 )

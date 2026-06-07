@@ -177,7 +177,7 @@ export const en = {
 
   // Shell
   "help.dialogAria": "User guide",
-  "help.title": "آيات.network Guide",
+  "help.title": "Guide — آيات.network",
   "help.badge": "?",
   "help.close": "Close",
 

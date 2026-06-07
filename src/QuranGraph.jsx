@@ -8,7 +8,10 @@ import { createSimClient } from "./graph/simClient.js";
 import { applyPositions } from "./graph/applyPositions.js";
 import { morphAt, verseGroupingKeys, formRoman, morphFilterActive, morphFilterSummary, filterOccurrencesByMorph, EMPTY_MORPH_FILTER } from "./morphology.js";
 import { serializeSvg, exportSvgFile, exportPngFile } from "./graph/exportGraph.js";
-import { readUrlState, writeUrlState } from "./hooks/useUrlState.js";
+import { readUrlState, writeUrlState, encodeState, decodeState } from "./hooks/useUrlState.js";
+import { useWorkspace } from "./hooks/useWorkspace.js";
+import { WorkspaceDrawer } from "./components/WorkspaceDrawer.jsx";
+import { StickyNotes } from "./components/StickyNotes.jsx";
 import { HighlightedAyah } from "./components/HighlightedAyah.jsx";
 import { GraphLayer } from "./components/GraphLayer.jsx";
 import { GraphCanvas } from "./components/GraphCanvas.jsx";
@@ -19,6 +22,7 @@ import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { DistributionModal } from "./components/DistributionModal.jsx";
 import { CompareModal } from "./components/CompareModal.jsx";
+import { DefinitionModal } from "./components/DefinitionModal.jsx";
 import { PhraseModal } from "./components/PhraseModal.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { HelpModal } from "./components/HelpModal.jsx";
@@ -46,6 +50,8 @@ function sanitizeMorphFilter(v) {
 /* ═══ MAIN ═══ */
 export default function QuranGraph() {
   const { t, lang, setLang } = useI18n();
+  const ws = useWorkspace();
+  const [wsOpen, setWsOpen] = useState(false); // workspace drawer
   const [quranRaw, setQuranRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -119,6 +125,7 @@ export default function QuranGraph() {
   const [occ, setOcc] = useState(null); // occurrences popup: { lookup, label, mode, keys }
   const [dist, setDist] = useState(null); // distribution/collocation modal: { lookup, label, mode }
   const [cmp, setCmp] = useState(null); // compare modal: { A, B } each { lookup, label, mode } | null
+  const [def, setDef] = useState(null); // definition reader modal: { root, lexicon } (from saved items)
   const [ctx, setCtx] = useState(null); // context reader modal: { centerKey }
   const [phrase, setPhrase] = useState(null); // shared-phrase (mutashābihāt) modal: { centerKey }
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
@@ -887,6 +894,38 @@ export default function QuranGraph() {
     setSuggest(null);
   }, [suggest, openOcc]);
 
+  // ── Workspace: quick-save the current graph, and re-open any saved item ──
+  // Plain function (only an onClick handler) — avoids depending on the per-render
+  // urlSnapshot object; it reads the live state directly when invoked.
+  const saveGraphView = () => {
+    const code = encodeState({ ...urlSnapshot, pos: posSnapshot() });
+    const title = `${t("ws.savedView")}: ${currentVerse?.sn || surah} ${safeAyah}`;
+    ws.saveItem({ type: "graph", title, payload: { code, surah, ayah: safeAyah } });
+    ws.toast(t("ws.saved"));
+  };
+  const openWorkspaceItem = useCallback((item) => {
+    const p = item.payload || {};
+    setWsOpen(false);
+    switch (item.type) {
+      case "graph": { const u = decodeState(p.code); if (u) applyState(u); break; }
+      case "compare": setCmp({ A: p.A, B: p.B }); break;
+      case "occ": openOcc(p.lookup, p.label, p.mode); break;
+      case "dist": setDist({ lookup: p.lookup, label: p.label, mode: p.mode }); break;
+      case "lexicon": setDef({ root: p.root, lexicon: p.lexicon }); break;
+      case "phrase": if (p.surah) { navigate(p.surah, p.ayah); openPhrases(`${p.surah}:${p.ayah}`); } break;
+      case "verse": case "word": if (p.surah) navigate(p.surah, p.ayah); break;
+      default: break;
+    }
+  }, [applyState, openOcc, navigate, openPhrases]);
+  // Pin a note onto the current graph (anchored to the selected node, else the centre).
+  const pinNote = useCallback((id) => {
+    const nodeId = (selected && nmap[selected]) ? selected : "v:" + currentKey;
+    ws.updateNote(id, { pin: { centerKey: currentKey, nodeId, dx: 0, dy: -70 } });
+    ws.toast(t("ws.pinned"));
+  }, [ws, t, selected, nmap, currentKey]);
+  // Pinned notes anchored to the current centre verse.
+  const stickyNotes = useMemo(() => ws.notes.filter((n) => n.pin && n.pin.centerKey === currentKey), [ws.notes, currentKey]);
+
   // Stable node handlers passed to the memoized GraphLayer.
   const onNodeEnter = useCallback((n) => { setHovered(n.id); if (n.type === "word") setActiveWord(n.lookup || n.wordNorm); }, []);
   const onNodeLeave = useCallback(() => { setHovered(null); if (!selected) setActiveWord(null); }, [selected]);
@@ -1080,6 +1119,8 @@ export default function QuranGraph() {
             )}
           </div>
 
+          <button type="button" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
+            aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
@@ -1127,6 +1168,7 @@ export default function QuranGraph() {
             {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
             {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
             {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
+            <button type="button" className="ag-iconbtn" title={t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>✶</button>
             <button type="button" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
@@ -1197,6 +1239,14 @@ export default function QuranGraph() {
               highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
               hovered={hovered} selected={selected} apiRef={canvasApiRef}
               onNodeClick={onNodeClick} onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} />
+          )}
+
+          {/* Canvas-anchored sticky notes (pinned to the current centre verse) */}
+          {stickyNotes.length > 0 && (
+            <StickyNotes notes={stickyNotes} positions={positions} transform={transform} currentKey={currentKey} nmap={nmap}
+              onMove={(id, dx, dy) => ws.updateNote(id, { pin: { ...ws.notes.find((n) => n.id === id).pin, dx, dy } })}
+              onEdit={(id, patch) => ws.updateNote(id, patch)}
+              onUnpin={(id) => ws.updateNote(id, { pin: null })} />
           )}
 
           {/* Hover tooltip */}
@@ -1287,6 +1337,10 @@ export default function QuranGraph() {
                         onClick={() => setCmp({ A: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode }, B: null })}>
                         ⇄ {t("common.insp.compare")}
                       </button>
+                      <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+                        onClick={() => { ws.saveItem({ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }); ws.toast(t("ws.saved")); }}>
+                        ★ {t("ws.save")}
+                      </button>
                     </div>
                   )}
                   {(() => {
@@ -1319,7 +1373,11 @@ export default function QuranGraph() {
                               : <span>{lexicons?.find((L) => L.id === activeLexicon)?.label || t("common.insp.lexFallback")}</span>}
                             <span style={{ color: "var(--text-faint)" }}>· {t("common.graphMode.root")} {sr}</span>
                           </span>
-                          {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? t("common.insp.less") : t("common.insp.more")}</button>}
+                          <span style={{ display: "flex", gap: 6 }}>
+                            {m && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+                              onClick={() => { const lx = lexicons?.find((L) => L.id === activeLexicon); ws.saveItem({ type: "lexicon", title: `${sr} — ${lx?.label || activeLexicon}`, payload: { root: sr, lexicon: activeLexicon, gloss: m.c, cite: m.cite || null, surah: selNode.surahNum || surah, ayah: selNode.ayahNum || safeAyah } }); ws.toast(t("ws.saved")); }}>★</button>}
+                            {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? t("common.insp.less") : t("common.insp.more")}</button>}
+                          </span>
                         </div>
                         {m && (() => {
                           // Edition citation: the print volume/page this gloss sits on (from the
@@ -1412,6 +1470,7 @@ export default function QuranGraph() {
                     <button type="button" className="ag-btn" title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: selNode.verseKey })}>☰ {t("common.insp.context")}</button>
                     <button type="button" className="ag-btn" title={t("common.reader.phrases")} onClick={() => openPhrases(selNode.verseKey)}>⧉ {t("common.insp.phrasesShort")}</button>
                     <button type="button" className="ag-btn" title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ {t("common.insp.makeCenter")}</button>
+                    <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "verse", title: selNode.label, payload: { surah: selNode.surahNum, ayah: selNode.ayahNum, label: selNode.label } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
                   </div>
                 </div>
               </>
@@ -1454,6 +1513,8 @@ export default function QuranGraph() {
         onPick={(key, label, mode) => { setCmp(null); openOcc(key, label, mode); }}
         onClose={() => setCmp(null)} />
 
+      <DefinitionModal def={def} onClose={() => setDef(null)} />
+
       {ctx && (
         <ContextModal ctx={ctx} orderedKeys={orderedKeys} verseData={verseData}
           onNavigate={(s, a) => { navigate(s, a); setCtx(null); }} onClose={() => setCtx(null)} />
@@ -1463,6 +1524,11 @@ export default function QuranGraph() {
         onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />
 
       <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
+
+      <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />
+
+      {/* One-click-save confirmation toast */}
+      {ws.toastMsg && <div className="ag-toast" role="status" aria-live="polite">{ws.toastMsg}</div>}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { distributionBySura, collocations } from "../analytics/stats.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { useWorkspace } from "../hooks/useWorkspace.js";
 import { fColor } from "../theme.js";
 
 /* ═══ Distribution + collocation modal ═══
@@ -20,6 +21,7 @@ const COLLOC_SORT_IDS = ["count", "ll", "pmi"];
 
 export function DistributionModal({ dist, index, verseData, surahList, stopSet, theme, onNavigate, onPick, onCompare, onClose }) {
   const { t } = useI18n();
+  const ws = useWorkspace();
   const [collocSort, setCollocSort] = useState("ll");
   const data = useMemo(() => {
     if (!dist) return null;
@@ -52,6 +54,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
             <span className="ag-modal-count"><b>{total}</b> {t("dist.in")} <b>{distribution.length}</b> {t("dist.surahs")}</span>
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "dist", title: dist.label, payload: { lookup: dist.lookup, label: dist.label, mode: dist.mode } }); ws.toast(t("ws.saved")); }}>★</button>
             {onCompare && <button type="button" className="ag-btn" title={t("dist.compareTitle")} onClick={() => onCompare({ lookup: dist.lookup, label: dist.label, mode: dist.mode })}>⇄ {t("dist.compare")}</button>}
             <button type="button" className="ag-btn" title={t("dist.exportJson")}
               onClick={() => exportJsonFile({
