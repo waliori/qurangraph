@@ -83,7 +83,7 @@ const sec = (title, illo, items) => (
   </section>
 );
 
-export function HelpModal({ open, onClose }) {
+export function HelpModal({ open, onClose, onStartTour }) {
   const { t } = useI18n();
   const dialogRef = useRef(null);
   useModalFocus(open, dialogRef, { onEscape: onClose });
@@ -98,7 +98,10 @@ export function HelpModal({ open, onClose }) {
       <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("help.dialogAria")} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title"><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></div>
-          <button type="button" className="ag-iconbtn" aria-label={t("help.close")} onClick={onClose}>✕</button>
+          <span style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
+            <button type="button" className="ag-iconbtn" aria-label={t("help.close")} onClick={onClose}>✕</button>
+          </span>
         </div>
         <div className="ag-help-body">
           {hero(t)}

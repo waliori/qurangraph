@@ -46,7 +46,7 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <aside className="ag-ws-drawer" role="dialog" aria-modal="true" aria-label={t("ws.title")} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+      <aside data-tour="wsdrawer" className="ag-ws-drawer" role="dialog" aria-modal="true" aria-label={t("ws.title")} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title"><span className="ag-badge t-verse">✶</span><h2 className="ag-modal-word">{t("ws.title")}</h2></div>
           <button type="button" className="ag-iconbtn" aria-label={t("ws.close")} onClick={onClose}>✕</button>

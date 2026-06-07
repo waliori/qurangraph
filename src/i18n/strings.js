@@ -10,8 +10,9 @@ import { ar as phraseAr, en as phraseEn } from "./phrase.js";
 import { ar as morphAr, en as morphEn } from "./morph.js";
 import { ar as stopAr, en as stopEn } from "./stop.js";
 import { ar as wsAr, en as wsEn } from "./ws.js";
+import { ar as tourAr, en as tourEn } from "./tour.js";
 
 export const STRINGS = {
-  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr },
-  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn },
+  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr, ...tourAr },
+  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn, ...tourEn },
 };

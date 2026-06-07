@@ -26,6 +26,7 @@ import { DefinitionModal } from "./components/DefinitionModal.jsx";
 import { PhraseModal } from "./components/PhraseModal.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { HelpModal } from "./components/HelpModal.jsx";
+import { Tour } from "./components/Tour.jsx";
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
 import { useI18n } from "./i18n/index.js";
@@ -38,6 +39,10 @@ const SOFT_CAP = 300; // per-word fan-out beyond this needs explicit opt-in (per
 const CULL_THRESHOLD = 700; // above this many nodes, cull off-screen ones from the SVG
 const POS_LINK_CAP = 600;   // above this, a share link can't embed the exact layout
 const isInt = (v) => Number.isInteger(v);
+// The tour's worked example: Āyat al-Kursī, with the word indices it spotlights
+// (15 = ٱلسَّمَٰوَٰت / heavens, 41 = كُرْسِيّ / a rare word). Module-scoped so it's a
+// stable reference for the tour's memo/effect deps.
+const TOUR_EX = { s: 2, a: 255, key: "2:255", samWi: 15, kursWi: 41, kursPartner: "38:34" };
 
 // Coerce a persisted morphology filter back to its {pos,form,aspect,voice} shape.
 function sanitizeMorphFilter(v) {
@@ -310,7 +315,7 @@ export default function QuranGraph() {
   // button lives inside the same wrapper, so it still toggles normally).
   useEffect(() => {
     if (!toolsOpen) return;
-    const onDown = (e) => { if (toolsRef.current && !toolsRef.current.contains(e.target)) setToolsOpen(false); };
+    const onDown = (e) => { if (toolsRef.current && !toolsRef.current.contains(e.target) && !e.target.closest?.("#react-joyride-portal")) setToolsOpen(false); };
     const onKey = (e) => { if (e.key === "Escape") setToolsOpen(false); };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
@@ -978,6 +983,196 @@ export default function QuranGraph() {
     return () => { live = false; };
   }, [meaningOpen, selRoot, activeLexicon, activeShards, fullLoaded]);
 
+  /* ═══ Getting-started tour ═══
+   * A scripted, end-to-end RESEARCH walkthrough on a known verse — Āyat al-Kursī
+   * (2:255) — driven by react-joyride in CONTROLLED mode. "Action" steps WAIT
+   * for the user to do the real thing (search to the verse, click a specific
+   * word, switch the dictionary, open/close each modal, switch to Root mode,
+   * toggle a tool, save, change theme) and advance when the gate effect detects
+   * it; modal steps auto-advance once the modal is closed. Each step's `before`
+   * re-establishes the canonical UI (selecting the example word by node id) so
+   * the sequence stays deterministic. Auto-opens every load until the user ticks
+   * "don't show on startup" (qg.tourHide). */
+  const [tourRun, setTourRun] = useState(false);
+  const [tourIndex, setTourIndex] = useState(0);
+  // The example's target words resolved to live graph nodes (only when we're on
+  // the example verse) — matched by their position in the verse (word nodes carry
+  // wordIndex), so steps can spotlight & select them precisely.
+  const tourEx = useMemo(() => {
+    if (currentKey !== TOUR_EX.key) return null;
+    const find = (wi) => graphNodes.find((g) => g.type === "word" && g.wordIndex === wi && g.parentVerseKey === TOUR_EX.key);
+    const sam = find(TOUR_EX.samWi), kurs = find(TOUR_EX.kursWi);
+    // The كرسي partner verse (38:34) node — only present once كرسي is expanded.
+    const partner = graphNodes.find((g) => g.type === "verse" && g.verseKey === TOUR_EX.kursPartner);
+    return { samId: sam?.id || null, kursId: kurs?.id || null, samNorm: sam?.wordNorm || null, kursNorm: kurs?.wordNorm || null, partnerId: partner?.id || null };
+  }, [currentKey, graphNodes]);
+
+  const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
+  const tourReset = useCallback(() => {
+    setToolsOpen(false); setWsOpen(false); setSheetOpen(false);
+    setSelected(null); setActiveWord(null);
+    setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null);
+  }, []);
+  // Each step's `before` sets the canonical UI it needs, then waits for the commit
+  // so its target exists before react-joyride measures it. `navEx` guarantees the
+  // example verse; `selectId` selects a specific node (the example word).
+  const tourBefore = useCallback((cfg = {}) => async () => {
+    if (cfg.navEx && currentKey !== TOUR_EX.key) navigate(TOUR_EX.s, TOUR_EX.a);
+    if (cfg.mode) setSearchMode(cfg.mode); // pin the grouping mode so counts are accurate
+    setToolsOpen(!!cfg.tools); setWsOpen(!!cfg.ws);
+    setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null);
+    if (cfg.selectId) {
+      const n = nmap[cfg.selectId];
+      setSelected(cfg.selectId); setActiveWord(n?.lookup || n?.wordNorm || null); setSheetOpen(true);
+    } else { setSelected(null); setActiveWord(null); setSheetOpen(false); }
+    await tourSettle();
+  }, [currentKey, navigate, nmap, setSearchMode, tourSettle]);
+
+  const tourSteps = useMemo(() => {
+    const center = (key, content) => ({ target: '[data-tour="stage"]', placement: "center", title: t(`tour.${key}Title`), content: content ?? t(`tour.${key}Body`), before: tourBefore({}) });
+    const info = (target, key, cfg, placement, extra) => ({ target, placement: placement || "auto", title: t(`tour.${key}Title`), content: t(`tour.${key}Body`), before: tourBefore(cfg), ...extra });
+    const action = (target, key, cfg, gate, placement, extra) => ({ target, placement: placement || "auto", title: t(`tour.${key}Title`), content: t(`tour.${key}Body`), before: tourBefore(cfg), data: { gate, gated: true }, ...extra });
+    const colorsContent = (
+      <div className="ag-tour-colors">
+        <p>{t("tour.colorsBody")}</p>
+        <div className="ag-tour-color"><span className="ag-legend-dot" style={{ background: "var(--gold-500)" }} />{t("tour.colCenter")}</div>
+        <div className="ag-tour-color"><span className="ag-legend-swatch ag-legend-freq" />{t("tour.colWord")}</div>
+        <div className="ag-tour-color"><span className="ag-legend-swatch ag-legend-depth" />{t("tour.colVerse")}</div>
+        <div className="ag-tour-color"><span className="ag-legend-line" style={{ borderColor: "var(--gold-400)" }} />{t("tour.colLink")}</div>
+        <div className="ag-tour-color"><span className="ag-legend-dot" style={{ background: "#34d8a8" }} />{t("tour.colGreen")}</div>
+        <div className="ag-tour-color"><span className="ag-legend-ring" />{t("tour.colPurple")}</div>
+      </div>
+    );
+    // Plain-language "what am I looking at" diagram: a centre verse, a word that
+    // branches to two other verses — labelled simply (verse/āyah, word).
+    const basicsContent = (
+      <div className="ag-tour-basics">
+        <svg viewBox="0 0 260 130" className="ag-tour-basics-svg" role="img" aria-label={t("tour.basicsAlt")}>
+          <line x1="130" y1="60" x2="70" y2="40" stroke="var(--gold-500)" strokeWidth="2.2" strokeOpacity="0.8" />
+          <line x1="70" y1="40" x2="40" y2="100" stroke="#6aa8ff" strokeWidth="1.6" strokeOpacity="0.7" />
+          <line x1="70" y1="40" x2="120" y2="108" stroke="#6aa8ff" strokeWidth="1.6" strokeOpacity="0.7" />
+          <circle cx="40" cy="100" r="9" fill="#6aa8ff33" stroke="#6aa8ff" strokeWidth="1.6" />
+          <circle cx="120" cy="108" r="9" fill="#6aa8ff33" stroke="#6aa8ff" strokeWidth="1.6" />
+          <circle cx="70" cy="40" r="11" fill="#fb718533" stroke="#fb7185" strokeWidth="2" />
+          <circle cx="130" cy="60" r="17" fill="#fbbf2433" stroke="#fbbf24" strokeWidth="3" />
+          <text x="130" y="64" textAnchor="middle" fontSize="11" fill="var(--gold-400)" fontFamily="var(--font-display)">۞</text>
+          <text x="130" y="92" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--gold-400)" fontFamily="var(--font-ui)">{t("tour.basicsVerse")}</text>
+          <text x="70" y="22" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fb7185" fontFamily="var(--font-ui)">{t("tour.basicsWord")}</text>
+          <text x="195" y="108" textAnchor="middle" fontSize="10.5" fill="#6aa8ff" fontFamily="var(--font-ui)">{t("tour.basicsOther")}</text>
+        </svg>
+        <p>{t("tour.basicsP1")}</p>
+        <p>{t("tour.basicsP2")}</p>
+      </div>
+    );
+    const samSel = tourEx?.samId ? `[data-node="${tourEx.samId}"]` : '[data-tour="stage"]';
+    const kursSel = tourEx?.kursId ? `[data-node="${tourEx.kursId}"]` : '[data-tour="stage"]';
+    const partnerSel = tourEx?.partnerId ? `[data-node="${tourEx.partnerId}"]` : '[data-tour="stage"]';
+    const samId = tourEx?.samId;
+    const lit = { hideOverlay: true }; // modal/canvas steps: keep the page & modal bright + interactive
+    const noRing = { data: { noRing: true } }; // large "subject" panels: card explains, no ring
+    return [
+      center("welcome"),                                                                              // 0
+      center("basics", basicsContent),                                                                // 1 plain-language idea
+      center("colors", colorsContent),                                                                // 2
+      info('[data-tour="search"]', "search", {}, "bottom"),                                           // 3 explain search
+      action('[data-tour="picker"]', "picker", {}, "navigate", "bottom"),                             // 4 pick 2:255 (waits for both)
+      info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
+      info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
+      action(samSel, "tapSamawat", { navEx: true }, `word:${tourEx?.samNorm || ""}`, "auto"),         // 7 tap ٱلسَّمَٰوَٰت
+      info(".ag-inspector", "inspector", { selectId: samId }, "auto", noRing),                        // 8
+      action('[data-tour="lexSelect"]', "dict", { selectId: samId }, "lexicon", "auto"),              // 9 switch dictionary
+      action('[data-tour="distBtn"]', "dist", { selectId: samId }, "modal:dist", "auto", lit),        // 10 distribution
+      action('[data-tour="compareBtn"]', "compare", { selectId: samId }, "modal:cmp", "auto", lit),   // 11 compare
+      action('[data-tour="allVersesBtn"]', "allverses", { selectId: samId }, "modal:occ", "auto", lit), // 12 all verses
+      action(kursSel, "tapKursi", { navEx: true }, `word:${tourEx?.kursNorm || ""}`, "auto"),         // 13 rare word
+      action(partnerSel, "kursiVerse", {}, `verse:${TOUR_EX.kursPartner}`, "auto"),                   // 14 the other verse (38:34)
+      action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 15 root mode
+      action('[data-tour="echoesBtn"]', "echoes", {}, "modal:phrase", "auto", lit),                   // 16 echoes
+      action('[data-tour="contextBtn"]', "context", {}, "modal:ctx", "auto", lit),                    // 17 context
+      action('[data-tour="tools"]', "toolsOpen", {}, "tools", "bottom"),                              // 18 open tools
+      action('[data-tour="toolspop"]', "toolsTry", { tools: true }, "tool-toggle", "left"),           // 19 try a toggle
+      action('[data-tour="saveViewBtn"]', "saveView", {}, "save", "left"),                            // 20 save the view
+      action('[data-tour="workspace"]', "wsOpen", {}, "ws", "bottom"),                                // 21 open workspace
+      info('[data-tour="wsdrawer"]', "wsView", { ws: true }, "left", { ...lit, ...noRing }),          // 22 workspace detail
+      action('[data-tour="themeBtn"]', "theme", { ws: false }, "theme", "bottom"),                    // 23 theme/lang
+      center("finish"),                                                                               // 24
+    ];
+  }, [t, tourEx, tourBefore]);
+
+  // ── Gating: advance an action step once the user performs the action ──
+  const gateRef = useRef({});
+  // Capture a baseline (and reset the modal "armed" latch) on entering a step.
+  useEffect(() => {
+    if (!tourRun) return;
+    gateRef.current = {
+      lex: activeLexicon, theme, lang, rareOnly, renderer,
+      morph: JSON.stringify(morphFilter), saveCount: ws.items.length, armed: false,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourRun, tourIndex]);
+  useEffect(() => {
+    if (!tourRun) return;
+    const gate = tourSteps[tourIndex]?.data?.gate;
+    if (!gate) return;
+    const B = gateRef.current;
+    let done = false;
+    if (gate === "navigate") done = currentKey === TOUR_EX.key;
+    else if (gate.startsWith("word:")) { const nw = gate.slice(5); done = !!nw && selNode?.type === "word" && selNode.wordNorm === nw; }
+    else if (gate.startsWith("verse:")) { const vk = gate.slice(6); done = selNode?.type === "verse" && selNode.verseKey === vk; }
+    else if (gate === "lexicon") done = activeLexicon !== B.lex;
+    else if (gate === "mode-root") done = searchMode === "root";
+    else if (gate === "tools") done = toolsOpen;
+    else if (gate === "tool-toggle") done = rareOnly !== B.rareOnly || renderer !== B.renderer || JSON.stringify(morphFilter) !== B.morph;
+    else if (gate === "save") done = ws.items.length > B.saveCount;
+    else if (gate === "ws") done = wsOpen;
+    else if (gate === "theme") done = theme !== B.theme || lang !== B.lang;
+    else if (gate.startsWith("modal:")) {
+      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : false;
+      if (open) B.armed = true; // user opened it
+      done = B.armed && !open; // …then closed it
+    }
+    if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, wsOpen, theme, lang, dist, cmp, occ, phrase, ctx]);
+
+  // Suppress text selection while the tour runs (so dragging the graph or the
+  // tour card never selects page text).
+  useEffect(() => {
+    document.documentElement.classList.toggle("qg-tour-active", tourRun);
+    return () => document.documentElement.classList.remove("qg-tour-active");
+  }, [tourRun]);
+
+  // On a tour "modal" step the user must CLOSE the window to continue. Block
+  // clicks inside the modal body (which would open/navigate and wrongly advance
+  // the tour) at the capture phase — leaving hover, scroll, and the close button
+  // (in the header) / backdrop working.
+  const tourModalStep = tourRun && !!tourSteps[tourIndex]?.data?.gate?.startsWith?.("modal:");
+  useEffect(() => {
+    if (!tourModalStep) return undefined;
+    const block = (e) => {
+      const inModal = e.target.closest?.(".ag-modal");
+      if (!inModal || e.target.closest?.(".ag-modal-head")) return; // backdrop or close/header → allow
+      e.preventDefault(); e.stopPropagation();
+    };
+    document.addEventListener("click", block, true);
+    return () => document.removeEventListener("click", block, true);
+  }, [tourModalStep]);
+
+  const startTour = () => { tourReset(); setTourIndex(0); setTourRun(true); };
+  const endTour = (dontShow) => {
+    setTourRun(false); setTourIndex(0); tourReset();
+    if (dontShow) { try { localStorage.setItem("qg.tourHide", "1"); } catch { /* private mode */ } }
+  };
+
+  // Auto-open once, after data is ready, unless the user dismissed it for good.
+  const autoTourRef = useRef(false);
+  useEffect(() => {
+    if (autoTourRef.current || loading || error || !currentVerse) return;
+    autoTourRef.current = true;
+    let hidden = false;
+    try { hidden = localStorage.getItem("qg.tourHide") === "1"; } catch { /* ignore */ }
+    if (!hidden) { setTourIndex(0); setTourRun(true); }
+  }, [loading, error, currentVerse]);
+
   if (error) return (
     <div className="ag-boot">
       <div className="ag-boot-glyph">۞</div>
@@ -1024,7 +1219,7 @@ export default function QuranGraph() {
           <span className="ag-wordmark">آيات<i>.network</i></span>
         </button>
 
-        <form className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search" style={{ position: "relative" }}>
+        <form data-tour="search" className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search" style={{ position: "relative" }}>
           <button type="submit" className="ag-search-btn" aria-label={t("common.search.button")} title={t("common.search.button")}>⌕</button>
           <input className="ag-input" type="search" value={query} aria-label={t("common.search.aria")}
             placeholder={searchMode === "root" ? t("common.search.phRoot") : searchMode === "lemma" ? t("common.search.phLemma") : t("common.search.phWord")}
@@ -1038,31 +1233,34 @@ export default function QuranGraph() {
         </form>
 
         <div className="ag-controls">
-          <div className="ag-seg" role="group" aria-label={t("common.search.modeGroup")}>
+          <div data-tour="modes" className="ag-seg" role="group" aria-label={t("common.search.modeGroup")}>
             <button type="button" className={"" + (searchMode === "exact" ? "is-on" : "")} title={t("common.search.matchWord")}
               aria-pressed={searchMode === "exact"} onClick={() => { setSearchMode("exact"); reset(); }}>{t("common.graphMode.word")}</button>
             <button type="button" className={"is-lemma " + (searchMode === "lemma" ? "is-on" : "")} title={t("common.search.matchLemma")}
               aria-pressed={searchMode === "lemma"} onClick={() => { setSearchMode("lemma"); reset(); }}>{t("common.graphMode.lemma")}</button>
-            <button type="button" className={"is-root " + (searchMode === "root" ? "is-on" : "")} title={t("common.search.matchRoot")}
+            <button type="button" data-tour="modeRoot" className={"is-root " + (searchMode === "root" ? "is-on" : "")} title={t("common.search.matchRoot")}
               aria-pressed={searchMode === "root"} onClick={() => { setSearchMode("root"); reset(); }}>{t("common.graphMode.root")}</button>
           </div>
 
-          <div className="ag-select">
-            <select aria-label={t("common.select.surah")} value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
-              {surahList.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
-            </select>
-          </div>
-          <div className="ag-select is-ayah">
-            <select aria-label={t("common.select.ayah")} value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
-              {Array.from({ length: ayahCount }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
-            </select>
-          </div>
+          {/* Both selects wrapped so the tour can spotlight the whole picker. */}
+          <span data-tour="picker" className="ag-picker">
+            <div className="ag-select">
+              <select aria-label={t("common.select.surah")} value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
+                {surahList.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
+              </select>
+            </div>
+            <div className="ag-select is-ayah">
+              <select aria-label={t("common.select.ayah")} value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
+                {Array.from({ length: ayahCount }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+              </select>
+            </div>
+          </span>
 
           <div className="ag-tools" ref={toolsRef}>
-            <button type="button" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label={t("common.tools.title")}
+            <button type="button" data-tour="tools" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label={t("common.tools.title")}
               aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>⚙</button>
             {toolsOpen && (
-              <div className="ag-popover" role="dialog" aria-label={t("common.tools.title")}>
+              <div data-tour="toolspop" className="ag-popover" role="dialog" aria-label={t("common.tools.title")}>
                 <h3 className="ag-pop-h">{t("common.tools.title")}</h3>
                 {(() => {
                   const sliderMax = allowBig ? branchMax : Math.min(branchMax, SOFT_CAP);
@@ -1134,20 +1332,20 @@ export default function QuranGraph() {
             )}
           </div>
 
-          <button type="button" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
+          <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
             onClick={() => setLang(lang === "ar" ? "en" : "ar")}>{lang === "ar" ? "EN" : "ع"}</button>
-          <button type="button" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
+          <button type="button" data-tour="themeBtn" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
             onClick={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
         </div>
       </header>
 
       {/* ── Body: stage + inspector ── */}
       <div className="ag-body">
-        <main className="ag-stage" ref={containerRef}
+        <main data-tour="stage" className="ag-stage" ref={containerRef}
           style={{ cursor: dragId || isPanning ? "grabbing" : "grab" }}
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={onPointerLeave}>
@@ -1176,7 +1374,7 @@ export default function QuranGraph() {
           </div>
 
           {/* On-canvas graph controls (fit / zoom / collapse / deselect / back) */}
-          <div className="ag-dock" data-panel="1">
+          <div data-tour="dock" className="ag-dock" data-panel="1">
             <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.fit")} aria-label={t("common.dock.fit")} onClick={() => setTransform(fitView())}>⤢</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.zoomIn")} aria-label={t("common.dock.zoomIn")} onClick={() => zoomBy(1.2)}>＋</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.zoomOut")} aria-label={t("common.dock.zoomOut")} onClick={() => zoomBy(0.83)}>－</button>
@@ -1185,7 +1383,7 @@ export default function QuranGraph() {
             {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
             {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
             {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
-            <button type="button" className="ag-iconbtn" title={t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>✶</button>
+            <button type="button" data-tour="saveViewBtn" className="ag-iconbtn" title={t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>✶</button>
             <button type="button" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
@@ -1300,9 +1498,9 @@ export default function QuranGraph() {
                     <span className="ag-ayah-num">{currentVerse.a}</span>
                   </span>
                   <span style={{ display: "flex", gap: 4 }}>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                    <button type="button" data-tour="echoesBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                    <button type="button" data-tour="contextBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.reader.readContext")} title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={readerCollapsed ? t("common.reader.showVerse") : t("common.reader.hideVerse")} aria-expanded={!readerCollapsed}
@@ -1342,19 +1540,19 @@ export default function QuranGraph() {
                   </div>
                   {selNode.count > 1 && (
                     <div className="ag-insp-actions">
-                      <button type="button" className="ag-btn is-gold ag-occ-btn"
+                      <button type="button" data-tour="allVersesBtn" className="ag-btn is-gold ag-occ-btn"
                         onClick={() => openOcc(selNode.lookup || selNode.wordNorm, selNode.label, searchMode)}>
                         ⌖ {t("common.insp.allVerses")} ({selNode.count})
                       </button>
-                      <button type="button" className="ag-btn"
+                      <button type="button" data-tour="distBtn" className="ag-btn"
                         onClick={() => setDist({ lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode })}>
                         ▦ {t("common.insp.distribution")}
                       </button>
-                      <button type="button" className="ag-btn" title={t("common.insp.compareTitle")}
+                      <button type="button" data-tour="compareBtn" className="ag-btn" title={t("common.insp.compareTitle")}
                         onClick={() => setCmp({ A: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode }, B: null })}>
                         ⇄ {t("common.insp.compare")}
                       </button>
-                      <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+                      <button type="button" data-tour="saveWordBtn" className="ag-btn" title={t("ws.saveTitle")}
                         onClick={() => { ws.saveItem({ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }); ws.toast(t("ws.saved")); }}>
                         ★ {t("ws.save")}
                       </button>
@@ -1384,7 +1582,7 @@ export default function QuranGraph() {
                         <div className="ag-insp-card-h" style={{ marginBottom: 0, marginTop: 6 }}>
                           <span className="ag-insp-card-lab" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                             {lexicons?.length > 1
-                              ? <select className="ag-lex-select" value={activeLexicon} aria-label={t("common.insp.chooseLex")} onChange={(e) => setActiveLexicon(e.target.value)}>
+                              ? <select data-tour="lexSelect" className="ag-lex-select" value={activeLexicon} aria-label={t("common.insp.chooseLex")} onChange={(e) => setActiveLexicon(e.target.value)}>
                                   {lexicons.map((L) => <option key={L.id} value={L.id}>{L.label}</option>)}
                                 </select>
                               : <span>{lexicons?.find((L) => L.id === activeLexicon)?.label || t("common.insp.lexFallback")}</span>}
@@ -1553,7 +1751,10 @@ export default function QuranGraph() {
       <PhraseModal phrase={phrase} seedIndex={seedIndex} verseData={verseData}
         onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />
 
-      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />
+
+      {/* Getting-started tour (interactive; waits for the user on action steps). */}
+      <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour} />
 
       <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />
 

@@ -747,6 +747,106 @@ body {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
+/* ═══════════ Getting-started tour (react-joyride custom tooltip) ═══════════ */
+/* While the tour runs, dragging the graph or the card must never select page
+   text. Inputs/textareas stay selectable so the search step still works. */
+html.qg-tour-active, html.qg-tour-active * { user-select: none; -webkit-user-select: none; }
+html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -webkit-user-select: text; }
+/* Keep the floater/overlay positioning LTR so fixed centering isn't skewed when
+   the app is in RTL; the card sets its own dir="rtl" for its content. */
+#react-joyride-portal { direction: ltr; }
+/* Picker wrapper: keep the sūrah + āyah selects together so the tour can
+   spotlight both (mirrors the toolbar's own inter-control gap). */
+.ag-picker { display: inline-flex; gap: var(--space-2); }
+.ag-tour {
+  position: relative; box-sizing: border-box;
+  /* Fill the floater wrapper, which owns the width (see STYLES in Tour.jsx). */
+  width: 100%; max-width: 100%;
+  background: var(--ink-800); color: var(--text-body);
+  border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3); padding: 26px 18px 18px; text-align: start;
+  font-family: var(--font-ui);
+}
+.ag-tour-grab {
+  position: absolute; inset-block-start: 4px; inset-inline-start: 50%; transform: translateX(-50%);
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  color: var(--text-faint); font-size: 13px; letter-spacing: 1px; line-height: 1;
+  padding: 3px 14px; border-radius: 6px;
+}
+.ag-tour-grab:hover { color: var(--text-muted); background: var(--ink-700); }
+.ag-tour-grab:active { cursor: grabbing; }
+.ag-tour-x {
+  position: absolute; inset-block-start: 8px; inset-inline-end: 8px;
+  width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent;
+  color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-standard);
+}
+.ag-tour-x:hover { color: var(--text-strong); background: var(--ink-700); }
+.ag-tour-title {
+  font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg);
+  color: var(--text-strong); line-height: 1.3; margin: 0 0 8px 0; padding-inline-end: 22px;
+}
+.ag-tour-body { font-size: var(--text-sm); line-height: 1.75; color: var(--text-body); }
+.ag-tour-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-block: 14px 12px; }
+.ag-tour-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--border-default);
+  transition: all var(--dur-base) var(--ease-out);
+}
+.ag-tour-dot.is-done { background: var(--gold-400); opacity: .55; }
+.ag-tour-dot.is-on { background: var(--gold-500); box-shadow: var(--glow-gold); transform: scale(1.3); }
+.ag-tour-dont {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: var(--text-xs); color: var(--text-muted); margin-block-end: 12px;
+}
+.ag-tour-dont input { accent-color: var(--gold-500); cursor: pointer; inline-size: 15px; block-size: 15px; }
+.ag-tour-nav { display: flex; align-items: center; gap: 8px; }
+.ag-tour-spacer { flex: 1 1 auto; }
+.ag-tour-count {
+  font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono, monospace);
+  white-space: nowrap; margin-inline-end: 2px;
+}
+.ag-tour-skip {
+  background: none; border: none; cursor: pointer; padding: 6px 2px;
+  font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted);
+}
+.ag-tour-skip:hover { color: var(--text-strong); text-decoration: underline; }
+.ag-tour-btn { font-size: var(--text-sm); padding: 7px 16px; }
+.ag-tour-hint {
+  display: flex; align-items: center; gap: 8px; margin-block: 12px 0;
+  font-size: var(--text-xs); font-weight: 600; color: var(--gold-400);
+}
+.ag-tour-pulse {
+  width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--gold-500); box-shadow: var(--glow-gold);
+  animation: ag-tour-pulse 1.4s var(--ease-out) infinite;
+}
+@keyframes ag-tour-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.6); opacity: .45; } }
+/* Pulsing ring on the currently-highlighted element (Tour adds this class to the
+   step's target). box-shadow rings HTML targets; drop-shadow glows SVG nodes —
+   both keyed on the gold tokens so it adapts to light/dark. */
+.qg-tour-target {
+  border-radius: 8px;
+  animation: qg-tour-ring 1.25s var(--ease-out) infinite;
+  /* No position override — the target keeps its own (e.g. the absolutely-
+     positioned dock), so the ring hugs the real element instead of a reflowed box. */
+}
+@keyframes qg-tour-ring {
+  0%, 100% { box-shadow: 0 0 0 2px var(--gold-500), 0 0 9px 1px color-mix(in oklab, var(--gold-500) 50%, transparent);
+             filter: drop-shadow(0 0 2px var(--gold-500)); }
+  50% { box-shadow: 0 0 0 4px var(--gold-400), 0 0 18px 5px color-mix(in oklab, var(--gold-400) 60%, transparent);
+        filter: drop-shadow(0 0 8px var(--gold-400)); }
+}
+.ag-tour-colors > p { margin: 0 0 10px; }
+.ag-tour-basics-svg { width: 100%; max-width: 280px; height: auto; display: block; margin: 0 auto 10px; }
+.ag-tour-basics > p { margin: 0 0 8px; }
+.ag-tour-basics > p:last-child { margin-bottom: 0; }
+.ag-tour-color { display: flex; align-items: center; gap: 9px; margin-block: 6px; font-size: var(--text-xs); color: var(--text-body); }
+.ag-tour-color > span:first-child { flex: 0 0 auto; }
+@media (max-width: 560px) {
+  .ag-tour { padding: 14px; }
+  .ag-tour-count { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
