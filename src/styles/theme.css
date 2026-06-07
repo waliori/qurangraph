@@ -234,7 +234,6 @@ body {
 .ag-iconbtn:hover { color: var(--text-strong); border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
 .ag-iconbtn.is-gold { color: var(--gold-400); }
 .ag-iconbtn.is-active { background: color-mix(in oklab, var(--gold-500) 18%, transparent); border-color: var(--gold-500); color: var(--gold-400); }
-.ag-iconbtn.is-menu { display: none; }
 
 /* Tools popover */
 .ag-tools { position: relative; }
@@ -680,10 +679,14 @@ body {
 /* ═══════════ Responsive ═══════════ */
 @media (max-width: 860px) {
   .ag-bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); }
-  .ag-iconbtn.is-menu { display: inline-flex; }
   .ag-wordmark i { display: none; }
   .ag-search { order: 3; flex-basis: 100%; max-width: none; margin: 0; }
-  .ag-controls { margin-inline-start: auto; gap: var(--space-2); }
+  /* Let the controls shrink and WRAP their children instead of overflowing off the
+     edge: on a narrow screen the row would otherwise be clipped past the viewport
+     (the leftmost icons in RTL). Shrink/wrap only engage when the width actually
+     runs out, so wider phones/tablets keep the whole bar on one row. */
+  .ag-controls { margin-inline-start: auto; column-gap: var(--space-2); row-gap: var(--space-2);
+    flex-shrink: 1; flex-wrap: wrap; }
 
   /* Inspector → bottom sheet: slides up from the bottom edge, rounded top,
      with a grab handle and scrim. Far friendlier than a side drawer on a phone. */
@@ -705,6 +708,17 @@ body {
   .ag-reader-dock { padding: var(--space-3); }
   .ag-reader-text { font-size: var(--text-xl); line-height: 2; }
   .ag-legend { display: none; }
+}
+
+/* Very narrow phones: tighten the toolbar so the controls pack into fewer wrapped
+   rows — smaller gaps, denser chips/buttons, and a capped sūrah picker. */
+@media (max-width: 560px) {
+  .ag-bar { gap: var(--space-2); }
+  .ag-controls { column-gap: var(--space-1); }
+  .ag-seg button { padding: 6px 7px; }
+  .ag-iconbtn { width: 34px; height: 34px; font-size: 15px; }
+  .ag-select select { height: 34px; font-size: var(--text-xs); padding-inline: var(--space-2) var(--space-5); }
+  .ag-select:not(.is-ayah) select { max-width: 150px; text-overflow: ellipsis; }
 }
 
 /* Shared-phrase (المتشابهات) modal */
