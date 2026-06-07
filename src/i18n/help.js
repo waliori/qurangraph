@@ -148,6 +148,12 @@ export const ar = {
   "help.coverage": "التغطية",
   "help.coverageD": "نحو ⅔ الكلمات لها جذر (الحروف وكثير من الأعلام بلا جذر، فتظهر متقطعةً وغير مجمَّعة)؛ ومعنى الجذر يعتمد جودة رقمنة المعجم المصدر.",
 
+  // Data sources / provenance
+  "help.sourcesTitle": "مصادر البيانات وإصداراتها",
+  "help.sourcesIntro": "بُنيت هذه النسخة من المصادر التالية. ",
+  "help.sourcesBuilt": "تاريخ البناء: {date}.",
+  "help.sourcesSkipped": "— لم يُحمَّل في هذا البناء",
+
   // Footer
   "help.footer": "أداة بحثية قرآنية محضة — كل الروابط لغوية (كلمة/صيغة/جذر)، دون تفسير أو ترجمة.",
 };
@@ -301,5 +307,11 @@ export const en = {
   "help.coverageD": "About ⅔ of words have a root (letters and many proper nouns have none, so they appear dashed and ungrouped); a root's meaning depends on the digitization quality of the source lexicon.",
 
   // Footer
+  // Data sources / provenance
+  "help.sourcesTitle": "Data sources & versions",
+  "help.sourcesIntro": "This build was compiled from the following sources. ",
+  "help.sourcesBuilt": "Built: {date}.",
+  "help.sourcesSkipped": "— not fetched in this build",
+
   "help.footer": "A purely Quranic research tool — all links are linguistic (word / lemma / root), with no exegesis or translation.",
 };

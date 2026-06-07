@@ -32,8 +32,15 @@ export function buildSpatialIndex(nodes, positions, cell = HIT_CELL) {
 }
 
 /* Nearest node whose disc (r + slack) covers world point (x,y), or null. Searches
- * only the 3×3 cells around the point. `positions` resolves live coordinates. */
-export function hitTest(index, positions, x, y, slack = 4) {
+ * only the 3×3 cells around the point. `positions` resolves live coordinates.
+ *
+ * `scale` matches the LARGEST size a node is ever rendered at (hover = r·1.35,
+ * selected/active = r·1.2). The renderer enlarges hovered/selected discs, but the
+ * index only stores base r, so without this the clickable region was smaller than
+ * the visible disc. Enlarging every node's hit radius uniformly is safe: the search
+ * still returns the NEAREST covering node, and node spacing (≥ r+r+PAD) far exceeds a
+ * 35% radius bump, so it just makes targets more forgiving without stealing clicks. */
+export function hitTest(index, positions, x, y, slack = 4, scale = 1.35) {
   if (!index || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   const { grid, cell } = index;
   const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
@@ -45,7 +52,7 @@ export function hitTest(index, positions, x, y, slack = 4) {
       for (const n of arr) {
         const p = nodePos(n, positions);
         const dx = p.x - x, dy = p.y - y, d = Math.hypot(dx, dy);
-        if (d <= (n.r || 8) + slack && d < bestD) { bestD = d; best = n; }
+        if (d <= (n.r || 8) * scale + slack && d < bestD) { bestD = d; best = n; }
       }
     }
   }

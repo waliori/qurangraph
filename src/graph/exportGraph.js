@@ -75,14 +75,73 @@ export function exportJsonFile(obj, name = "qurangraph.json") {
   download(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" }), name);
 }
 
+/* Plain-text download (BibTeX / RIS citation files). */
+export function exportTextFile(text, name, mime = "text/plain;charset=utf-8") {
+  download(new Blob([text], { type: mime }), name);
+}
+
+/* ═══ Citation export (BibTeX / RIS) ═══
+ *
+ * A lexicon gloss already carries its provenance — the dictionary edition (author,
+ * title, editor, publisher, year) and the (approximate) volume/page from the OpenITI
+ * pagination markers — so a researcher can cite the exact entry. These turn that into
+ * the two formats reference managers read. `info`:
+ *   { root, lexLabel, edition:{ title, author, died, editor, publisher, year } | null,
+ *     cite:{ vol, page } | null }
+ * Missing fields are simply omitted. The "s.v. (sub verbo) ROOT" note pins the entry. */
+function citeKey(info) {
+  const lex = (info.lexLabel || "lexicon").toString().toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 16) || "lex";
+  const root = (info.root || "root").replace(/[^A-Za-z؀-ۿ]/g, "");
+  const yr = info.edition?.year ? String(info.edition.year).replace(/[^0-9]/g, "") : "";
+  return `${lex}_${root}${yr}`;
+}
+function sv(info) {
+  const bits = [`s.v. ${info.root}`];
+  if (info.cite?.vol != null) bits.push(`vol. ${info.cite.vol}`);
+  if (info.cite?.page != null) bits.push(`p. ${info.cite.page}`);
+  return bits.join(", ");
+}
+export function buildBibtex(info) {
+  const ed = info.edition || {};
+  const title = ed.title || info.lexLabel || "";
+  const fields = [];
+  if (ed.author) fields.push(["author", ed.died ? `${ed.author} (d. ${ed.died})` : ed.author]);
+  if (title) fields.push(["title", title]);
+  if (ed.editor) fields.push(["editor", ed.editor]);
+  if (ed.publisher) fields.push(["publisher", ed.publisher]);
+  if (ed.year) fields.push(["year", String(ed.year)]);
+  if (info.cite?.vol != null) fields.push(["volume", String(info.cite.vol)]);
+  if (info.cite?.page != null) fields.push(["pages", String(info.cite.page)]);
+  fields.push(["note", sv(info)]);
+  const body = fields.map(([k, v]) => `  ${k} = {${String(v).replace(/[{}]/g, "")}}`).join(",\n");
+  return `@book{${citeKey(info)},\n${body}\n}\n`;
+}
+export function buildRis(info) {
+  const ed = info.edition || {};
+  const lines = ["TY  - BOOK"];
+  if (ed.author) lines.push(`AU  - ${ed.author}`);
+  if (ed.title || info.lexLabel) lines.push(`TI  - ${ed.title || info.lexLabel}`);
+  if (ed.editor) lines.push(`A2  - ${ed.editor}`);
+  if (ed.publisher) lines.push(`PB  - ${ed.publisher}`);
+  if (ed.year) lines.push(`PY  - ${String(ed.year).replace(/[^0-9]/g, "")}`);
+  if (info.cite?.vol != null) lines.push(`VL  - ${info.cite.vol}`);
+  if (info.cite?.page != null) lines.push(`SP  - ${info.cite.page}`);
+  if (info.root) lines.push(`KW  - ${info.root}`);
+  lines.push(`N1  - ${sv(info)}`);
+  lines.push("ER  - ");
+  return lines.join("\r\n") + "\r\n";
+}
+
 /* Build a KWIC (keyword-in-context) concordance: every occurrence of a term, with
  * the `window` words on each side, the keyword centred. `verses` is a list of verse
  * keys, `words` resolves a verse key to its word objects, and `isHit(word)` says
  * whether a word IS the term (already mode-aware at the call site). One row per
  * occurrence (a verse with the term twice yields two rows), so frequency-by-context
- * studies line up. Returns rows ready for toCsv()/exportCsvFile (with a header). */
-export function buildConcordance(verses, words, isHit, meta, window = 5) {
-  const rows = [["السورة", "الآية", "المرجع", "قبل", "الكلمة", "بعد"]];
+ * studies line up. `headers` is the (translated) header row; it defaults to Arabic for
+ * back-compat. Returns rows ready for toCsv()/exportCsvFile (with a header). */
+export function buildConcordance(verses, words, isHit, meta, window = 5,
+  headers = ["السورة", "الآية", "المرجع", "قبل", "الكلمة", "بعد"]) {
+  const rows = [headers];
   for (const vk of verses) {
     const ws = words(vk);
     if (!ws) continue;

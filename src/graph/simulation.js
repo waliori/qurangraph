@@ -20,12 +20,15 @@
  * caller hands in (the component pre-seeds them in a phyllotaxis disk around the
  * parent). Pinned (dragged) and fixed (centre / dropped) bodies are never moved.
  *
- * Shared force constants (CUTOFF2 / CELL / PAD / DEFAULT_LINK_DIST) and the grid
- * key helper come from forceConstants.js, the single source the batch layout
- * (forceLayout.js) reads too, so the two engines can't drift apart.
+ * Shared force constants (REP_STRENGTH / REP_SOFT / COLLIDE_CELL / PAD /
+ * DEFAULT_LINK_DIST) and the grid key helper come from forceConstants.js, the single
+ * source the batch layout (forceLayout.js) reads too, so the two engines can't drift
+ * apart. Repulsion is long-range via the Barnes-Hut quadtree (quadtree.js); collision
+ * stays a small uniform grid.
  */
 
-import { CUTOFF2, CELL, PAD, DEFAULT_LINK_DIST, cellKey } from "./forceConstants.js";
+import { REP_STRENGTH, REP_SOFT, COLLIDE_CELL, PAD, DEFAULT_LINK_DIST, cellKey } from "./forceConstants.js";
+import { buildQuadtree, repulsionForce } from "./quadtree.js";
 
 export function createSimulation(W = 1600, H = 1100) {
   const cx = W / 2, cy = H / 2;
@@ -107,17 +110,28 @@ export function createSimulation(W = 1600, H = 1100) {
       else { b.vx += (cx - b.x) * 0.002 * al; b.vy += (cy - b.y) * 0.002 * al; }
     }
 
-    // Repulsion + collision, bucketed by a uniform spatial grid (≈O(n)).
+    // Long-range repulsion via Barnes-Hut (O(n log n), no distance cutoff) — every body
+    // is pushed away from every other, so separate clusters spread apart instead of
+    // overlapping. Fixed/pinned bodies still exert force on others (they're in the tree)
+    // but aren't themselves moved.
+    const tree = buildQuadtree(bodies);
+    for (const b of bodies) {
+      if (b.fixed || b.pinned) continue;
+      const { fx, fy } = repulsionForce(tree, b, REP_STRENGTH, REP_SOFT);
+      b.vx += fx * al; b.vy += fy * al;
+    }
+
+    // Collision: short-range overlap resolution, bucketed by a small uniform grid.
     grid.clear();
     for (let i = 0; i < N; i++) {
       const b = bodies[i];
-      const k = cellKey(Math.floor(b.x / CELL), Math.floor(b.y / CELL));
+      const k = cellKey(Math.floor(b.x / COLLIDE_CELL), Math.floor(b.y / COLLIDE_CELL));
       const bk = grid.get(k);
       if (bk) bk.push(i); else grid.set(k, [i]);
     }
     for (let i = 0; i < N; i++) {
       const a = bodies[i];
-      const gx = Math.floor(a.x / CELL), gy = Math.floor(a.y / CELL);
+      const gx = Math.floor(a.x / COLLIDE_CELL), gy = Math.floor(a.y / COLLIDE_CELL);
       for (let ox = -1; ox <= 1; ox++) {
         for (let oy = -1; oy <= 1; oy++) {
           const bk = grid.get(cellKey(gx + ox, gy + oy));
@@ -125,8 +139,7 @@ export function createSimulation(W = 1600, H = 1100) {
           for (const j of bk) {
             if (j <= i) continue;
             const b = bodies[j];
-            let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
-            if (d2 > CUTOFF2) continue;
+            const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
             const dist = Math.sqrt(d2) || 1;
             const aMov = !a.fixed && !a.pinned, bMov = !b.fixed && !b.pinned;
             if (dist < a.r + b.r + PAD) {
@@ -134,9 +147,6 @@ export function createSimulation(W = 1600, H = 1100) {
               if (aMov) { a.vx -= dx * f; a.vy -= dy * f; }
               if (bMov) { b.vx += dx * f; b.vy += dy * f; }
             }
-            const rep = -55 * al / (d2 + 200);
-            if (aMov) { a.vx += dx / dist * rep; a.vy += dy / dist * rep; }
-            if (bMov) { b.vx -= dx / dist * rep; b.vy -= dy / dist * rep; }
           }
         }
       }

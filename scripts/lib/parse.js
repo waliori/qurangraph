@@ -96,7 +96,14 @@ export function collapseGeminate(root) {
  *   - unify the whole alif/hamza family → ا  (أله↔اله, سوأ↔سوء, سأل↔سال)
  *   - unify the final weak letter و/ي/ى → ى  (corpus صلو/رأي ↔ Ibn Faris صلى/رأى)
  * The final-weak fold is positional (last char only) so it does not merge
- * distinct strong roots like قول vs قيل. */
+ * distinct strong roots like قول vs قيل.
+ *
+ * This folds standalone ء (and the whole hamza/alif family) MORE aggressively than
+ * the runtime token normaliser norm() (src/arabic-utils.js), which keeps ء distinct.
+ * The divergence is deliberate: here we align a closed, curated set of ROOTS onto
+ * dictionary headers whose hamza spelling varies by edition, so aggressive folding is
+ * what lets them match; norm() groups open-class display TOKENS, where erasing ء would
+ * wrongly merge content words (ماء→ما). See the norm() header for the full rationale. */
 export function matchNorm(root) {
   return root
     .replace(/[ٱأإآاءؤئ]/g, "ا")

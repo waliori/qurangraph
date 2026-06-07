@@ -1,31 +1,13 @@
 import { memo } from "react";
 import { norm } from "../arabic-utils.js";
 import { fColor, dColor, eColor, eWidth } from "../theme.js";
+import { useI18n } from "../i18n/index.js";
+import { nodeAria } from "./nodeAria.js";
 
 // Evaluated once at load — users rarely toggle the OS setting mid-session, and a
 // constant lets the memoized nodes skip it as a dependency. SMIL <animate> is NOT
 // covered by the CSS reduced-motion rule, so the pulse ring must be gated here.
 const REDUCE_MOTION = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// A descriptive, action-bearing label for assistive tech — the bare word/ref alone
-// gave a screen reader no type, frequency, relationship, or affordance.
-function nodeAria(n) {
-  if (n.type === "center") return `الآية المركزية: ${n.label}`;
-  if (n.type === "word") {
-    const parts = [`كلمة ${n.label}`, `وردت في ${n.count} آية`];
-    if (n.rootLabel) parts.push(`جذر ${n.rootLabel}`);
-    parts.push(n.isExpanded ? "موسَّعة، اضغط للطي" : "اضغط للتوسيع");
-    return parts.join("، ");
-  }
-  if (n.type === "verse") {
-    const parts = [`آية ${n.label}`];
-    if (n.connectingWord) parts.push(`متّصلة عبر «${n.connectingWord}»`);
-    if (n.sharedCount > 1) parts.push(`تشارك ${n.sharedCount} كلمة`);
-    parts.push(n.isExpanded ? "موسَّعة" : "اضغط للتحديد");
-    return parts.join("، ");
-  }
-  return n.label;
-}
 
 /* ═══ Memoized SVG graph render ═══
  *
@@ -38,7 +20,7 @@ function nodeAria(n) {
  * only the handful of nodes whose flags changed.
  */
 
-const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, onEnter, onLeave, onClick }) {
+const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, aria, onEnter, onLeave, onClick }) {
   const opacity = dim ? 0.42 : 1;
   const r = isH ? n.r * 1.35 : isS || isAW ? n.r * 1.2 : n.r;
   const isWE = n.type === "word" && n.isExpanded;
@@ -58,12 +40,27 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   // Register this node's <g> so applyPositions() can move it without a re-render.
   const ref = (el) => { if (el) reg.nodes.set(n.id, el); else reg.nodes.delete(n.id); };
 
+  // Overflow meta-node: a muted dashed disc with "+N" — the verses the per-word cap
+  // hid. Clicking opens the full occurrences list (handled in QuranGraph onNodeClick).
+  if (n.type === "overflow") {
+    return (
+      <g ref={ref} data-node={n.id} transform={`translate(${x},${y})`}
+        style={{ cursor: "pointer", opacity, transition: "opacity 0.25s" }}
+        role="button" tabIndex={0} aria-label={aria}
+        onMouseEnter={() => onEnter(n)} onMouseLeave={() => onLeave(n)} onClick={(e) => onClick(n, e)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } }}>
+        <circle cx={0} cy={0} r={r} fill={(L ? "#9a9077" : "#586a88") + "22"} stroke={L ? "#9a9077" : "#8d9bb5"} strokeWidth={1.4} strokeDasharray="3,2" />
+        <text x={0} y={3} textAnchor="middle" fontSize={9} fontWeight="bold" fill={L ? "#6f6757" : "#8d9bb5"} style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.label}</text>
+      </g>
+    );
+  }
+
   return (
     <g ref={ref} data-node={n.id} transform={`translate(${x},${y})`}
       style={{ cursor: "pointer", opacity, transition: "opacity 0.25s" }}
       role={clickable ? "button" : "img"}
       tabIndex={clickable ? 0 : undefined}
-      aria-label={nodeAria(n)}
+      aria-label={aria}
       aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
       onMouseEnter={() => onEnter(n)}
       onMouseLeave={() => onLeave(n)}
@@ -97,6 +94,7 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
 });
 
 function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, onNodeEnter, onNodeLeave, onNodeClick }) {
+  const { t } = useI18n();
   const anyHighlight = !!highlightSet || activeWordNodeIds.size > 0;
   const pos = (n) => positions[n.id] || { x: n.x, y: n.y };
   // Viewport culling (large graphs only — `viewport` is null otherwise, so the
@@ -144,7 +142,7 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewpo
         const isAW = activeWordNodeIds.has(n.id);
         const onP = highlightSet ? highlightSet.has(n.id) : true;
         const dim = !(onP || isAW) && anyHighlight;
-        return <GraphNode key={n.id} node={n} x={p.x} y={p.y} reg={reg}
+        return <GraphNode key={n.id} node={n} x={p.x} y={p.y} reg={reg} aria={nodeAria(n, t)}
           isH={hovered === n.id} isS={selected === n.id} isAW={isAW} dim={dim}
           T={T} theme={theme} onEnter={onNodeEnter} onLeave={onNodeLeave} onClick={onNodeClick} />;
       })}

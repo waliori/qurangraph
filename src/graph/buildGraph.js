@@ -86,8 +86,10 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
   const { l2v, M, morphFilter, rareOnly = false, rareMax = 100, stopSet } = opts;
   const nodes = [], links = [], loopLinks = [], parentMap = {};
   const addedNodes = new Set(), visitedVerses = new Set();
+  let omitted = 0;          // verses a word fans to that exceed maxBranch (shown as an overflow node)
+  let truncated = false;    // the BFS hit its hard safety cap — the graph is structurally incomplete
   const cv = verseData[centerKey];
-  if (!cv) return { nodes, links, loopLinks, parentMap };
+  if (!cv) return { nodes, links, loopLinks, parentMap, omitted, truncated };
 
   const cx = W / 2, cy = H / 2;
   // Lemma mode REQUIRES its index; never silently fall back to the exact (w2v)
@@ -159,15 +161,18 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
       });
     } else if (item.type === "show-verses") {
       // Rank candidate verses by shared-word count with the centre, most first.
-      const ranked = (index[item.lookup] || [])
+      const rankedAll = (index[item.lookup] || [])
         .filter((vk) => vk !== item.fromVerseKey)
         .map((vk) => {
           const v = verseData[vk];
           return v ? { vk, v, shared: sharedOf(v) } : null;
         })
         .filter(Boolean)
-        .sort((a, b) => b.shared.length - a.shared.length || a.vk.localeCompare(b.vk))
-        .slice(0, maxBranch);
+        .sort((a, b) => b.shared.length - a.shared.length || a.vk.localeCompare(b.vk));
+      const ranked = rankedAll.slice(0, maxBranch);
+      // Verses this word reaches but that the per-word cap hides. Surfaced below as a
+      // single overflow node (and tallied for the HUD) instead of being dropped silently.
+      const hidden = rankedAll.length - ranked.length;
 
       // Spring length for this word's verse fan-out. A fixed distance seats every
       // verse on one ring around the word — fine for 3 verses, hopeless for 100
@@ -195,8 +200,26 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         links.push({ source: item.wordId, target: vid, dist: ring, weight });
         if (isVE) queue.push({ type: "show-words", verseId: vid, verseKey: vk, depth: item.depth + 1 });
       });
+
+      // Overflow aggregate: a single meta-node standing in for the verses the per-word
+      // cap hides. It's both the "incomplete view" signal (the user SEES there's more,
+      // not a silent drop) and the escape hatch for hub words — clicking it opens the
+      // full occurrences list. Skipped in rareOnly mode (which deliberately trims hubs).
+      if (hidden > 0 && !rareOnly) {
+        omitted += hidden;
+        const oid = `o:${item.lookup}@${item.fromVerseKey}`;
+        if (!addedNodes.has(oid)) {
+          nodes.push({ id: oid, type: "overflow", lookup: item.lookup, label: `+${hidden}`, count: hidden,
+            connectingWord: item.lookup, parentVerseKey: item.fromVerseKey, color: "#8d9bb5",
+            r: Math.min(9 + Math.log2(hidden + 1) * 1.6, 16), depth: item.depth, ...place(item.depth) });
+          addedNodes.add(oid);
+          parentMap[oid] = item.wordId;
+          links.push({ source: item.wordId, target: oid, dist: ring, weight });
+        }
+      }
     }
   }
+  if (safety <= 0) truncated = true;
 
-  return { nodes, links, loopLinks, parentMap };
+  return { nodes, links, loopLinks, parentMap, omitted, truncated };
 }

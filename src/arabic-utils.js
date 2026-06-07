@@ -10,6 +10,20 @@
  * inflectional variants of the same word match (the display text always uses
  * the original `orig` token, so nothing is lost visually). This is a matching
  * heuristic, not a linguistic transliteration.
+ *
+ * Standalone hamza (ء) is deliberately NOT folded here, and the divergence from the
+ * build-time root matcher matchNorm() (scripts/lib/parse.js — which folds the WHOLE
+ * hamza/alif family to ا) is intentional, not an oversight:
+ *   - norm() groups DISPLAYED corpus TOKENS. Erasing ء would merge distinct content
+ *     words — ماء (water) → ما (what/not), سوء → سو, شيء → شي — so the consonant is
+ *     kept to avoid silently collapsing different words. The carriers ؤ/ئ ARE folded
+ *     because they spell the same و/ي consonant and so don't create such collisions.
+ *   - matchNorm() aligns Qur'anic ROOTS onto classical-dictionary HEADERS, where one
+ *     root is spelled with different hamza/alif conventions (سأل↔سال, سوأ↔سوء); there
+ *     folding all hamza to ا is what makes headers line up, and roots are a closed,
+ *     curated set, so the token over-merge risk doesn't apply.
+ * Token grouping must be conservative about hamza; offline root alignment must be
+ * aggressive — two different matching problems, hence two different rules.
  */
 export function norm(w, { fold = true } = {}) {
   let s = w
@@ -21,6 +35,8 @@ export function norm(w, { fold = true } = {}) {
   if (fold) {
     // Aggressive orthographic folds: let inflectional / spelling variants match.
     // Off in "strict" precision so e.g. آية ≠ اية and صلوة ≠ صلوه stay distinct.
+    // NB: standalone ء is intentionally left alone (see header) — folding it would
+    // merge content words like ماء→ما; the hamza CARRIERS ؤ/ئ are safe to fold.
     s = s.replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/ؤ/g, "و").replace(/ئ/g, "ي");
   }
   return s.replace(/[^ء-ي]/g, "").trim();

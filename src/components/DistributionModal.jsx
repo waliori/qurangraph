@@ -25,7 +25,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   const [collocSort, setCollocSort] = useState("ll");
   const data = useMemo(() => {
     if (!dist) return null;
-    const distribution = distributionBySura(dist.lookup, index, verseData, surahList).filter((d) => d.count > 0);
+    const distribution = distributionBySura(dist.lookup, index, verseData, surahList, dist.mode).filter((d) => d.count > 0);
     const colloc = collocations(dist.lookup, dist.mode, index, verseData, stopSet, 99, { sort: collocSort }).slice(0, 60);
     const total = distribution.reduce((s, d) => s + d.count, 0);
     const max = distribution.reduce((m, d) => Math.max(m, d.count), 1);

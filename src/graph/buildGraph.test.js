@@ -41,6 +41,28 @@ describe("buildLazyGraph", () => {
     expect(nodes.filter((n) => n.type === "verse").length).toBe(1);
   });
 
+  it("surfaces verses hidden by maxBranch as an overflow node (not a silent drop)", () => {
+    // رب reaches 2 verses; cap at 1 → one is shown, one is surfaced as a "+1" overflow.
+    const { nodes, omitted, truncated } = buildLazyGraph("1:1", verseData, w2v, r2v, new Set(["رب@1:1"]), new Set(), false, 1, "exact");
+    const overflow = nodes.filter((n) => n.type === "overflow");
+    expect(overflow).toHaveLength(1);
+    expect(overflow[0].count).toBe(1);
+    expect(overflow[0].lookup).toBe("رب");
+    expect(omitted).toBe(1);
+    expect(truncated).toBe(false);
+  });
+
+  it("adds no overflow node when the whole fan fits", () => {
+    const { nodes, omitted } = buildLazyGraph("1:1", verseData, w2v, r2v, new Set(["رب@1:1"]), new Set(), false, 10, "exact");
+    expect(nodes.some((n) => n.type === "overflow")).toBe(false);
+    expect(omitted).toBe(0);
+  });
+
+  it("omits the overflow node in rareOnly mode (which deliberately trims hubs)", () => {
+    const { nodes } = buildLazyGraph("1:1", verseData, w2v, r2v, new Set(["رب@1:1"]), new Set(), false, 1, "exact", 900, 600, { rareOnly: true });
+    expect(nodes.some((n) => n.type === "overflow")).toBe(false);
+  });
+
   it("returns empty graph for an unknown verse", () => {
     const { nodes } = buildLazyGraph("99:99", verseData, w2v, r2v, new Set(), new Set(), false, 10, "exact");
     expect(nodes).toEqual([]);

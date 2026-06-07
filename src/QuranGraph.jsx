@@ -7,7 +7,7 @@ import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "
 import { createSimClient } from "./graph/simClient.js";
 import { applyPositions } from "./graph/applyPositions.js";
 import { morphAt, verseGroupingKeys, formRoman, morphFilterActive, morphFilterSummary, filterOccurrencesByMorph, EMPTY_MORPH_FILTER } from "./morphology.js";
-import { serializeSvg, exportSvgFile, exportPngFile } from "./graph/exportGraph.js";
+import { serializeSvg, exportSvgFile, exportPngFile, buildBibtex, exportTextFile } from "./graph/exportGraph.js";
 import { readUrlState, writeUrlState, encodeState, decodeState } from "./hooks/useUrlState.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { WorkspaceDrawer } from "./components/WorkspaceDrawer.jsx";
@@ -426,10 +426,10 @@ export default function QuranGraph() {
   // we hold off building (rather than fall back to exact-form matches dressed up as
   // lemma links). Root/exact build immediately.
   const lemmaPending = searchMode === "lemma" && !l2v;
-  const { graphNodes, graphLinks, loopLinks, parentMap } = useMemo(() => {
-    if (!currentVerse || lemmaPending) return { graphNodes: [], graphLinks: [], loopLinks: [], parentMap: {} };
+  const { graphNodes, graphLinks, loopLinks, parentMap, omitted, truncated } = useMemo(() => {
+    if (!currentVerse || lemmaPending) return { graphNodes: [], graphLinks: [], loopLinks: [], parentMap: {}, omitted: 0, truncated: false };
     const r = buildLazyGraph(currentKey, verseData, w2v, r2v, expandedWords, expandedVerses, hideStop, effMaxBranch, searchMode, VW, VH, { l2v, M: morph, morphFilter, rareOnly, stopSet });
-    return { graphNodes: r.nodes, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap };
+    return { graphNodes: r.nodes, graphLinks: r.links, loopLinks: r.loopLinks, parentMap: r.parentMap, omitted: r.omitted, truncated: r.truncated };
   }, [currentVerse, lemmaPending, currentKey, verseData, w2v, r2v, l2v, morph, morphFilter, rareOnly, stopSet, expandedWords, expandedVerses, hideStop, effMaxBranch, searchMode]);
 
   // Adjacency map reused across every subtree query (descendants / drag / highlight).
@@ -868,6 +868,15 @@ export default function QuranGraph() {
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
     setSuggest(null);
+    // Direct verse reference ("2:255", "٢٫٢٥٥", "2 255", "2.255") → jump straight there.
+    // Western + Arabic-Indic digits, any of : . / - or space as the separator.
+    const ref = query.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).trim().match(/^(\d{1,3})\s*[:.،/\s-]\s*(\d{1,3})$/);
+    if (ref) {
+      const s = +ref[1], a = +ref[2];
+      const sur = quranRaw?.find((x) => x.id === s);
+      if (sur && a >= 1 && a <= sur.total_verses) { setToolsOpen(false); setSearchMiss(false); navigate(s, a); setQuery(""); return; }
+      setSearchMiss(true); return;
+    }
     const q = norm(query);
     if (q.length < 2) { setSearchMiss(true); return; }
     const qx = searchMode === "exact" && precision === "strict" ? normStrict(query) : q;
@@ -885,7 +894,7 @@ export default function QuranGraph() {
       if (hit) { setSuggest({ lookup: hit, label: hit }); setSearchMiss(false); return; }
     }
     setSearchMiss(true);
-  }, [query, searchMode, precision, w2v, openOcc]);
+  }, [query, searchMode, precision, w2v, openOcc, quranRaw, navigate]);
 
   // Accept the "did you mean" offer — only now do we actually search for it.
   const acceptSuggest = useCallback(() => {
@@ -933,9 +942,12 @@ export default function QuranGraph() {
     e.stopPropagation();
     if (draggedRef.current) { draggedRef.current = false; return; } // it was a drag, not a click
     if (n.type === "center") { setSelected(null); setActiveWord(null); return; }
+    // Overflow meta-node: the verses the per-word cap hid. Open the full list so the
+    // user can reach every occurrence (the escape hatch for hub words).
+    if (n.type === "overflow") { const parent = nmap[parentMap[n.id]]; openOcc(n.lookup, parent?.label || n.lookup, searchMode); return; }
     if (n.type === "word") { setMeaningOpen(false); toggleWord(n.lookup || n.wordNorm, n.parentVerseKey); setActiveWord(n.lookup || n.wordNorm); setSelected(n.id); }
     else if (n.type === "verse") { if (selected === n.id) toggleVerse(n.verseKey); else { setSelected(n.id); setActiveWord(null); } }
-  }, [selected, toggleWord, toggleVerse]);
+  }, [selected, toggleWord, toggleVerse, nmap, parentMap, openOcc, searchMode]);
   // Keep a live ref to onNodeClick so the canvas pointerup (defined earlier) can fire
   // it without a forward reference. Written in an effect, never during render.
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
@@ -1144,6 +1156,8 @@ export default function QuranGraph() {
             <span className="ag-chip" title={t("common.hud.countTitle")}>{t("common.hud.count", { n: graphNodes.length, m: graphLinks.length })}</span>
             <span className={"ag-chip is-mode" + (searchMode === "root" ? " is-root" : searchMode === "lemma" ? " is-lemma" : "")} title={t("common.hud.modeTitle")}>{searchMode === "root" ? t("common.hud.modeRoot") : searchMode === "lemma" ? t("common.hud.modeLemma") : t("common.hud.modeWord")}</span>
             {morphFilterActive(morphFilter) && <span className="ag-chip is-morph" title={t("common.hud.morphTitle")}>⚙ {morphFilterSummary(morphFilter)}</span>}
+            {searchMode !== "exact" && !morph && !lemmaPending && <span className="ag-chip" title={t("common.hud.refiningTitle")}>{t("common.hud.refining")}</span>}
+            {(omitted > 0 || truncated) && <span className="ag-chip" style={{ color: "var(--rubric-400)" }} title={t(truncated ? "common.hud.truncatedTitle" : "common.hud.incompleteTitle")}>{truncated ? t("common.hud.truncated") : t("common.hud.incomplete", { n: omitted })}</span>}
             {layoutNotShared && <span className="ag-chip" style={{ color: "var(--rubric-400)" }} title={t("common.hud.noPosTitle")}>{t("common.hud.noPos")}</span>}
           </div>
 
@@ -1250,7 +1264,7 @@ export default function QuranGraph() {
           )}
 
           {/* Hover tooltip */}
-          {hovNode && hovNode.type !== "center" && !selNode && (
+          {hovNode && (hovNode.type === "word" || hovNode.type === "verse") && !selNode && (
             <div data-panel="1" className="ag-tooltip" style={{ pointerEvents: hovNode.type === "verse" ? "auto" : "none" }}>
               {hovNode.type === "word" ? (
                 <div>
@@ -1390,6 +1404,8 @@ export default function QuranGraph() {
                             <div className="ag-insp-cite" title={t("common.cite.title")}>
                               {ct && <span className="ag-insp-cite-pg">{t("common.cite.volPage", { vol: ct.vol, page: ct.page })}</span>}
                               {edStr && <span className="ag-insp-cite-ed">{edStr}</span>}
+                              <button type="button" className="ag-btn" style={{ marginInlineStart: "auto" }} title={t("common.cite.bib")}
+                                onClick={() => exportTextFile(buildBibtex({ root: sr, lexLabel: lexicons?.find((L) => L.id === activeLexicon)?.label || activeLexicon, edition: ed || null, cite: ct || null }), `cite-${activeLexicon}-${sr}.bib`, "application/x-bibtex")}>⧉ {t("common.cite.cite")}</button>
                             </div>
                           );
                         })()}

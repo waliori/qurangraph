@@ -21,6 +21,14 @@ describe("distributionBySura", () => {
     ]);
     expect(d.reduce((s, x) => s + x.count, 0)).toBe(index["نور"].length);
   });
+
+  it("counts TRUE token frequency — a word twice in one āyah counts twice", () => {
+    const vd = { "2:1": { s: 2, sn: "س2", a: 1, words: [w("نور"), w("نور"), w("ارض")] } };
+    const idx = { نور: ["2:1"] };
+    const sl = [{ id: 2, name: "س2" }];
+    const d = distributionBySura("نور", idx, vd, sl, "exact");
+    expect(d[0].count).toBe(2); // two occurrences in the single verse, not 1
+  });
 });
 
 describe("collocations", () => {
@@ -43,6 +51,16 @@ describe("collocations", () => {
     const idx = { "نور": ["1:1"], "قول": ["1:1"] };
     const c = collocations("نور", "root", idx, vd, new Set(["قول"]));
     expect(c.find((x) => x.key === "قول")).toBeUndefined();
+  });
+
+  it("returns null PMI/LL in windowed mode (verse-document table is invalid there)", () => {
+    // With a narrow window the co-occurrence count is windowed but the marginals are
+    // whole-verse, so the significance table would mix populations — report null, not a
+    // biased number, and fall back to count ranking.
+    const c = collocations("نور", "exact", index, verseData, stop, 1, { sort: "pmi" });
+    for (const x of c) { expect(x.pmi).toBeNull(); expect(x.ll).toBeNull(); }
+    // count ranking still holds (sort fell back from the unavailable pmi metric).
+    expect(c[0].count).toBeGreaterThanOrEqual(c[c.length - 1].count);
   });
 
   it("attaches PMI + signed log-likelihood to every neighbour", () => {

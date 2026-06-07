@@ -7,9 +7,12 @@ import { useI18n } from "../i18n/index.js";
  * are drawn as small editable cards over the stage, anchored to a node (or the centre)
  * plus a world-space offset (dx,dy). Screen position = world·k + translate, so they
  * track pan/zoom. The grip (⠿) drags the card — that updates the offset (world units)
- * via onMove; the title + body are edited inline via onEdit; ✕ unpins. Marked
- * data-panel so the stage's own pan/drag handlers ignore pointer events on the card.
+ * via onMove; it's a real <button>, so keyboard users can nudge the card with the arrow
+ * keys (Shift = larger step) too. The title + body are edited inline via onEdit; ✕
+ * unpins. Marked data-panel so the stage's own pan/drag handlers ignore pointer events.
  */
+const NUDGE = 12; // world-units per arrow-key press (keyboard reposition)
+
 export function StickyNotes({ notes, positions, transform, currentKey, nmap, onMove, onEdit, onUnpin }) {
   const { t } = useI18n();
   const dragRef = useRef(null);
@@ -25,6 +28,14 @@ export function StickyNotes({ notes, positions, transform, currentKey, nmap, onM
     onMove(d.id, d.dx0 + (e.clientX - d.startX) / d.k, d.dy0 + (e.clientY - d.startY) / d.k);
   };
   const onUp = (e) => { if (dragRef.current) { e.currentTarget.releasePointerCapture?.(e.pointerId); dragRef.current = null; } };
+  // Keyboard reposition: arrow keys nudge the note's world-space offset.
+  const onKey = (e, n) => {
+    const v = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!v) return;
+    e.preventDefault();
+    const s = NUDGE * (e.shiftKey ? 4 : 1);
+    onMove(n.id, n.pin.dx + v[0] * s, n.pin.dy + v[1] * s);
+  };
 
   return (
     <>
@@ -36,8 +47,9 @@ export function StickyNotes({ notes, positions, transform, currentKey, nmap, onM
         return (
           <div key={n.id} data-panel="1" className="ag-sticky" style={{ left, top }}>
             <div className="ag-sticky-bar">
-              <span className="ag-sticky-grip" title={t("ws.pinned")} aria-hidden="true"
-                onPointerDown={(e) => onDown(e, n)} onPointerMove={onMoveEvt} onPointerUp={onUp} onPointerCancel={onUp}>⠿</span>
+              <button type="button" className="ag-sticky-grip" title={t("ws.moveNote")} aria-label={t("ws.moveNote")}
+                onPointerDown={(e) => onDown(e, n)} onPointerMove={onMoveEvt} onPointerUp={onUp} onPointerCancel={onUp}
+                onKeyDown={(e) => onKey(e, n)}>⠿</button>
               <input className="ag-sticky-titlein" value={n.title} placeholder={t("ws.noteTitlePh")}
                 onChange={(e) => onEdit(n.id, { title: e.target.value })} />
               <button type="button" className="ag-sticky-x" aria-label={t("ws.unpin")} title={t("ws.unpin")} onClick={() => onUnpin(n.id)}>✕</button>

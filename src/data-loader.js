@@ -21,6 +21,13 @@ export function loadHafsData() {
   return fetchJSON("data/quran-hafs.json");
 }
 
+// Build provenance manifest { builtAt, sources:[{ id, label, repo, ref, sha256, … }] }.
+// Optional — resolves to null if the build didn't emit it (older builds / dev), so the
+// caller can simply hide the section rather than error.
+export function loadSources() {
+  return fetchJSON("data/sources.json").catch(() => null);
+}
+
 // Precomputed normForm → root map (eager — needed for root-mode grouping).
 export function loadRoots() {
   return fetchJSON("data/roots.json");

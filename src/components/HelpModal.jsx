@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { loadSources } from "../data-loader.js";
 
 /* ═══ Help / guide ═══
  * A visual, scrollable guide — opened from the toolbar. Examples are colour-coded
@@ -86,6 +87,10 @@ export function HelpModal({ open, onClose }) {
   const { t } = useI18n();
   const dialogRef = useRef(null);
   useModalFocus(open, dialogRef, { onEscape: onClose });
+  // Lazy-load the build's source-provenance manifest the first time Help opens; null
+  // when the build didn't emit one (older builds), in which case the section is hidden.
+  const [sources, setSources] = useState(null);
+  useEffect(() => { if (open && !sources) loadSources().then(setSources).catch(() => {}); }, [open, sources]);
 
   if (!open) return null;
   return (
@@ -156,6 +161,23 @@ export function HelpModal({ open, onClose }) {
             [t("help.lenientMatch"), <>{t("help.lenientMatchD1")}{ex("آية", GREEN)}={ex("اية", GREEN)}{t("help.lenientMatchD2")}{ex(t("help.exWordMode"), BLUE)}{t("help.lenientMatchD3")}{ex(t("help.strict"), RED)}.</>],
             [t("help.coverage"), t("help.coverageD")],
           ])}
+
+          {sources?.sources?.length > 0 && (
+            <section className="ag-help-sec">
+              <h3 className="ag-help-h">{t("help.sourcesTitle")}</h3>
+              <p className="ag-hint">{t("help.sourcesIntro")}{sources.builtAt ? t("help.sourcesBuilt", { date: sources.builtAt.slice(0, 10) }) : ""}</p>
+              <dl className="ag-help-dl">
+                {sources.sources.map((s) => (
+                  <div className="ag-help-row" key={s.id}>
+                    <dt className="ag-help-t">{s.label}</dt>
+                    <dd className="ag-help-d" style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", wordBreak: "break-all" }}>
+                      {s.skipped ? t("help.sourcesSkipped") : <>{s.repo}@{String(s.ref).slice(0, 12)}{s.sha256 ? <> · sha256 {s.sha256.slice(0, 12)}…</> : null}</>}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           <p className="ag-hint" style={{ textAlign: "center", paddingBlock: "var(--space-3)" }}>
             {t("help.footer")}

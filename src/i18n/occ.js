@@ -13,6 +13,15 @@ export const ar = {
   "occ.kwicBtn": "سياقي",
   "occ.exportJson": "تصدير البيانات (JSON)",
   "occ.close": "إغلاق",
+  "occ.col.sura": "السورة",
+  "occ.col.aya": "الآية",
+  "occ.col.ref": "المرجع",
+  "occ.col.text": "النص",
+  "occ.col.before": "قبل",
+  "occ.col.word": "الكلمة",
+  "occ.col.after": "بعد",
+  "occ.file.verses": "آيات-{label}",
+  "occ.file.context": "سياق-{label}",
 };
 
 export const en = {
@@ -30,4 +39,13 @@ export const en = {
   "occ.kwicBtn": "KWIC",
   "occ.exportJson": "Export data (JSON)",
   "occ.close": "Close",
+  "occ.col.sura": "Surah",
+  "occ.col.aya": "Ayah",
+  "occ.col.ref": "Reference",
+  "occ.col.text": "Text",
+  "occ.col.before": "Before",
+  "occ.col.word": "Word",
+  "occ.col.after": "After",
+  "occ.file.verses": "verses-{label}",
+  "occ.file.context": "concordance-{label}",
 };

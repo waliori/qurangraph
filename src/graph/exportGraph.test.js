@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { toCsv, serializeSvg, buildConcordance } from "./exportGraph.js";
+import { toCsv, serializeSvg, buildConcordance, buildBibtex, buildRis } from "./exportGraph.js";
 
 describe("toCsv", () => {
   it("escapes commas, quotes and newlines; leaves plain cells", () => {
@@ -39,6 +39,39 @@ describe("buildConcordance (KWIC)", () => {
   it("respects the context window size", () => {
     const rows = buildConcordance(["1:1"], (k) => verseWords[k], (w) => w.orig === "العالمين", meta, 1);
     expect(rows[1]).toEqual([1, 1, "1:1", "رب", "العالمين", ""]); // only 1 word of left context
+  });
+
+  it("accepts a translated header row", () => {
+    const en = ["Surah", "Ayah", "Ref", "Before", "Word", "After"];
+    const rows = buildConcordance(["1:1"], (k) => verseWords[k], (w) => w.orig === "رب", meta, 1, en);
+    expect(rows[0]).toEqual(en);
+  });
+});
+
+describe("citation export", () => {
+  const info = {
+    root: "غفر", lexLabel: "Maqāyīs al-Lugha",
+    edition: { title: "Maqāyīs al-Lugha", author: "Ibn Fāris", died: "395", editor: "ʿAbd al-Salām Hārūn", publisher: "Dār al-Fikr", year: "1979" },
+    cite: { vol: 4, page: 385 },
+  };
+
+  it("builds a BibTeX entry with edition fields and an s.v. note", () => {
+    const bib = buildBibtex(info);
+    expect(bib).toMatch(/^@book\{/);
+    expect(bib).toContain("author = {Ibn Fāris (d. 395)}");
+    expect(bib).toContain("publisher = {Dār al-Fikr}");
+    expect(bib).toContain("year = {1979}");
+    expect(bib).toContain("volume = {4}");
+    expect(bib).toContain("note = {s.v. غفر, vol. 4, p. 385}");
+  });
+
+  it("builds an RIS entry and omits fields that are missing", () => {
+    const ris = buildRis({ root: "غفر", lexLabel: "Lisān", edition: null, cite: null });
+    expect(ris).toContain("TY  - BOOK");
+    expect(ris).toContain("TI  - Lisān");
+    expect(ris).toContain("KW  - غفر");
+    expect(ris).toContain("ER  - ");
+    expect(ris).not.toContain("PB  -"); // no publisher → line omitted
   });
 });
 

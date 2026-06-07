@@ -60,6 +60,12 @@ export const ar = {
   "common.hud.morphTitle": "تصفية صرفية فعّالة — تُقيّد الرسم والبحث",
   "common.hud.noPosTitle": "الشبكة كبيرة: رابط المشاركة سيعيد بناء التوزيع تقريبيًّا ولن يحفظ مواضع العقد بدقّة",
   "common.hud.noPos": "⚠ الرابط لا يحفظ المواضع",
+  "common.hud.incomplete": "⚠ {n} آية مخفية",
+  "common.hud.incompleteTitle": "تجاوزت بعض الكلمات حدّ «عدد الآيات لكل كلمة» — اضغط عقدة +N أو ارفع الحدّ لعرض الباقي",
+  "common.hud.truncated": "⚠ الشبكة مقتطعة",
+  "common.hud.truncatedTitle": "بلغ البناء الحدّ الأقصى للأمان — قلّل التوسعة لعرض الشبكة كاملةً",
+  "common.hud.refining": "⟳ تدقيق القراءات",
+  "common.hud.refiningTitle": "يُعرض الرسم بالقراءة الأكثر شيوعًا ريثما تُحمَّل بيانات الصرف، ثم يُدقَّق لكل موضع",
 
   // Legend
   "common.legend.center": "المركز (الآية المختارة)",
@@ -101,10 +107,26 @@ export const ar = {
   "common.boot.error": "تعذّر تحميل بيانات القرآن.",
   "common.boot.retry": "إعادة المحاولة",
   "common.boot.loading": "جارٍ نسج الشبكة القرآنية…",
+  "common.boot.crash": "حدث خطأ غير متوقع في الشبكة.",
 
   // SVG graph aria
   "common.graphRole": "شبكة بيانية",
   "common.graphAria": "شبكة الآية {sn} {a}: {n} عقدة و{m} رابط، بنمط {mode}. تنقّل بين العقد بمفتاح Tab.",
+
+  // Per-node aria (built from fragments — keep punctuation so they concatenate cleanly)
+  "common.aria.center": "الآية المركزية: {label}",
+  "common.aria.word": "كلمة {label}، وردت في {count} آية",
+  "common.aria.wordRoot": "، جذر {root}",
+  "common.aria.wordExpanded": "، موسَّعة، اضغط للطي",
+  "common.aria.wordCollapse": "، اضغط للتوسيع",
+  "common.aria.verse": "آية {label}",
+  "common.aria.verseVia": "، متّصلة عبر «{word}»",
+  "common.aria.verseShares": "، تشارك {count} كلمة",
+  "common.aria.verseExpanded": "، موسَّعة",
+  "common.aria.verseSelect": "، اضغط للتحديد",
+  "common.aria.overflow": "{count} آية إضافية مخفية، اضغط لعرض جميع المواضع",
+  "common.aria.graphGroup": "شبكة الآية: {n} عقدة. تنقّل بين العقد بمفتاح Tab.",
+  "common.aria.graphTooLarge": "الشبكة كبيرة ({n} عقدة) — استخدم البحث أو قائمة الكلمات الموسّعة للتنقّل.",
 
   // Hover tooltip
   "common.tip.verse": "آية",
@@ -144,6 +166,9 @@ export const ar = {
   "common.cite.sep": "، ",
   "common.cite.title": "بيانات الطبعة من مصدر OpenITI — رقم الجزء/الصفحة تقريبيّ وفق مواضع الترقيم",
   "common.cite.volPage": "ج{vol} · ص{page}",
+  "common.cite.bib": "تصدير اقتباس BibTeX",
+  "common.cite.ris": "تصدير اقتباس RIS",
+  "common.cite.cite": "اقتباس",
 
   // Morphology card
   "common.morph.title": "التحليل الصرفي",
@@ -250,6 +275,12 @@ export const en = {
   "common.hud.morphTitle": "Morphology filter active — constrains graph and search",
   "common.hud.noPosTitle": "Large graph: the share link rebuilds the layout approximately and won't save node positions precisely",
   "common.hud.noPos": "⚠ Link doesn't save positions",
+  "common.hud.incomplete": "⚠ {n} verses hidden",
+  "common.hud.incompleteTitle": "Some words exceed the “verses per word” cap — click a +N node or raise the cap to see the rest",
+  "common.hud.truncated": "⚠ Graph truncated",
+  "common.hud.truncatedTitle": "The build hit its safety limit — reduce the expansion to render the whole graph",
+  "common.hud.refining": "⟳ Refining readings",
+  "common.hud.refiningTitle": "Shown with the commonest reading until morphology loads, then refined per occurrence",
 
   // Legend
   "common.legend.center": "Center (selected verse)",
@@ -291,10 +322,26 @@ export const en = {
   "common.boot.error": "Failed to load Qur'an data.",
   "common.boot.retry": "Retry",
   "common.boot.loading": "Weaving the Qur'anic network…",
+  "common.boot.crash": "An unexpected error occurred in the network.",
 
   // SVG graph aria
   "common.graphRole": "Network graph",
   "common.graphAria": "Network for verse {sn} {a}: {n} nodes and {m} links, in {mode} mode. Navigate nodes with Tab.",
+
+  // Per-node aria (built from fragments — keep punctuation so they concatenate cleanly)
+  "common.aria.center": "Center verse: {label}",
+  "common.aria.word": "Word {label}, occurs in {count} verses",
+  "common.aria.wordRoot": ", root {root}",
+  "common.aria.wordExpanded": ", expanded, activate to collapse",
+  "common.aria.wordCollapse": ", activate to expand",
+  "common.aria.verse": "Verse {label}",
+  "common.aria.verseVia": ", linked via «{word}»",
+  "common.aria.verseShares": ", shares {count} words",
+  "common.aria.verseExpanded": ", expanded",
+  "common.aria.verseSelect": ", activate to select",
+  "common.aria.overflow": "{count} more hidden verses, activate to list all occurrences",
+  "common.aria.graphGroup": "Verse network: {n} nodes. Navigate nodes with Tab.",
+  "common.aria.graphTooLarge": "Large graph ({n} nodes) — use search or the expanded-words list to navigate.",
 
   // Hover tooltip
   "common.tip.verse": "verses",
@@ -334,6 +381,9 @@ export const en = {
   "common.cite.sep": ", ",
   "common.cite.title": "Edition data from OpenITI — volume/page number is approximate per pagination markers",
   "common.cite.volPage": "Vol. {vol} · p. {page}",
+  "common.cite.bib": "Export BibTeX citation",
+  "common.cite.ris": "Export RIS citation",
+  "common.cite.cite": "Cite",
 
   // Morphology card
   "common.morph.title": "Morphological analysis",

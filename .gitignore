@@ -11,3 +11,4 @@ dist
 /public/data/lemmas.json
 /public/data/morphology.json
 /public/data/lexicons/
+/public/data/sources.json

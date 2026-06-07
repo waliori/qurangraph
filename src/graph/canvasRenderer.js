@@ -20,6 +20,12 @@ const QURAN_FONT = '"Amiri", "Scheherazade New", "Noto Naskh Arabic", serif';
 const UI_FONT = 'system-ui, "Segoe UI", sans-serif';
 const MONO_FONT = '"DejaVu Sans Mono", ui-monospace, monospace';
 
+// Level-of-detail: text smaller than this many DEVICE-independent screen pixels is
+// unreadable clutter and just costs fill time, so it's skipped. A label drawn at world
+// font-size `s` appears at `s·k` screen px (k = zoom), so we gate each text on `s·k`.
+// Zoomed out, labels drop away and only the node discs remain; zoomed in they return.
+const MIN_LABEL_PX = 5.5;
+
 const posOf = (n, positions) => positions[n.id] || { x: n.x, y: n.y };
 
 export function drawScene(ctx, scene) {
@@ -107,6 +113,27 @@ export function drawScene(ctx, scene) {
     const isAW = activeWordNodeIds.has(n.id);
     const onP = highlightSet ? highlightSet.has(n.id) : true;
     const dim = !(onP || isAW) && anyHighlight;
+
+    // Overflow meta-node: muted dashed disc + "+N" (the verses the per-word cap hid).
+    if (n.type === "overflow") {
+      ctx.save();
+      ctx.globalAlpha = dim ? 0.42 : 1;
+      ctx.translate(p.x, p.y);
+      ctx.beginPath(); ctx.arc(0, 0, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = (L ? "#9a9077" : "#586a88") + "22";
+      ctx.fill();
+      ctx.strokeStyle = L ? "#9a9077" : "#8d9bb5";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([3, 2]); ctx.stroke(); ctx.setLineDash([]);
+      if (9 * k >= MIN_LABEL_PX) {
+        ctx.fillStyle = L ? "#6f6757" : "#8d9bb5";
+        ctx.font = `bold 9px ${MONO_FONT}`;
+        ctx.fillText(n.label, 0, 3);
+      }
+      ctx.restore();
+      continue;
+    }
+
     const isH = hovered === n.id, isS = selected === n.id;
     const isWE = n.type === "word" && n.isExpanded;
     const isVE = n.type === "verse" && n.isExpanded;
@@ -144,34 +171,40 @@ export function drawScene(ctx, scene) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Inner count.
-    if (n.type === "word") {
-      ctx.fillStyle = L ? "#2a2620" : "#fff";
-      ctx.font = `bold 8px ${MONO_FONT}`;
-      ctx.fillText(String(n.count || ""), 0, 3.5);
-    } else if (n.type === "verse" && (n.sharedCount || 0) > 1) {
-      ctx.fillStyle = cGold;
-      ctx.font = `bold 7px ${MONO_FONT}`;
-      ctx.fillText(String(n.sharedCount), 0, 3);
+    // Inner count (gated by LOD — 8/7px world text vanishes when zoomed out).
+    if (8 * k >= MIN_LABEL_PX) {
+      if (n.type === "word") {
+        ctx.fillStyle = L ? "#2a2620" : "#fff";
+        ctx.font = `bold 8px ${MONO_FONT}`;
+        ctx.fillText(String(n.count || ""), 0, 3.5);
+      } else if (n.type === "verse" && (n.sharedCount || 0) > 1) {
+        ctx.fillStyle = cGold;
+        ctx.font = `bold 7px ${MONO_FONT}`;
+        ctx.fillText(String(n.sharedCount), 0, 3);
+      }
     }
 
-    // Label.
-    const labelFill = isS || isAW ? sel : n.type === "verse" ? T.textDim : col;
-    ctx.fillStyle = labelFill;
+    // Label (LOD: skip when it would render below MIN_LABEL_PX on screen).
     const lsize = n.type === "center" ? 12 : n.type === "word" ? 12 : 8;
-    const lweight = n.type !== "verse" ? "bold " : "";
-    ctx.font = `${lweight}${lsize}px ${n.type === "verse" ? UI_FONT : QURAN_FONT}`;
-    ctx.direction = "rtl";
-    ctx.fillText(n.label, 0, n.type === "word" ? -r - 4 : r + 11);
+    if (lsize * k >= MIN_LABEL_PX) {
+      const labelFill = isS || isAW ? sel : n.type === "verse" ? T.textDim : col;
+      ctx.fillStyle = labelFill;
+      const lweight = n.type !== "verse" ? "bold " : "";
+      ctx.font = `${lweight}${lsize}px ${n.type === "verse" ? UI_FONT : QURAN_FONT}`;
+      ctx.direction = "rtl";
+      ctx.fillText(n.label, 0, n.type === "word" ? -r - 4 : r + 11);
+      ctx.direction = "inherit";
+    }
 
-    // Root sub-label.
-    if (n.type === "word" && n.rootLabel && n.rootLabel !== norm(n.label)) {
+    // Root sub-label (LOD-gated, 8px world).
+    if (n.type === "word" && n.rootLabel && n.rootLabel !== norm(n.label) && 8 * k >= MIN_LABEL_PX) {
       ctx.globalAlpha = (dim ? 0.42 : 1) * (L ? 0.95 : 0.75);
       ctx.fillStyle = cVir;
       ctx.font = `8px ${UI_FONT}`;
+      ctx.direction = "rtl";
       ctx.fillText(`(${n.rootLabel})`, 0, -r - 23);
+      ctx.direction = "inherit";
     }
-    ctx.direction = "inherit";
     ctx.restore();
   }
   ctx.globalAlpha = 1;

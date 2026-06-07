@@ -14,19 +14,19 @@
  * This lets callers pin already-placed nodes and let new ones settle around
  * them without disturbing the existing layout.
  *
- * Repulsion/collision use a uniform spatial-hash grid so the per-iteration cost
- * is ~O(n) for evenly-spread graphs instead of O(n²). The grid cell size equals
- * the interaction cutoff radius, so every pair within range lands in the same or
- * an adjacent cell — the set of pairs considered is identical to the old
- * all-pairs loop with its `d2 > CUTOFF` early-out, only without visiting the
- * far-apart pairs that were skipped anyway.
+ * Repulsion is long-range via a Barnes-Hut quadtree (quadtree.js): every body feels
+ * every other (distant groups approximated by their centre of mass) in O(n log n),
+ * with no distance cutoff — so far-apart clusters still repel and don't overlap.
+ * Collision (local overlap resolution) keeps a uniform grid, sized so a 3×3 scan
+ * around a cell covers any colliding pair, which is genuinely O(n).
  *
- * Shared force constants (CUTOFF2 / CELL / PAD / DEFAULT_LINK_DIST) and the grid /
- * hash helpers live in forceConstants.js, so this batch layout and the live engine
- * in simulation.js can never drift apart.
+ * Shared force constants (REP_STRENGTH / REP_SOFT / COLLIDE_CELL / PAD /
+ * DEFAULT_LINK_DIST) and the grid / hash helpers live in forceConstants.js, so this
+ * batch layout and the live engine in simulation.js can never drift apart.
  */
 
-import { CUTOFF2, CELL, PAD, DEFAULT_LINK_DIST, cellKey, hash } from "./forceConstants.js";
+import { REP_STRENGTH, REP_SOFT, COLLIDE_CELL, PAD, DEFAULT_LINK_DIST, cellKey, hash } from "./forceConstants.js";
+import { buildQuadtree, repulsionForce } from "./quadtree.js";
 
 export function forceLayout(nodes, links, W, H, iters = 160) {
   const cx = W / 2, cy = H / 2;
@@ -57,14 +57,15 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
   });
 
   const N = nodes.length;
-  // Visit each near pair once via a 3×3 neighbourhood of grid cells. Deterministic:
+  // Collision grid: visit each near pair once via a 3×3 neighbourhood of cells, sized
+  // so any colliding pair lands in the same or an adjacent cell. Deterministic:
   // depends only on node coordinates and array order, never on Math.random.
   const grid = new Map();
   const rebuildGrid = () => {
     grid.clear();
     for (let i = 0; i < N; i++) {
       const n = nodes[i];
-      const k = cellKey(Math.floor(n.x / CELL), Math.floor(n.y / CELL));
+      const k = cellKey(Math.floor(n.x / COLLIDE_CELL), Math.floor(n.y / COLLIDE_CELL));
       const bucket = grid.get(k);
       if (bucket) bucket.push(i); else grid.set(k, [i]);
     }
@@ -91,11 +92,21 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
       }
     }
 
-    // Pairwise repulsion + collision, bucketed by spatial grid.
+    // Long-range repulsion via Barnes-Hut: every node is pushed away from every other
+    // (distant groups summed at their centre of mass), so separate subtrees never
+    // overlap regardless of distance — the old grid cutoff zeroed this far field.
+    const tree = buildQuadtree(nodes);
+    for (const n of nodes) {
+      if (n.fixed) continue;
+      const { fx, fy } = repulsionForce(tree, n, REP_STRENGTH, REP_SOFT);
+      n.vx += fx * al; n.vy += fy * al;
+    }
+
+    // Collision: short-range overlap resolution, bucketed by the (small) grid.
     rebuildGrid();
     for (let i = 0; i < N; i++) {
       const a = nodes[i];
-      const gx = Math.floor(a.x / CELL), gy = Math.floor(a.y / CELL);
+      const gx = Math.floor(a.x / COLLIDE_CELL), gy = Math.floor(a.y / COLLIDE_CELL);
       for (let ox = -1; ox <= 1; ox++) {
         for (let oy = -1; oy <= 1; oy++) {
           const bucket = grid.get(cellKey(gx + ox, gy + oy));
@@ -103,8 +114,7 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
           for (const j of bucket) {
             if (j <= i) continue; // process each unordered pair once
             const b = nodes[j];
-            let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
-            if (d2 > CUTOFF2) continue;
+            const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
             const dist = Math.sqrt(d2) || 1;
             // Min gap is generous (not just r+r): every node carries a text label
             // (~60-80px wide for an āyah ref) drawn beside it, so a radius-only
@@ -115,9 +125,6 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
               if (!a.fixed) { a.vx -= dx * f; a.vy -= dy * f; }
               if (!b.fixed) { b.vx += dx * f; b.vy += dy * f; }
             }
-            const rep = -55 * al / (d2 + 200);
-            if (!a.fixed) { a.vx += dx / dist * rep; a.vy += dy / dist * rep; }
-            if (!b.fixed) { b.vx -= dx / dist * rep; b.vy -= dy / dist * rep; }
           }
         }
       }

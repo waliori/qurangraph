@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { get } from "https";
-import { createHash } from "node:crypto";
+import { SOURCES, raw, sha256 } from "./lib/sources.js";
 
 const TIMEOUT_MS = 60000;   // per-request socket timeout — never hang the build
 const MAX_REDIRECTS = 10;   // cap redirect chains so a loop can't spin forever
@@ -41,76 +41,27 @@ function download(url) {
   });
 }
 
-/* ── Source refs ──
- * Each source is pinned to a git ref here, in one place, so re-pinning (e.g. to a
- * specific commit SHA) is a one-line change. These default to the branches the
- * build currently tracks so nothing breaks. For reproducible builds these SHOULD
- * be pinned to commit SHAs rather than moving branches. Override per source with
- * the env var QG_<SOURCE>_REF (e.g. QG_TANZIL_REF=abc123). */
-const REFS = {
-  TANZIL: process.env.QG_TANZIL_REF || "master",
-  MORPHOLOGY: process.env.QG_MORPHOLOGY_REF || "master",
-  MAQAYIS: process.env.QG_MAQAYIS_REF || "master",
-  MUFRADAT: process.env.QG_MUFRADAT_REF || "master",
-  LISAN: process.env.QG_LISAN_REF || "master",
-};
-
-const raw = (repo, ref, path) => `https://raw.githubusercontent.com/${repo}/${ref}/${path}`;
-
-const TANZIL_URL = raw("q-ran/quran", REFS.TANZIL, "sources/1.0/quran-uthmani.xml");
-
-// Per-word morphology (incl. ROOT) — Quranic Arabic Corpus, Arabic-script mirror.
-const MORPHOLOGY_URL = raw("mustafa0x/quran-morphology", REFS.MORPHOLOGY, "quran-morphology.txt");
-
-// Mu'jam Maqayis al-Lugha (Ibn Faris, d.395) — OpenITI digitisation (Shamela 21710).
-const MAQAYIS_URL = raw("OpenITI/0400AH", REFS.MAQAYIS,
-  "data/0395IbnFarisQazwini/0395IbnFarisQazwini.MucjamMaqayis/0395IbnFarisQazwini.MucjamMaqayis.Shamela0021710-ara1");
-
-// Al-Mufradat fi Gharib al-Qur'an (al-Raghib al-Isfahani, d.502) — OpenITI (JK).
-const MUFRADAT_URL = raw("OpenITI/0525AH", REFS.MUFRADAT,
-  "data/0502RaghibIsbahani/0502RaghibIsbahani.Mufradat/0502RaghibIsbahani.Mufradat.JK001150-ara1");
-
-// Lisan al-'Arab (Ibn Manzur, d.711) — OpenITI (JK). Large (~25MB).
-const LISAN_URL = raw("OpenITI/0725AH", REFS.LISAN,
-  "data/0711IbnManzurIfriqi/0711IbnManzurIfriqi.LisanCarab/0711IbnManzurIfriqi.LisanCarab.JK000880-ara1");
-
 if (!existsSync("data/source")) mkdirSync("data/source", { recursive: true });
 
-// Log byte size + sha256 so build reproducibility can be tracked across runs.
-const report = (buf) => `${buf.length} bytes, sha256 ${createHash("sha256").update(buf).digest("hex")}`;
+// Log byte size + sha256 so build reproducibility can be tracked across runs. The
+// authoritative provenance manifest (public/data/sources.json) is written separately
+// by scripts/build-sources-manifest.js, which hashes whatever is actually on disk — so
+// it's correct whether the sources were downloaded here or copied in from git (the
+// Dockerfile path, which uses the committed corpora and skips this script).
+const report = (buf) => `${buf.length} bytes, sha256 ${sha256(buf)}`;
 
 async function main() {
-  console.log("Downloading Tanzil Uthmani XML...");
-  const xml = await download(TANZIL_URL);
-  writeFileSync("data/source/tanzil-uthmani.xml", xml);
-  console.log(`  -> ${report(xml)}`);
-
-  console.log("Downloading Quran word morphology (roots)...");
-  const morph = await download(MORPHOLOGY_URL);
-  writeFileSync("data/source/quran-morphology.txt", morph);
-  console.log(`  -> ${report(morph)}`);
-
-  console.log("Downloading Maqayis al-Lugha (Ibn Faris)...");
-  const maqayis = await download(MAQAYIS_URL);
-  writeFileSync("data/source/maqayis.txt", maqayis);
-  console.log(`  -> ${report(maqayis)}`);
-
-  // Extra lexicons are best-effort: a failure (e.g. moved OpenITI path) shouldn't
-  // break the core build, so each is caught and skipped.
-  for (const [name, url, out] of [
-    ["Mufradat (al-Raghib)", MUFRADAT_URL, "data/source/mufradat.txt"],
-    ["Lisan al-'Arab (Ibn Manzur)", LISAN_URL, "data/source/lisan.txt"],
-  ]) {
+  for (const s of SOURCES) {
     try {
-      console.log(`Downloading ${name}...`);
-      const buf = await download(url);
-      writeFileSync(out, buf);
+      console.log(`Downloading ${s.label}...`);
+      const buf = await download(raw(s.repo, s.ref, s.path));
+      writeFileSync(s.out, buf);
       console.log(`  -> ${report(buf)}`);
     } catch (e) {
-      console.warn(`  ! skipped ${name}: ${e.message}`);
+      if (s.core) throw e; // a core source failing must fail the build
+      console.warn(`  ! skipped ${s.label}: ${e.message}`);
     }
   }
-
   console.log("\nDone!");
 }
 

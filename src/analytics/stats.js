@@ -12,12 +12,22 @@ import { wordGroupKey } from "../arabic-utils.js";
  * root/lemma use the word's position-correct analysis when morphology is loaded). */
 const keyOf = wordGroupKey;
 
-/* [{ sura, name, count }] over every sūrah (zeros included) for `lookup`. */
-export function distributionBySura(lookup, index, verseData, surahList) {
+/* [{ sura, name, count }] over every sūrah (zeros included) for `lookup`.
+ *
+ * `count` is TRUE TOKEN FREQUENCY — the number of times the term occurs, so a word
+ * appearing 3× in one āyah counts 3, not 1. Counting needs the grouping `mode` to
+ * recognise each occurrence (exact surface / lemma / root). When `mode` is omitted
+ * we still count occurrences via the default exact key, so callers that don't pass a
+ * mode get token frequency rather than the old (misleading) verse/document frequency. */
+export function distributionBySura(lookup, index, verseData, surahList, mode) {
   const counts = {};
   for (const vk of index[lookup] || []) {
-    const s = verseData[vk]?.s;
-    if (s != null) counts[s] = (counts[s] || 0) + 1;
+    const v = verseData[vk];
+    if (!v || v.s == null) continue;
+    // Tally every matching token in the verse, not just the verse once.
+    let occ = 0;
+    for (const w of v.words || []) if (keyOf(w, mode) === lookup) occ++;
+    counts[v.s] = (counts[v.s] || 0) + (occ || 1); // ≥1: a verse in the index always has the term
   }
   return surahList.map((s) => ({ sura: s.id, name: s.name, count: counts[s.id] || 0 }));
 }
@@ -54,7 +64,14 @@ export function association(k, a, b, N) {
  * (for significance; defaults to verseData size) and `opts.sort` ∈ "count"|"pmi"|"ll"
  * picks the ranking (default "count"). Each result also carries pmi + ll so the UI
  * can show significance regardless of sort.
- * Returns [{ key, label, count, pmi, ll }]. */
+ *
+ * Significance (PMI / G²) is a VERSE-document model: the 2×2 table counts verses, so
+ * it is only valid when a "co-occurrence" means "in the same verse" — i.e. whole-verse
+ * mode (window ≥ 99). With a narrower window the co-occurrence count `k` is windowed
+ * but the marginals (verses containing each term) are not, which would mix two
+ * populations and bias the figures. So in windowed mode pmi/ll are returned as null
+ * (the ranking falls back to raw count) rather than reporting an inconsistent number.
+ * Returns [{ key, label, count, pmi, ll }] (pmi/ll null in windowed mode). */
 export function collocations(lookup, mode, index, verseData, stopSet, window = 99, opts = {}) {
   const tally = {};   // key → count
   const labels = {};  // key → a representative surface form
@@ -82,10 +99,12 @@ export function collocations(lookup, mode, index, verseData, stopSet, window = 9
   }
   const N = opts.N || Object.keys(verseData).length;
   const a = (index[lookup] || []).length; // verses containing the term
-  const sort = opts.sort || "count";
+  const wholeVerse = window >= 99; // the only window where the verse-document table is valid
+  let sort = opts.sort || "count";
+  if (!wholeVerse && (sort === "pmi" || sort === "ll")) sort = "count"; // no valid metric to sort by
   const out = Object.keys(tally).map((k) => {
     const b = (index[k] || []).length; // verses containing the neighbour
-    const { pmi, ll } = association(tally[k], a, b, N);
+    const { pmi, ll } = wholeVerse ? association(tally[k], a, b, N) : { pmi: null, ll: null };
     return { key: k, label: labels[k], count: tally[k], pmi, ll };
   });
   const cmp = sort === "pmi" ? (x, y) => y.pmi - x.pmi

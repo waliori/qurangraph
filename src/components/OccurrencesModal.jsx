@@ -61,19 +61,21 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             <button type="button" className="ag-btn" title={t("ws.saveTitle")}
               onClick={() => { ws.saveItem({ type: "occ", title: occ.label, payload: { lookup: occ.lookup, label: occ.label, mode: occ.mode } }); ws.toast(t("ws.saved")); }}>★</button>
             <button type="button" className="ag-btn" title={t("occ.exportCsv")}
-              onClick={() => exportCsvFile([["السورة", "الآية", "المرجع", "النص"], ...keys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `آيات-${occ.label}.csv`)}>⤓ CSV</button>
+              onClick={() => exportCsvFile([[t("occ.col.sura"), t("occ.col.aya"), t("occ.col.ref"), t("occ.col.text")], ...keys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `${t("occ.file.verses", { label: occ.label })}.csv`)}>⤓ CSV</button>
             <button type="button" className="ag-btn" title={t("occ.exportKwic")}
               onClick={() => exportCsvFile(buildConcordance(
                 keys,
                 (k) => verseData[k]?.words,
                 (w) => wordGroupKey(w, occ.mode) === occ.lookup,
                 (k) => { const v = verseData[k]; return { s: v.s, a: v.a, ref: `${v.sn} ${v.a}` }; },
-              ), `سياق-${occ.label}.csv`)}>⤓ {t("occ.kwicBtn")}</button>
+                5,
+                [t("occ.col.sura"), t("occ.col.aya"), t("occ.col.ref"), t("occ.col.before"), t("occ.col.word"), t("occ.col.after")],
+              ), `${t("occ.file.context", { label: occ.label })}.csv`)}>⤓ {t("occ.kwicBtn")}</button>
             <button type="button" className="ag-btn" title={t("occ.exportJson")}
               onClick={() => exportJsonFile({
                 term: occ.label, lookup: occ.lookup, mode: occ.mode, count: n,
                 verses: keys.map((k) => { const v = verseData[k]; return { sura: v.s, ayah: v.a, ref: `${v.sn} ${v.a}`, text: v.text }; }),
-              }, `آيات-${occ.label}.json`)}>⤓ JSON</button>
+              }, `${t("occ.file.verses", { label: occ.label })}.json`)}>⤓ JSON</button>
             <button type="button" className="ag-iconbtn" aria-label={t("occ.close")} onClick={onClose}>✕</button>
           </div>
         </div>

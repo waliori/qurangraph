@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { drawScene } from "../graph/canvasRenderer.js";
+import { nodeAria } from "./nodeAria.js";
+import { useI18n } from "../i18n/index.js";
 
 /* ═══ Canvas graph view ═══
  *
@@ -12,31 +14,20 @@ import { drawScene } from "../graph/canvasRenderer.js";
  * commit (hover / selection / transform / structure change).
  *
  * Accessibility: a canvas has no per-node DOM, so we render a visually-hidden list of
- * focusable buttons mirroring the nodes (same labels as the SVG path), giving
- * keyboard + screen-reader users the same reach.
+ * focusable buttons mirroring the nodes (translated labels, shared with the SVG path),
+ * giving keyboard + screen-reader users the same reach — BUT only up to MIRROR_CAP.
+ * Canvas mode exists precisely for huge graphs, where thousands of focusable buttons
+ * would both reintroduce the per-node DOM the canvas avoids AND be unusable (thousands
+ * of Tab stops). Past the cap we expose a short message pointing to search / the
+ * expanded-words list instead.
  */
 
-function nodeAria(n) {
-  if (n.type === "center") return `الآية المركزية: ${n.label}`;
-  if (n.type === "word") {
-    const parts = [`كلمة ${n.label}`, `وردت في ${n.count} آية`];
-    if (n.rootLabel) parts.push(`جذر ${n.rootLabel}`);
-    parts.push(n.isExpanded ? "موسَّعة، اضغط للطي" : "اضغط للتوسيع");
-    return parts.join("، ");
-  }
-  if (n.type === "verse") {
-    const parts = [`آية ${n.label}`];
-    if (n.connectingWord) parts.push(`متّصلة عبر «${n.connectingWord}»`);
-    if (n.sharedCount > 1) parts.push(`تشارك ${n.sharedCount} كلمة`);
-    parts.push(n.isExpanded ? "موسَّعة" : "اضغط للتحديد");
-    return parts.join("، ");
-  }
-  return n.label;
-}
+const MIRROR_CAP = 400;
 
 function GraphCanvasInner({ nodes, links, loopLinks, nmap, positionsRef, transform, dims, T, theme,
   showLoops, hovered, selected, activeWordNodeIds, highlightSet, highlightLinks, viewport,
   apiRef, onNodeClick, onNodeEnter, onNodeLeave }) {
+  const { t } = useI18n();
   const canvasRef = useRef(null);
   const dprRef = useRef(1);
   // Latest props, read by the imperative draw() so the parent can repaint at any time
@@ -73,25 +64,29 @@ function GraphCanvasInner({ nodes, links, loopLinks, nmap, positionsRef, transfo
   }, [apiRef, draw]);
 
   // Refresh the props snapshot then repaint after every commit (hover / selection /
-  // transform / structure / theme change).
+  // transform / structure / theme change). The explicit dep list documents exactly
+  // what a repaint depends on (positionsRef is a stable ref — its .current is read live
+  // by draw(), and sim ticks repaint through apiRef, so it isn't a dep here).
   useEffect(() => {
     propsRef.current = { nodes, links, loopLinks, nmap, positionsRef, transform, dims, T, theme, showLoops, hovered, selected, activeWordNodeIds, highlightSet, highlightLinks, viewport };
     draw();
-  });
+  }, [nodes, links, loopLinks, nmap, positionsRef, transform, dims, T, theme, showLoops, hovered, selected, activeWordNodeIds, highlightSet, highlightLinks, viewport, draw]);
 
   return (
     <>
       <canvas ref={canvasRef} className="ag-canvas" aria-hidden="true"
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
-      {/* Visually-hidden, focusable mirror of the nodes for keyboard / screen readers. */}
-      <div className="ag-sr-only" data-panel="1" role="group"
-        aria-label={`شبكة الآية: ${nodes.length} عقدة. تنقّل بين العقد بمفتاح Tab.`}>
-        {nodes.map((n) => (
-          <button key={n.id} type="button" aria-label={nodeAria(n)}
-            aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
-            onFocus={() => onNodeEnter(n)} onBlur={() => onNodeLeave(n)}
-            onClick={(e) => onNodeClick(n, e)}>{n.label}</button>
-        ))}
+      {/* Visually-hidden, focusable mirror of the nodes for keyboard / screen readers —
+          capped so a huge canvas graph doesn't recreate thousands of DOM nodes. */}
+      <div className="ag-sr-only" data-panel="1" role="group" aria-label={t("common.aria.graphGroup", { n: nodes.length })}>
+        {nodes.length <= MIRROR_CAP
+          ? nodes.map((n) => (
+              <button key={n.id} type="button" aria-label={nodeAria(n, t)}
+                aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
+                onFocus={() => onNodeEnter(n)} onBlur={() => onNodeLeave(n)}
+                onClick={(e) => onNodeClick(n, e)}>{n.label}</button>
+            ))
+          : <p>{t("common.aria.graphTooLarge", { n: nodes.length })}</p>}
       </div>
     </>
   );

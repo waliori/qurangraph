@@ -3,6 +3,7 @@ import { loadLexicon, loadLexiconFullShard, loadLexiconManifest } from "../data-
 import { shardOf } from "../lexiconShard.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
+import { buildBibtex, buildRis, exportTextFile } from "../graph/exportGraph.js";
 
 /* ═══ Definition modal ═══
  *
@@ -44,6 +45,12 @@ export function DefinitionModal({ def, onClose }) {
   };
   const body = entry ? (open ? (full || entry.f || entry.c) : entry.c) : null;
   const edStr = ed ? [ed.editor && t("common.cite.editor", { name: ed.editor }), ed.publisher, ed.year].filter(Boolean).join(t("common.cite.sep")) : "";
+  const citeInfo = { root: def.root, lexLabel: lex?.label || def.lexicon, edition: ed || null, cite: cite || null };
+  const exportCite = (kind) => {
+    const base = `cite-${def.lexicon}-${def.root}`;
+    if (kind === "ris") exportTextFile(buildRis(citeInfo), `${base}.ris`, "application/x-research-info-systems");
+    else exportTextFile(buildBibtex(citeInfo), `${base}.bib`, "application/x-bibtex");
+  };
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
@@ -66,12 +73,15 @@ export function DefinitionModal({ def, onClose }) {
             <div className="ag-insp-cite" title={t("common.cite.title")}>
               {cite && <span className="ag-insp-cite-pg">{t("common.cite.volPage", { vol: cite.vol, page: cite.page })}</span>}
               {edStr && <span className="ag-insp-cite-ed">{edStr}</span>}
-              {shards > 0 && (
-                <button type="button" className="ag-btn is-gold" style={{ marginInlineStart: "auto" }}
-                  onClick={() => (open ? setOpen(false) : readMore())}>
-                  {open ? t("common.insp.less") : t("common.insp.more")}
-                </button>
-              )}
+              <span style={{ display: "flex", gap: "var(--space-2)", marginInlineStart: "auto" }}>
+                <button type="button" className="ag-btn" title={t("common.cite.bib")} onClick={() => exportCite("bib")}>⧉ BibTeX</button>
+                <button type="button" className="ag-btn" title={t("common.cite.ris")} onClick={() => exportCite("ris")}>⧉ RIS</button>
+                {shards > 0 && (
+                  <button type="button" className="ag-btn is-gold" onClick={() => (open ? setOpen(false) : readMore())}>
+                    {open ? t("common.insp.less") : t("common.insp.more")}
+                  </button>
+                )}
+              </span>
             </div>
           )}
         </div>
