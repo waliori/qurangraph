@@ -162,7 +162,11 @@ recentre.
 How a term spreads across the 114 sūrahs (true token frequency — three hits in one
 āyah count as three). A bar per sūrah (click to list that sūrah's occurrences),
 plus a ranked **collocates** section (neighbouring words by count / PMI / signed
-log-likelihood; click to drill in). Save to workspace; export CSV/JSON.
+log-likelihood; click to drill in), and a **direct neighbours** section — the word
+sitting *immediately* before / after / either side of the term across the whole
+corpus (true adjacency / bigram frequency, counted per occurrence; particles kept,
+since the immediate grammatical neighbour is the point here). Save to workspace;
+export CSV/JSON.
 
 ### Compare modal
 Two terms side by side (A ⇄ B), each with its own pick + mode. Paired

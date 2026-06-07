@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { distributionBySura, collocations } from "../analytics/stats.js";
+import { distributionBySura, collocations, directNeighbors } from "../analytics/stats.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
@@ -18,11 +18,14 @@ import { fColor } from "../theme.js";
 // association measures that correct for how common each word is on its own.
 // Labels/titles are resolved per id via t() inside the component (hook scope).
 const COLLOC_SORT_IDS = ["count", "ll", "pmi"];
+// Which side of the term the direct-neighbour list ranks by.
+const NBR_SIDE_IDS = ["before", "after", "both"];
 
 export function DistributionModal({ dist, index, verseData, surahList, stopSet, theme, onSurah, onPick, onCompare, onClose }) {
   const { t } = useI18n();
   const ws = useWorkspace();
   const [collocSort, setCollocSort] = useState("ll");
+  const [nbrSide, setNbrSide] = useState("both");
   const data = useMemo(() => {
     if (!dist) return null;
     const distribution = distributionBySura(dist.lookup, index, verseData, surahList, dist.mode).filter((d) => d.count > 0);
@@ -31,6 +34,13 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
     const max = distribution.reduce((m, d) => Math.max(m, d.count), 1);
     return { distribution, colloc, total, max };
   }, [dist, index, verseData, surahList, stopSet, collocSort]);
+  // Adjacency is position-aware but side-independent to compute, so build the full
+  // before/after table once and re-rank per side without rescanning the corpus.
+  const nbrAll = useMemo(() => (dist ? directNeighbors(dist.lookup, dist.mode, index, verseData) : []), [dist, index, verseData]);
+  const neighbors = useMemo(() => {
+    const metric = nbrSide === "before" ? (n) => n.before : nbrSide === "after" ? (n) => n.after : (n) => n.total;
+    return nbrAll.filter((n) => metric(n) > 0).sort((x, y) => metric(y) - metric(x) || x.key.localeCompare(y.key)).slice(0, 60);
+  }, [nbrAll, nbrSide]);
 
   const dialogRef = useRef(null);
   useModalFocus(!!dist, dialogRef, { onEscape: onClose });
@@ -40,6 +50,8 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   // The association figure shown on each chip tracks the active sort.
   const metricOf = (c) => collocSort === "pmi" ? c.pmi : collocSort === "ll" ? c.ll : null;
   const fmtMetric = (v) => (v == null ? "" : Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1));
+  // The number shown bold on each neighbour chip = the active side's count.
+  const nbrCount = (n) => (nbrSide === "before" ? n.before : nbrSide === "after" ? n.after : n.total);
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
@@ -116,6 +128,30 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="ag-dist-sec">
+            <div className="ag-dist-sec-h">
+              <span>{t("nbr.title")}</span>
+              <button type="button" className="ag-btn" title={t("nbr.exportCsv")}
+                onClick={() => exportCsvFile([[t("nbr.colWord"), t("nbr.colBefore"), t("nbr.colAfter"), t("nbr.colTotal")], ...neighbors.map((n) => [n.label, n.before, n.after, n.total])], t("nbr.file", { label: dist.label }))}>⤓ CSV</button>
+            </div>
+            <div className="ag-seg ag-seg-sm" role="group" aria-label={t("nbr.title")} style={{ marginBlockEnd: "var(--space-2)" }}>
+              {NBR_SIDE_IDS.map((id) => (
+                <button type="button" key={id} className={nbrSide === id ? "is-on" : ""} title={t(`nbr.side.${id}.title`)}
+                  aria-pressed={nbrSide === id} onClick={() => setNbrSide(id)}>{t(`nbr.side.${id}.label`)}</button>
+              ))}
+            </div>
+            <p className="ag-hint">{t("nbr.hint", { label: dist.label })}</p>
+            <div className="ag-dist-tags">
+              {neighbors.length === 0 ? <span className="ag-dist-name">{t("nbr.none")}</span> : neighbors.map((n) => (
+                <button type="button" className="ag-tag ag-tag-btn" key={n.key} onClick={() => onPick?.(n.key, n.label)}
+                  title={t("nbr.chipTitle", { label: n.label, before: n.before, after: n.after, total: n.total })}>
+                  {n.label} <b style={{ color: "var(--gold-400)" }}>{nbrCount(n)}</b>
+                  {nbrSide === "both" && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{n.before}·{n.after}</span>}
+                </button>
+              ))}
             </div>
           </div>
         </div>

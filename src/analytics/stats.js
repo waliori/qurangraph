@@ -113,6 +113,35 @@ export function collocations(lookup, mode, index, verseData, stopSet, window = 9
   return out.sort((x, y) => cmp(x, y) || x.key.localeCompare(y.key));
 }
 
+/* Words that occur IMMEDIATELY before/after `lookup` across the whole corpus —
+ * true positional adjacency (bigram frequency), unlike collocations() which is
+ * whole-verse co-occurrence. For every occurrence of the term, the token at
+ * position −1 is tallied as a "before" neighbour and the token at +1 as an
+ * "after" neighbour, grouped by the active-mode key. Particles are KEPT here (the
+ * immediate grammatical neighbour — a preposition, a conjunction — is precisely
+ * the signal in an adjacency study, where in whole-verse collocation it is noise).
+ * Self-adjacency (neighbour key === the term) is skipped. Counts are token-level:
+ * each adjacency instance counts once, so a verse with the term twice contributes
+ * up to two neighbours per side.
+ * Returns [{ key, label, before, after, total }] sorted by total desc (the caller
+ * re-sorts/filters per side). */
+export function directNeighbors(lookup, mode, index, verseData) {
+  const before = {}, after = {}, labels = {};
+  const tally = (bag, w, k) => { bag[k] = (bag[k] || 0) + 1; if (!labels[k]) labels[k] = w.orig; };
+  for (const vk of index[lookup] || []) {
+    const words = verseData[vk]?.words || [];
+    words.forEach((w, i) => {
+      if (keyOf(w, mode) !== lookup) return;
+      if (i > 0) { const p = words[i - 1], k = keyOf(p, mode); if (k !== lookup) tally(before, p, k); }
+      if (i < words.length - 1) { const nx = words[i + 1], k = keyOf(nx, mode); if (k !== lookup) tally(after, nx, k); }
+    });
+  }
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys]
+    .map((k) => { const b = before[k] || 0, a = after[k] || 0; return { key: k, label: labels[k], before: b, after: a, total: b + a }; })
+    .sort((x, y) => y.total - x.total || x.key.localeCompare(y.key));
+}
+
 /* Split two collocation lists (each from collocations()) into the neighbours SHARED
  * by both terms vs. those distinct to each — the core of compare mode. A shared entry
  * carries BOTH terms' figures ({ key, label, a, b }, where a/b are the original

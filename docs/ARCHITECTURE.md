@@ -164,8 +164,9 @@ Pure functions over the inverted indices, all unit-tested:
 
 - `stats.js` — `distributionBySura` (true token frequency), `association`
   (PMI + Dunning's signed log-likelihood), `collocations` (whole-verse window by
-  default; narrower windows null out the significance scores), `mergeCollocations`
-  (shared / only-A / only-B for compare).
+  default; narrower windows null out the significance scores), `directNeighbors`
+  (position-aware ±1 adjacency / bigram counts, before + after per word),
+  `mergeCollocations` (shared / only-A / only-B for compare).
 - `phrases.js` — `buildSeedIndex` (corpus trigram index, built lazily once) and
   `findSharedPhrases` (maximal contiguous shared runs, longest-first, left-maximal).
 

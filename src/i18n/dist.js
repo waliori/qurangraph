@@ -48,6 +48,23 @@ export const ar = {
   "dist.hintPmi.c": " (وقد تضخّم كلمةً وردت مرّةً واحدة). الرقم الذهبي = الآيات المشتركة، والرمادي = قيمة PMI.",
 
   "dist.chipTitle": "«{label}» — {count} آية مشتركة · PMI {pmi} · G² {ll}",
+
+  "nbr.title": "الجارّ المباشر (الكلمة الملاصقة)",
+  "nbr.hint": "الكلمات الملاصقة لـ«{label}» مباشرةً عبر القرآن كلِّه: قبلها أو بعدها. عدٌّ بالمرّات لا بالآيات، وتشمل الحروف (فالجار المباشر — حرف الجر أو العطف — هو المقصود هنا). اضغط كلمة لعرض آياتها.",
+  "nbr.side.before.label": "قبل",
+  "nbr.side.before.title": "الكلمات التي تسبق المصطلح مباشرةً",
+  "nbr.side.after.label": "بعد",
+  "nbr.side.after.title": "الكلمات التي تلي المصطلح مباشرةً",
+  "nbr.side.both.label": "كلاهما",
+  "nbr.side.both.title": "الكلمات الملاصقة من أيّ جهة (المجموع)",
+  "nbr.none": "لا توجد",
+  "nbr.colWord": "الكلمة",
+  "nbr.colBefore": "قبل",
+  "nbr.colAfter": "بعد",
+  "nbr.colTotal": "المجموع",
+  "nbr.file": "الجوار-المباشر-{label}.csv",
+  "nbr.exportCsv": "تصدير الجوار المباشر (CSV)",
+  "nbr.chipTitle": "«{label}» — {before} مرّة قبل · {after} مرّة بعد ({total} إجمالًا)",
 };
 
 export const en = {
@@ -99,4 +116,21 @@ export const en = {
   "dist.hintPmi.c": " associations (and may inflate a word that appears only once). The gold number = shared verses, the gray = the PMI value.",
 
   "dist.chipTitle": "«{label}» — {count} shared verses · PMI {pmi} · G² {ll}",
+
+  "nbr.title": "Direct neighbours (adjacent word)",
+  "nbr.hint": "Words sitting directly next to «{label}» across the whole Qur'an — immediately before or after. Counted by occurrence, not by verse, and particles are kept (the immediate neighbour — a preposition or conjunction — is the point here). Click a word to view its verses.",
+  "nbr.side.before.label": "Before",
+  "nbr.side.before.title": "Words immediately preceding the term",
+  "nbr.side.after.label": "After",
+  "nbr.side.after.title": "Words immediately following the term",
+  "nbr.side.both.label": "Both",
+  "nbr.side.both.title": "Adjacent on either side (the total)",
+  "nbr.none": "None",
+  "nbr.colWord": "Word",
+  "nbr.colBefore": "Before",
+  "nbr.colAfter": "After",
+  "nbr.colTotal": "Total",
+  "nbr.file": "direct-neighbours-{label}.csv",
+  "nbr.exportCsv": "Export direct neighbours (CSV)",
+  "nbr.chipTitle": "«{label}» — {before}× before · {after}× after ({total} total)",
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { distributionBySura, collocations, association, mergeCollocations } from "./stats.js";
+import { distributionBySura, collocations, association, mergeCollocations, directNeighbors } from "./stats.js";
 
 const w = (s) => ({ orig: s, norm: s, exact: s });
 const verseData = {
@@ -91,6 +91,34 @@ describe("association", () => {
   it("returns zeros for degenerate inputs", () => {
     expect(association(0, 5, 5, 100)).toEqual({ pmi: 0, ll: 0 });
     expect(association(3, 0, 5, 100)).toEqual({ pmi: 0, ll: 0 });
+  });
+});
+
+describe("directNeighbors", () => {
+  // نور at 1:1 is followed by سماء; at 2:3 preceded by في, followed by ارض; at 2:9
+  // preceded by سماء (the verse "سماء نور" — see below).
+  const vd = {
+    "1:1": { s: 1, sn: "س1", a: 1, words: [w("نور"), w("سماء"), w("في")] },
+    "2:3": { s: 2, sn: "س2", a: 3, words: [w("في"), w("نور"), w("ارض")] },
+    "2:9": { s: 2, sn: "س2", a: 9, words: [w("سماء"), w("نور")] },
+  };
+  const idx = { نور: ["1:1", "2:3", "2:9"] };
+
+  it("tallies immediate before/after tokens, position-aware, particles kept", () => {
+    const n = directNeighbors("نور", "exact", idx, vd);
+    const by = Object.fromEntries(n.map((x) => [x.key, x]));
+    expect(by["سماء"]).toMatchObject({ before: 1, after: 1, total: 2 }); // after in 1:1, before in 2:9
+    expect(by["ارض"]).toMatchObject({ before: 0, after: 1 });            // after in 2:3
+    expect(by["في"]).toMatchObject({ before: 1, after: 0 });             // before in 2:3 (particle KEPT)
+    expect(n[0].key).toBe("سماء"); // ranked by total desc
+  });
+
+  it("counts token-level — the term twice in a verse contributes both neighbours", () => {
+    const vd2 = { "3:1": { s: 3, sn: "س3", a: 1, words: [w("نور"), w("نور"), w("ارض")] } };
+    const n = directNeighbors("نور", "exact", { نور: ["3:1"] }, vd2);
+    const by = Object.fromEntries(n.map((x) => [x.key, x]));
+    expect(by["ارض"].after).toBe(1);     // follows the 2nd نور
+    expect(by["نور"]).toBeUndefined();   // self-adjacency skipped
   });
 });
 

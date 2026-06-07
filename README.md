@@ -40,7 +40,8 @@ morphology, and lexicon glosses are never translated.
   Lisān al-ʿArab (Ibn Manẓūr) — swappable per word, concise + full article, with
   print volume/page citation and **BibTeX/RIS** export.
 - **Analytics** — distribution by sūrah, within-verse **collocation** (PMI + signed
-  log-likelihood), two-term **compare**, and shared multi-word phrases
+  log-likelihood), **direct neighbours** (the word immediately before/after a term,
+  corpus-wide adjacency), two-term **compare**, and shared multi-word phrases
   (المتشابهات). Everything exports to **CSV/JSON**.
 - **Rarity-weighted edges** (rarer shared word = stronger signal) + a "rare links
   only" filter, and an **editable stop-word layer** (particles vs. content words).
