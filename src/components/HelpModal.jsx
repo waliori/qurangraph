@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useRef } from "react";
+import { useModalFocus } from "../hooks/useModalFocus.js";
 
 /* ═══ Help / guide ═══
  * A visual, scrollable guide — opened from the toolbar. Examples are colour-coded
@@ -81,17 +82,13 @@ const sec = (title, illo, items) => (
 );
 
 export function HelpModal({ open, onClose }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const dialogRef = useRef(null);
+  useModalFocus(open, dialogRef, { onEscape: onClose });
 
   if (!open) return null;
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label="دليل الاستخدام" onClick={(e) => e.stopPropagation()}>
+      <div className="ag-modal" role="dialog" aria-modal="true" aria-label="دليل الاستخدام" ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title"><span className="ag-badge t-verse">؟</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>دليل آيات.network</h2></div>
           <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>

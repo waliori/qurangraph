@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useRef } from "react";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
-import { exportCsvFile } from "../graph/exportGraph.js";
+import { exportCsvFile, exportJsonFile, buildConcordance } from "../graph/exportGraph.js";
+import { wordGroupKey } from "../arabic-utils.js";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
+import { useModalFocus } from "../hooks/useModalFocus.js";
 
 /* OccurrencesModal — a scrollable popup listing every āyah a word (or its root)
  * occurs in, the current verse first. Each row is clickable to re-centre the
@@ -12,13 +14,9 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
     useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${n}` });
 
-  // Esc: go back if there's a back target, else close.
-  useEffect(() => {
-    if (!occ) return;
-    const onKey = (e) => { if (e.key === "Escape") { if (occ.back && onBack) onBack(); else onClose(); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [occ, onBack, onClose]);
+  // Focus trap + restoration; Esc goes back if there's a back target, else closes.
+  const dialogRef = useRef(null);
+  useModalFocus(!!occ, dialogRef, { onEscape: () => (occ?.back && onBack ? onBack() : onClose()) });
 
   if (!occ) return null;
   const primary = occ.lookup;
@@ -46,7 +44,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
       <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`الآيات التي ترد فيها ${occ.label}`}
-        onClick={(e) => e.stopPropagation()}>
+        ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
             {occ.back && onBack && <button type="button" className="ag-iconbtn" title="رجوع إلى التوزيع" aria-label="رجوع" onClick={onBack}>→</button>}
@@ -55,8 +53,20 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             <span className="ag-modal-count"><b>{n}</b> آية</span>
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-            <button type="button" className="ag-btn" title="تصدير CSV"
+            <button type="button" className="ag-btn" title="تصدير قائمة الآيات (CSV)"
               onClick={() => exportCsvFile([["السورة", "الآية", "المرجع", "النص"], ...keys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `آيات-${occ.label}.csv`)}>⤓ CSV</button>
+            <button type="button" className="ag-btn" title="تصدير كشاف سياقي (الكلمة مع ما قبلها وبعدها) — KWIC"
+              onClick={() => exportCsvFile(buildConcordance(
+                keys,
+                (k) => verseData[k]?.words,
+                (w) => wordGroupKey(w, occ.mode) === occ.lookup,
+                (k) => { const v = verseData[k]; return { s: v.s, a: v.a, ref: `${v.sn} ${v.a}` }; },
+              ), `سياق-${occ.label}.csv`)}>⤓ سياقي</button>
+            <button type="button" className="ag-btn" title="تصدير البيانات (JSON)"
+              onClick={() => exportJsonFile({
+                term: occ.label, lookup: occ.lookup, mode: occ.mode, count: n,
+                verses: keys.map((k) => { const v = verseData[k]; return { sura: v.s, ayah: v.a, ref: `${v.sn} ${v.a}`, text: v.text }; }),
+              }, `آيات-${occ.label}.json`)}>⤓ JSON</button>
             <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>
           </div>
         </div>

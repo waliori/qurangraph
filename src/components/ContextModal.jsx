@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
+import { useModalFocus } from "../hooks/useModalFocus.js";
 
 /* ═══ Context reader ═══
  *
@@ -24,12 +25,8 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
   const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
     useVirtualRows({ count: n, est: 110, overscan: 8, resetKey: ctx?.centerKey, initialIndex: centerIndex });
 
-  useEffect(() => {
-    if (!ctx) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [ctx, onClose]);
+  const dialogRef = useRef(null);
+  useModalFocus(!!ctx, dialogRef, { onEscape: onClose });
 
   if (!ctx) return null;
   const center = verseData[ctx.centerKey];
@@ -54,7 +51,7 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
       <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`سياق الآية ${center ? center.sn + " " + center.a : ""}`}
-        onClick={(e) => e.stopPropagation()}>
+        ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
             <span className="ag-badge t-verse">سياق</span>

@@ -35,6 +35,23 @@ export function morphAt(M, verseKey, wordIndex) {
   return rows ? decodeMorph(rows[wordIndex], M) : null;
 }
 
+/* Position-correct grouping keys for every word of a verse, aligned 1:1 with
+ * verseData[vk].words (same word order, same <2-char skip — the builder emits the
+ * tuple array against that exact filter). Each entry is { proot, plemma } where
+ * plemma is the BARE-normalised lemma so it matches the voted lemma map's keys.
+ * Returns null when the verse has no morphology row. The app attaches these to its
+ * word objects so wordGroupKey() can disambiguate homographs per occurrence. */
+export function verseGroupingKeys(M, verseKey, normFn) {
+  const rows = M?.v?.[verseKey];
+  if (!rows) return null;
+  return rows.map((t) => {
+    const m = decodeMorph(t, M);
+    const proot = m?.root || null;
+    const plemma = m?.lemma && normFn ? (normFn(m.lemma) || null) : null;
+    return { proot, plemma };
+  });
+}
+
 /* Empty filter shape. Each category is a list of allowed codes; [] = no constraint. */
 export const EMPTY_MORPH_FILTER = { pos: [], form: [], aspect: [], voice: [] };
 

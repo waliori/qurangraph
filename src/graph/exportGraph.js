@@ -68,3 +68,31 @@ export function toCsv(rows) {
 export function exportCsvFile(rows, name = "qurangraph.csv") {
   download(new Blob(["﻿" + toCsv(rows)], { type: "text/csv;charset=utf-8" }), name);
 }
+
+/* Pretty-printed JSON download — for re-analysis in a researcher's own tooling,
+ * where CSV's flat tables lose the nested structure (metadata + arrays of records). */
+export function exportJsonFile(obj, name = "qurangraph.json") {
+  download(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" }), name);
+}
+
+/* Build a KWIC (keyword-in-context) concordance: every occurrence of a term, with
+ * the `window` words on each side, the keyword centred. `verses` is a list of verse
+ * keys, `words` resolves a verse key to its word objects, and `isHit(word)` says
+ * whether a word IS the term (already mode-aware at the call site). One row per
+ * occurrence (a verse with the term twice yields two rows), so frequency-by-context
+ * studies line up. Returns rows ready for toCsv()/exportCsvFile (with a header). */
+export function buildConcordance(verses, words, isHit, meta, window = 5) {
+  const rows = [["السورة", "الآية", "المرجع", "قبل", "الكلمة", "بعد"]];
+  for (const vk of verses) {
+    const ws = words(vk);
+    if (!ws) continue;
+    ws.forEach((w, i) => {
+      if (!isHit(w)) return;
+      const left = ws.slice(Math.max(0, i - window), i).map((x) => x.orig).join(" ");
+      const right = ws.slice(i + 1, i + 1 + window).map((x) => x.orig).join(" ");
+      const m = meta(vk);
+      rows.push([m.s, m.a, m.ref, left, w.orig, right]);
+    });
+  }
+  return rows;
+}

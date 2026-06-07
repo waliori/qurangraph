@@ -34,6 +34,17 @@ describe("collocations", () => {
     expect(c[0].key).toBe("سماء"); // ranked by count
   });
 
+  it("excludes a neighbour whose GROUPING key (not just surface) is a stop word", () => {
+    // In root mode a neighbour's surface form (يقول) isn't in the stop set, but its
+    // root (قول) is — it must still be dropped, matching the graph's getUW().
+    const vd = {
+      "1:1": { s: 1, sn: "س", a: 1, words: [{ orig: "نور", norm: "نور", proot: "نور" }, { orig: "يقول", norm: "يقول", proot: "قول" }] },
+    };
+    const idx = { "نور": ["1:1"], "قول": ["1:1"] };
+    const c = collocations("نور", "root", idx, vd, new Set(["قول"]));
+    expect(c.find((x) => x.key === "قول")).toBeUndefined();
+  });
+
   it("attaches PMI + signed log-likelihood to every neighbour", () => {
     const c = collocations("نور", "exact", index, verseData, stop, 99, { sort: "ll" });
     const m = Object.fromEntries(c.map((x) => [x.key, x]));

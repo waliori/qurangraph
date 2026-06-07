@@ -1,4 +1,4 @@
-import { groupKey } from "../arabic-utils.js";
+import { wordGroupKey } from "../arabic-utils.js";
 
 /* ═══ Pure Qur'an-internal statistics ═══
  *
@@ -8,10 +8,9 @@ import { groupKey } from "../arabic-utils.js";
  *                         (optionally a ±window of word positions), ranked.
  */
 
-/* The active-mode key for a word object (exact uses the precision-aware surface). */
-function keyOf(w, mode) {
-  return mode === "exact" ? (w.exact ?? w.norm) : groupKey(w.norm, mode);
-}
+/* The active-mode key for a word object (exact uses the precision-aware surface;
+ * root/lemma use the word's position-correct analysis when morphology is loaded). */
+const keyOf = wordGroupKey;
 
 /* [{ sura, name, count }] over every sūrah (zeros included) for `lookup`. */
 export function distributionBySura(lookup, index, verseData, surahList) {
@@ -72,7 +71,10 @@ export function collocations(lookup, mode, index, verseData, stopSet, window = 9
     for (const j of within) {
       const w = words[j];
       const k = keyOf(w, mode);
-      if (k === lookup || (stopSet && stopSet.has(w.norm))) continue;
+      // Drop a neighbour if EITHER its surface form or its grouping key is a stop
+      // word — matching getUW() in the graph, so a particle hidden by its root/lemma
+      // key (not just its surface) doesn't leak into the collocation list.
+      if (k === lookup || (stopSet && (stopSet.has(w.norm) || stopSet.has(k)))) continue;
       keysHere.add(k);
       if (!labels[k]) labels[k] = w.orig;
     }

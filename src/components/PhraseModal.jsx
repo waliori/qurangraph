@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { findSharedPhrases } from "../analytics/phrases.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
+import { useModalFocus } from "../hooks/useModalFocus.js";
 
 /* ═══ Shared-phrase (المتشابهات) modal ═══
  *
@@ -37,19 +38,15 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
     [centerKey, verseData, seedIndex]
   );
 
-  useEffect(() => {
-    if (!phrase) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [phrase, onClose]);
+  const dialogRef = useRef(null);
+  useModalFocus(!!phrase, dialogRef, { onEscape: onClose });
 
   if (!phrase) return null;
   const cv = verseData[centerKey];
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`العبارات المشتركة في ${cv?.sn} ${cv?.a}`} onClick={(e) => e.stopPropagation()}>
+      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`العبارات المشتركة في ${cv?.sn} ${cv?.a}`} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
             <span className="ag-badge t-verse">متشابهات</span>

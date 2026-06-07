@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { toCsv, serializeSvg } from "./exportGraph.js";
+import { toCsv, serializeSvg, buildConcordance } from "./exportGraph.js";
 
 describe("toCsv", () => {
   it("escapes commas, quotes and newlines; leaves plain cells", () => {
@@ -12,6 +12,33 @@ describe("toCsv", () => {
   });
   it("renders Arabic verse text unquoted when it has no separators", () => {
     expect(toCsv([["بسم الله"]])).toBe("بسم الله");
+  });
+});
+
+describe("buildConcordance (KWIC)", () => {
+  const W = (s) => ({ orig: s });
+  const verseWords = {
+    "1:1": [W("الحمد"), W("لله"), W("رب"), W("العالمين")],
+    "2:5": [W("رب"), W("اغفر"), W("لي"), W("رب")], // term twice → two rows
+  };
+  const meta = (k) => ({ s: +k.split(":")[0], a: +k.split(":")[1], ref: k });
+
+  it("emits a header plus one row per occurrence, keyword centred with context", () => {
+    const rows = buildConcordance(["1:1", "2:5"], (k) => verseWords[k], (w) => w.orig === "رب", meta, 2);
+    expect(rows[0]).toEqual(["السورة", "الآية", "المرجع", "قبل", "الكلمة", "بعد"]);
+    // 1:1 has رب once; 2:5 has it twice → 3 data rows.
+    expect(rows.length).toBe(1 + 3);
+    // 1:1: left = "الحمد لله", keyword = "رب", right = "العالمين"
+    expect(rows[1]).toEqual([1, 1, "1:1", "الحمد لله", "رب", "العالمين"]);
+    // 2:5 first رب is at index 0 → no left context; window picks the next two.
+    expect(rows[2]).toEqual([2, 5, "2:5", "", "رب", "اغفر لي"]);
+    // 2:5 second رب is last → no right context.
+    expect(rows[3]).toEqual([2, 5, "2:5", "اغفر لي", "رب", ""]);
+  });
+
+  it("respects the context window size", () => {
+    const rows = buildConcordance(["1:1"], (k) => verseWords[k], (w) => w.orig === "العالمين", meta, 1);
+    expect(rows[1]).toEqual([1, 1, "1:1", "رب", "العالمين", ""]); // only 1 word of left context
   });
 });
 

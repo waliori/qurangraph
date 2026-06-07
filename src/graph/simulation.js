@@ -19,15 +19,13 @@
  * Determinism: no Math.random anywhere. New bodies are seeded from the x/y the
  * caller hands in (the component pre-seeds them in a phyllotaxis disk around the
  * parent). Pinned (dragged) and fixed (centre / dropped) bodies are never moved.
+ *
+ * Shared force constants (CUTOFF2 / CELL / PAD / DEFAULT_LINK_DIST) and the grid
+ * key helper come from forceConstants.js, the single source the batch layout
+ * (forceLayout.js) reads too, so the two engines can't drift apart.
  */
 
-const CUTOFF2 = 300000;            // pairs farther than this are ignored
-const CELL = Math.sqrt(CUTOFF2);   // grid cell size = cutoff radius
-const PAD = 48;                    // extra collision gap reserving room for labels
-// Default link spring rest length. MUST agree with forceLayout.js's
-// DEFAULT_LINK_DIST — the live sim and the batch layout share one force model,
-// so a divergent default makes a settled live layout differ from the batch one.
-const DEFAULT_LINK_DIST = 130;
+import { CUTOFF2, CELL, PAD, DEFAULT_LINK_DIST, cellKey } from "./forceConstants.js";
 
 export function createSimulation(W = 1600, H = 1100) {
   const cx = W / 2, cy = H / 2;
@@ -41,7 +39,6 @@ export function createSimulation(W = 1600, H = 1100) {
   const userFixed = new Set();     // ids dropped by the user — stay put until reset
 
   const grid = new Map();
-  const cellKey = (a, b) => a * 73856093 + b;
 
   /* Rebuild bodies from the current node set. Surviving nodes keep their live
    * position/velocity; new nodes take the seed coords on the node object; removed

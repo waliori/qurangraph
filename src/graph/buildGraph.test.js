@@ -91,6 +91,26 @@ describe("lemma mode (precomputed lemmas)", () => {
   });
 });
 
+describe("position-correct root grouping (homographs)", () => {
+  // قل appears twice: once analysed as قول (say), once as قلل (few). With voted
+  // grouping both collapse to the commoner قول; with per-occurrence roots attached
+  // (w.proot) they split into two word nodes under their real roots.
+  const W = (s, proot) => ({ orig: s, norm: s, proot });
+  const vd = {
+    "1:1": { text: "قل قل", s: 1, a: 1, sn: "س", words: [W("قل", "قول"), W("قل", "قلل")] },
+  };
+  // Position-correct index: each root points at the verse once.
+  const idx = { "قول": ["1:1"], "قلل": ["1:1"] };
+
+  it("splits a homograph surface form into its two real roots", () => {
+    setRootMap({ "قل": "قول" }); // voted reading is قول for the bare form
+    const { nodes } = buildLazyGraph("1:1", vd, idx, idx, new Set(), new Set(), false, 10, "root");
+    const lookups = nodes.filter((n) => n.type === "word").map((n) => n.lookup).sort();
+    expect(lookups).toEqual(["قلل", "قول"]); // two distinct roots, not one voted قول
+    setRootMap(null);
+  });
+});
+
 describe("morphology filter", () => {
   const vd = {
     "1:1": { text: "alpha beta", s: 1, a: 1, sn: "س", words: [word("alpha"), word("beta")] },

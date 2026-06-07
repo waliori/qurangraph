@@ -1,4 +1,4 @@
-import { rootOf, lemmaOf, groupKey, STOP } from "../arabic-utils.js";
+import { rootOf, lemmaOf, wordGroupKey, STOP } from "../arabic-utils.js";
 import { decodeMorph, passesMorphFilter, morphFilterActive } from "../morphology.js";
 import { fColor, dColor, rarityWeight } from "../theme.js";
 
@@ -19,9 +19,10 @@ export function getUW(v, hideStop, mode, opts = {}) {
   const out = [];
   v.words.forEach((w, idx) => {
     if (filtering && !passesMorphFilter(morphRows ? decodeMorph(morphRows[idx], M) : null, morphFilter)) return;
-    // Exact mode keys on the precision-aware surface form (w.exact); root/lemma on
-    // the precomputed maps. w.exact falls back to w.norm for callers/tests that omit it.
-    const key = mode === "exact" ? (w.exact ?? w.norm) : groupKey(w.norm, mode);
+    // Exact mode keys on the precision-aware surface form (w.exact); root/lemma use
+    // the word's position-correct analysis when morphology is loaded, else the voted
+    // maps. w.exact falls back to w.norm for callers/tests that omit it.
+    const key = wordGroupKey(w, mode);
     // Hide if the word's surface form OR its grouping key is in the stop set — so a
     // hidden word works whether you typed the surface form or (in root/lemma mode)
     // the node's root/lemma key.
@@ -65,12 +66,10 @@ export function getPathToCenter(nid, parentMap) {
   return path;
 }
 
-/* The `lookup` key for a word object, per search mode. Exact mode uses the
- * precision-aware surface form (w.exact, falling back to w.norm); lemma/root use
- * the precomputed maps. Takes the word OBJECT so it can read w.exact. */
-function wordKey(w, mode) {
-  return mode === "exact" ? (w.exact ?? w.norm) : groupKey(w.norm, mode);
-}
+/* The `lookup` key for a word object, per search mode — thin alias over the shared
+ * wordGroupKey() (exact → precision-aware surface; root/lemma → position-correct
+ * analysis when loaded, else the voted maps). Kept for readability at call sites. */
+const wordKey = wordGroupKey;
 
 /* ═══ Lazy graph builder ═══
  *
@@ -91,7 +90,11 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
   if (!cv) return { nodes, links, loopLinks, parentMap };
 
   const cx = W / 2, cy = H / 2;
-  const index = searchMode === "root" ? r2v : searchMode === "lemma" ? (l2v || w2v) : w2v;
+  // Lemma mode REQUIRES its index; never silently fall back to the exact (w2v)
+  // index, which would present surface-form matches as if they were lemma matches.
+  // The caller gates the build until l2v is ready, but `|| {}` keeps this pure even
+  // if it isn't (an empty index just yields a lone centre node, not wrong links).
+  const index = searchMode === "root" ? r2v : searchMode === "lemma" ? (l2v || {}) : w2v;
   // Per-verse morphology row arrays for the active filter (index-aligned to words).
   const morphOpts = (verseKey) => ({ morphRows: M?.v?.[verseKey], M, morphFilter, stopSet });
 
@@ -135,8 +138,11 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         if (rareOnly && count > rareMax) return;
         const expKey = `${w.lookup}@${item.verseKey}`;
         const isExp = expandedWords.has(expKey);
-        const realRoot = rootOf(w.norm);     // always derivable — shown as context in any mode
-        const realLemma = lemmaOf(w.norm);
+        // Prefer this occurrence's position-correct root/lemma (from morphology) so
+        // the node label, lexicon gloss and grouping all agree; fall back to the
+        // voted maps when morphology hasn't loaded for this word.
+        const realRoot = w.proot || rootOf(w.norm);   // always derivable — shown as context in any mode
+        const realLemma = w.plemma || lemmaOf(w.norm);
         // The label under the node: the root in root/lemma mode (the grouping/context).
         const rootLabel = searchMode === "exact" ? null : realRoot;
         // Coverage: in root/lemma mode a word with no precomputed root/lemma is

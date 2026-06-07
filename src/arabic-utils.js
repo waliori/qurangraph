@@ -64,9 +64,25 @@ export function lemmaOf(normForm) { return LEMMA_MAP[normForm] || null; }
 export function lemmaKey(normForm) { return LEMMA_MAP[normForm] || normForm; }
 
 /* The grouping key for a normalised word under the active mode. Single source of
- * truth for the exact/lemma/root branch so call sites stop re-implementing it. */
+ * truth for the exact/lemma/root branch so call sites stop re-implementing it.
+ * Operates on a bare string (no per-occurrence context) — so root/lemma grouping
+ * here is the majority-voted reading. Prefer wordGroupKey() when a word OBJECT is
+ * available, since it can use the position-correct (per-occurrence) analysis. */
 export function groupKey(normForm, mode) {
   return mode === "root" ? rootKey(normForm) : mode === "lemma" ? lemmaKey(normForm) : normForm;
+}
+
+/* The grouping key for a word OBJECT under the active mode — the position-correct
+ * version of groupKey(). When the corpus morphology is loaded, each word carries
+ * its per-occurrence root (`proot`) / lemma (`plemma`), so a homograph (one surface
+ * skeleton, two roots — e.g. قل = قول vs قلل) groups under THIS verse's actual
+ * reading rather than the commoner one. Falls back to the voted maps (identical to
+ * groupKey) when morphology hasn't loaded yet or the word has no analysis, so the
+ * graph works immediately and upgrades to position-correct edges when it arrives. */
+export function wordGroupKey(w, mode) {
+  if (mode === "root") return w.proot || rootKey(w.norm);
+  if (mode === "lemma") return w.plemma || lemmaKey(w.norm);
+  return w.exact ?? w.norm;
 }
 
 /* ═══ Stop words (two visible, editable groups) ═══

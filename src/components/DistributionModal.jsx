@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { distributionBySura, collocations } from "../analytics/stats.js";
-import { exportCsvFile } from "../graph/exportGraph.js";
+import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
+import { useModalFocus } from "../hooks/useModalFocus.js";
 import { fColor } from "../theme.js";
 
 /* ═══ Distribution + collocation modal ═══
@@ -33,6 +34,9 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
     return { distribution, colloc, total, max, firstInSura };
   }, [dist, index, verseData, surahList, stopSet, collocSort]);
 
+  const dialogRef = useRef(null);
+  useModalFocus(!!dist, dialogRef, { onEscape: onClose });
+
   if (!dist || !data) return null;
   const { distribution, colloc, total, max, firstInSura } = data;
   // The association figure shown on each chip tracks the active sort.
@@ -41,14 +45,22 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`توزيع ${dist.label}`} onClick={(e) => e.stopPropagation()}>
+      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`توزيع ${dist.label}`} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
             <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{dist.mode === "root" ? "جذر" : dist.mode === "lemma" ? "صيغة" : "كلمة"}</span>
             <h2 className="ag-modal-word">{dist.label}</h2>
             <span className="ag-modal-count"><b>{total}</b> في <b>{distribution.length}</b> سورة</span>
           </div>
-          <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>
+          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+            <button type="button" className="ag-btn" title="تصدير التوزيع والمجاورات (JSON)"
+              onClick={() => exportJsonFile({
+                term: dist.label, mode: dist.mode, total, surahCount: distribution.length, collocationSort: collocSort,
+                distribution: distribution.map((d) => ({ sura: d.sura, name: d.name, count: d.count })),
+                collocations: colloc.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
+              }, `تحليل-${dist.label}.json`)}>⤓ JSON</button>
+            <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div className="ag-dist-body">

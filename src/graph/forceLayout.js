@@ -20,25 +20,13 @@
  * an adjacent cell — the set of pairs considered is identical to the old
  * all-pairs loop with its `d2 > CUTOFF` early-out, only without visiting the
  * far-apart pairs that were skipped anyway.
+ *
+ * Shared force constants (CUTOFF2 / CELL / PAD / DEFAULT_LINK_DIST) and the grid /
+ * hash helpers live in forceConstants.js, so this batch layout and the live engine
+ * in simulation.js can never drift apart.
  */
 
-const CUTOFF2 = 300000;                       // pairs farther than this are ignored
-const CELL = Math.sqrt(CUTOFF2);              // grid cell size = cutoff radius
-const PAD = 48;                               // extra collision gap reserving room for node labels
-// Default link spring rest length. MUST agree with simulation.js's
-// DEFAULT_LINK_DIST — the batch layout and the live sim share one force model,
-// so a divergent default makes the settled layouts differ. 130 is the value the
-// live sim uses, i.e. what users actually see.
-const DEFAULT_LINK_DIST = 130;
-
-function hash(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) / 4294967295; // → [0, 1)
-}
+import { CUTOFF2, CELL, PAD, DEFAULT_LINK_DIST, cellKey, hash } from "./forceConstants.js";
 
 export function forceLayout(nodes, links, W, H, iters = 160) {
   const cx = W / 2, cy = H / 2;
@@ -72,7 +60,6 @@ export function forceLayout(nodes, links, W, H, iters = 160) {
   // Visit each near pair once via a 3×3 neighbourhood of grid cells. Deterministic:
   // depends only on node coordinates and array order, never on Math.random.
   const grid = new Map();
-  const cellKey = (cxi, cyi) => cxi * 73856093 + cyi; // pair → integer hash
   const rebuildGrid = () => {
     grid.clear();
     for (let i = 0; i < N; i++) {

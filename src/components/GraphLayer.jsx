@@ -96,15 +96,21 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   );
 });
 
-function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, onNodeEnter, onNodeLeave, onNodeClick }) {
+function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, onNodeEnter, onNodeLeave, onNodeClick }) {
   const anyHighlight = !!highlightSet || activeWordNodeIds.size > 0;
   const pos = (n) => positions[n.id] || { x: n.x, y: n.y };
+  // Viewport culling (large graphs only — `viewport` is null otherwise, so the
+  // common case still skips this and never re-renders on pan). A point is visible
+  // if it falls inside the padded world-space rect; a link shows if EITHER endpoint
+  // is visible (so edges crossing the screen edge aren't clipped away).
+  const inView = (p) => !viewport || (p.x >= viewport.minX && p.x <= viewport.maxX && p.y >= viewport.minY && p.y <= viewport.maxY);
 
   return (
     <>
       {links.map((l, i) => {
         const s = nmap[l.source], t = nmap[l.target]; if (!s || !t) return null;
         const sp = pos(s), tp = pos(t);
+        if (viewport && !inView(sp) && !inView(tp)) return null;
         const isC = s.type === "center" || t.type === "center";
         // A link is "bright" only when a selection/active-word actually highlights it.
         // With nothing highlighted, links render in their RESTING (rarity) style — so
@@ -125,13 +131,16 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, highli
       })}
       {showLoops && loopLinks.map((l, i) => {
         const s = nmap[l.source], t = nmap[l.target]; if (!s || !t) return null;
-        const sp = pos(s), tp = pos(t), mx = (sp.x + tp.x) / 2, my = (sp.y + tp.y) / 2, dx = tp.x - sp.x, dy = tp.y - sp.y;
+        const sp = pos(s), tp = pos(t);
+        if (viewport && !inView(sp) && !inView(tp)) return null;
+        const mx = (sp.x + tp.x) / 2, my = (sp.y + tp.y) / 2, dx = tp.x - sp.x, dy = tp.y - sp.y;
         return <path key={`lp${i}`} ref={(el) => { if (el) reg.loops.set(i, { el, s: l.source, t: l.target }); else reg.loops.delete(i); }}
           d={`M ${sp.x} ${sp.y} Q ${mx - dy * 0.3} ${my + dx * 0.3} ${tp.x} ${tp.y}`} fill="none" stroke="#ff6b6b" strokeWidth={1.2} strokeDasharray="4,3" strokeOpacity={0.4} markerEnd="url(#arrL)" />;
       })}
 
       {nodes.map((n) => {
         const p = pos(n);
+        if (viewport && !n.fixed && !inView(p)) return null; // keep the fixed centre always
         const isAW = activeWordNodeIds.has(n.id);
         const onP = highlightSet ? highlightSet.has(n.id) : true;
         const dim = !(onP || isAW) && anyHighlight;

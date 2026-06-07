@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { norm, normStrict, setRootMap, setLemmaMap, rootOf, rootKey, lemmaOf, lemmaKey, groupKey, extractRoot, STOP, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
+import { norm, normStrict, setRootMap, setLemmaMap, rootOf, rootKey, lemmaOf, lemmaKey, groupKey, wordGroupKey, extractRoot, STOP, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 
 describe("norm", () => {
   it("strips diacritics to a consonantal skeleton", () => {
@@ -70,6 +70,31 @@ describe("lemma lookup + groupKey", () => {
     expect(groupKey("استغفر", "exact")).toBe("استغفر");
     expect(groupKey("استغفر", "lemma")).toBe("استغفر");
     expect(groupKey("استغفر", "root")).toBe("غفر");
+  });
+});
+
+describe("wordGroupKey (position-correct grouping)", () => {
+  beforeEach(() => { setRootMap({ "قل": "قول" }); setLemmaMap({ "قل": "قال" }); });
+
+  it("falls back to the voted maps when the word has no per-occurrence analysis", () => {
+    const w = { orig: "قُلْ", norm: "قل", exact: "قل" };
+    expect(wordGroupKey(w, "exact")).toBe("قل");
+    expect(wordGroupKey(w, "root")).toBe("قول");  // voted root
+    expect(wordGroupKey(w, "lemma")).toBe("قال"); // voted lemma
+  });
+
+  it("uses the word's own root/lemma when present (homograph disambiguation)", () => {
+    // Same surface skeleton قل, but this occurrence is analysed as قلل, not the
+    // commoner قول — so it must group under قلل rather than the voted root.
+    const w = { orig: "قُلَّ", norm: "قل", exact: "قل", proot: "قلل", plemma: "قلل" };
+    expect(wordGroupKey(w, "root")).toBe("قلل");
+    expect(wordGroupKey(w, "lemma")).toBe("قلل");
+    expect(wordGroupKey(w, "exact")).toBe("قل"); // exact is unaffected by analysis
+  });
+
+  it("exact mode prefers the precision-aware surface (w.exact), then w.norm", () => {
+    expect(wordGroupKey({ norm: "صلاه", exact: "صلاة" }, "exact")).toBe("صلاة");
+    expect(wordGroupKey({ norm: "صلاه" }, "exact")).toBe("صلاه");
   });
 });
 
