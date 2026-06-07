@@ -305,6 +305,7 @@ body {
 .ag-chip.is-mode { color: var(--lapis-400); }
 .ag-chip.is-mode.is-root { color: var(--viridian-400); }
 .ag-chip.is-mode.is-lemma { color: var(--gold-400); }
+.ag-chip.is-morph { color: var(--rubric-400); border-color: color-mix(in oklab, var(--rubric-400) 35%, transparent); }
 
 /* Morphology filter (tools popover) */
 .ag-pop-h-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
@@ -384,6 +385,31 @@ body {
 .ag-tag-btn { cursor: pointer; transition: all var(--dur-fast) var(--ease-standard); }
 .ag-tag-btn:hover { border-color: var(--gold-500); color: var(--text-strong); }
 .ag-dist-tags { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; }
+
+/* Canvas renderer + its visually-hidden accessibility mirror */
+.ag-canvas { display: block; }
+.ag-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; padding: 0; margin: -1px; }
+
+/* Compare modal (two terms side by side) */
+.ag-cmp-slots { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border-block-end: var(--bw-hair) solid var(--border-subtle); }
+.ag-cmp-slot { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ag-cmp-current { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.ag-cmp-label { font-family: var(--font-quran); font-size: var(--text-lg); font-weight: var(--fw-semibold);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ag-cmp-empty { color: var(--text-faint); font-size: var(--text-sm); font-style: italic; }
+.ag-cmp-pick { display: flex; flex-direction: column; gap: 4px; }
+.ag-cmp-pickrow { display: flex; gap: 4px; }
+.ag-cmp-pickrow .ag-input { min-width: 0; flex: 1; }
+.ag-cmp-swap { align-self: center; }
+.ag-cmp-row { grid-template-columns: 120px 1fr; }
+.ag-cmp-bars { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ag-cmp-barline { display: flex; align-items: center; gap: 6px; }
+.ag-cmp-barline b { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: var(--fw-semibold); }
+.ag-cmp-coll-h { font-size: var(--text-xs); font-weight: var(--fw-semibold); color: var(--text-muted);
+  margin-block: 4px 2px; }
+.ag-cmp-coll-h b { font-family: var(--font-mono); margin-inline-start: 4px; }
 
 /* Context reader (āya in its full muṣḥaf context) */
 .ag-ctx-list { padding: var(--space-2) var(--space-3); }
@@ -531,6 +557,11 @@ body {
 .ag-insp-card.t-mean { background: color-mix(in oklab, var(--viridian-500) 8%, var(--ink-800)); border-color: color-mix(in oklab, var(--viridian-500) 22%, transparent); }
 .ag-insp-card-h { display: flex; align-items: center; justify-content: space-between; margin-block-end: 6px; }
 .ag-insp-card-lab { font-size: var(--text-xs); color: var(--text-faint); }
+.ag-insp-cite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: var(--text-xs); color: var(--text-faint); line-height: 1.6; }
+.ag-insp-cite-pg { font-family: var(--font-mono); color: var(--gold-400); white-space: nowrap;
+  border: var(--bw-hair) solid color-mix(in oklab, var(--gold-500) 30%, transparent); border-radius: var(--radius-sm); padding: 1px 6px; }
+.ag-insp-cite-ed { min-width: 0; }
 .ag-insp-mean { font-size: var(--text-base); line-height: 1.9; color: var(--viridian-400); }
 /* Bright teal washes out on the light parchment — use a deep, readable tone there. */
 [data-theme="light"] .ag-insp-mean { color: #1c3b34; }

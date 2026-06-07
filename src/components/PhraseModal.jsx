@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { findSharedPhrases } from "../analytics/phrases.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
+import { useI18n } from "../i18n/index.js";
 
 /* ═══ Shared-phrase (المتشابهات) modal ═══
  *
@@ -32,6 +33,7 @@ function PhraseVerse({ words, phraseNorm }) {
 }
 
 export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose }) {
+  const { t } = useI18n();
   const centerKey = phrase?.centerKey;
   const phrases = useMemo(
     () => (centerKey && seedIndex ? findSharedPhrases(centerKey, verseData, seedIndex) : []),
@@ -46,32 +48,32 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`العبارات المشتركة في ${cv?.sn} ${cv?.a}`} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("phrase.ariaLabel", { surah: cv?.sn, ayah: cv?.a })} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
-            <span className="ag-badge t-verse">متشابهات</span>
+            <span className="ag-badge t-verse">{t("phrase.badge")}</span>
             <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{cv?.sn} {cv?.a}</h2>
-            <span className="ag-modal-count"><b>{phrases.length}</b> عبارة مشتركة</span>
+            <span className="ag-modal-count"><b>{phrases.length}</b> {t("phrase.sharedPhrases")}</span>
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
             {phrases.length > 0 && (
-              <button type="button" className="ag-btn" title="تصدير CSV"
+              <button type="button" className="ag-btn" title={t("phrase.exportCsv")}
                 onClick={() => exportCsvFile(
-                  [["العبارة", "عدد الكلمات", "عدد الآيات", "الآيات"],
-                   ...phrases.map((p) => [p.tokens.join(" "), p.len, p.verses.length, p.verses.join(" ، ")])],
-                  `متشابهات-${cv?.sn}-${cv?.a}.csv`)}>⤓ CSV</button>
+                  [[t("phrase.csvPhrase"), t("phrase.csvWordCount"), t("phrase.csvAyahCount"), t("phrase.csvAyat")],
+                   ...phrases.map((p) => [p.tokens.join(" "), p.len, p.verses.length, p.verses.join(t("phrase.listSep"))])],
+                  t("phrase.csvFilename", { surah: cv?.sn, ayah: cv?.a }))}>⤓ CSV</button>
             )}
-            <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>
+            <button type="button" className="ag-iconbtn" aria-label={t("phrase.close")} onClick={onClose}>✕</button>
           </div>
         </div>
 
         <div className="ag-help-body">
           <p className="ag-hint">
-            العبارات (تتابع كلمتين فأكثر) التي ترد بنصّها في آيات أخرى — أطولها أولًا. اضغط آيةً لتجعلها مركز الشبكة.
+            {t("phrase.hint")}
           </p>
           {phrases.length === 0 ? (
             <div className="ag-empty-inner" style={{ paddingBlock: "var(--space-5)", textAlign: "center", color: "var(--text-faint)" }}>
-              لا تشارك هذه الآية عبارةً (ثلاث كلمات فأكثر) مع آيةٍ أخرى.
+              {t("phrase.empty")}
             </div>
           ) : phrases.map((p, pi) => {
             const shown = p.verses.slice(0, VERSE_CAP);
@@ -80,8 +82,8 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
                 <div className="ag-phrase-head">
                   <span className="ag-phrase-text" dir="rtl" style={{ fontFamily: "var(--font-quran)" }}>{p.tokens.join(" ")}</span>
                   <span className="ag-phrase-meta">
-                    <span className="ag-tag">{p.len} كلمات</span>
-                    <span className="ag-tag" style={{ color: "var(--gold-400)" }}>{p.verses.length} آية</span>
+                    <span className="ag-tag">{t("phrase.wordsTag", { n: p.len })}</span>
+                    <span className="ag-tag" style={{ color: "var(--gold-400)" }}>{t("phrase.ayahTag", { n: p.verses.length })}</span>
                   </span>
                 </div>
                 <ul className="ag-phrase-list">
@@ -90,7 +92,7 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
                     if (!v) return null;
                     return (
                       <li key={vk}>
-                        <button type="button" className="ag-modal-row" onClick={() => onNavigate(v.s, v.a)} title="اجعلها مركز الشبكة">
+                        <button type="button" className="ag-modal-row" onClick={() => onNavigate(v.s, v.a)} title={t("phrase.recenter")}>
                           <span className="ag-ayah-ref"><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{v.a}</span></span>
                           <span className="ag-modal-text"><PhraseVerse words={v.words} phraseNorm={p.norm} /></span>
                         </button>
@@ -98,7 +100,7 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
                     );
                   })}
                 </ul>
-                {p.verses.length > VERSE_CAP && <p className="ag-hint">+{p.verses.length - VERSE_CAP} آية أخرى…</p>}
+                {p.verses.length > VERSE_CAP && <p className="ag-hint">{t("phrase.moreAyat", { n: p.verses.length - VERSE_CAP })}</p>}
               </section>
             );
           })}

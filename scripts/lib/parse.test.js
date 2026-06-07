@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText } from "./parse.js";
+import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText, parseLexMeta, parsePageMarker } from "./parse.js";
 
 describe("parseMorphologyRoot", () => {
   it("extracts ROOT when present", () => {
@@ -152,5 +152,54 @@ describe("parseLexiconText", () => {
     expect(Object.keys(e).sort()).toEqual(["أبا", "أبد"]);
     expect(e["أبا"].c).toContain("الأب الوالد");
     expect(e["أبد"].c).toContain("الدوام");
+  });
+
+  it("attaches an approximate { vol, page } citation from page milestones", () => {
+    const text = [
+      "######OpenITI#",
+      "# PageV02P015",
+      "# أبا : الأب الوالد",
+      "~~تكملة",
+      "# PageV02P016",
+      "# أبد : الأبد الدوام",
+    ].join("\n");
+    const e = parseLexiconText(text, "mufradat");
+    // أبا opens after V02P015 and its body crosses into P016 → cited there.
+    expect(e["أبا"].cite).toEqual({ vol: 2, page: 16 });
+    expect(e["أبد"].cite).toEqual({ vol: 2, page: 16 });
+  });
+});
+
+describe("parsePageMarker", () => {
+  it("reads volume + page from a PageVxxPyyy milestone", () => {
+    expect(parsePageMarker("# PageV01P007")).toEqual({ vol: 1, page: 7 });
+    expect(parsePageMarker("PageV12P340 trailing")).toEqual({ vol: 12, page: 340 });
+    expect(parsePageMarker("# no marker here")).toBeNull();
+  });
+});
+
+describe("parseLexMeta", () => {
+  const text = [
+    "######OpenITI#",
+    "#META# 010.AuthorAKA\t:: ابن منظور",
+    "#META# 010.AuthorNAME\t:: محمد بن مكرم",
+    "#META# 011.AuthorDIED\t:: 711",
+    "#META# 020.BookTITLE\t:: لسان العرب",
+    "#META# 022.BookVOLS\t:: 15",
+    "#META# 040.EdEDITOR\t:: NODATA",
+    "#META# 043.EdPUBLISHER\t:: دار صادر",
+    "#META# 045.EdYEAR\t:: 1414هـ",
+    "#META#Header#End#",
+    "#META# 040.EdEDITOR\t:: should-be-ignored-after-end",
+  ].join("\n");
+  it("extracts edition fields, dropping placeholders and preferring AuthorAKA", () => {
+    const m = parseLexMeta(text);
+    expect(m.title).toBe("لسان العرب");
+    expect(m.author).toBe("ابن منظور"); // AKA wins over NAME
+    expect(m.died).toBe("711");
+    expect(m.publisher).toBe("دار صادر");
+    expect(m.year).toBe("1414هـ");
+    expect(m.vols).toBe(15);
+    expect(m.editor).toBeUndefined(); // NODATA dropped, and nothing read past Header#End#
   });
 });

@@ -93,3 +93,21 @@ export function collocations(lookup, mode, index, verseData, stopSet, window = 9
     : (x, y) => y.count - x.count;
   return out.sort((x, y) => cmp(x, y) || x.key.localeCompare(y.key));
 }
+
+/* Split two collocation lists (each from collocations()) into the neighbours SHARED
+ * by both terms vs. those distinct to each — the core of compare mode. A shared entry
+ * carries BOTH terms' figures ({ key, label, a, b }, where a/b are the original
+ * { count, pmi, ll } records); onlyA/onlyB are the plain records, order preserved
+ * from the input (so the caller's sort still holds). */
+export function mergeCollocations(aList, bList) {
+  const byKeyB = new Map((bList || []).map((c) => [c.key, c]));
+  const keysA = new Set((aList || []).map((c) => c.key));
+  const shared = [], onlyA = [];
+  for (const a of aList || []) {
+    const b = byKeyB.get(a.key);
+    if (b) shared.push({ key: a.key, label: a.label, a, b });
+    else onlyA.push(a);
+  }
+  const onlyB = (bList || []).filter((c) => !keysA.has(c.key));
+  return { shared, onlyA, onlyB };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { distributionBySura, collocations, association } from "./stats.js";
+import { distributionBySura, collocations, association, mergeCollocations } from "./stats.js";
 
 const w = (s) => ({ orig: s, norm: s, exact: s });
 const verseData = {
@@ -73,5 +73,32 @@ describe("association", () => {
   it("returns zeros for degenerate inputs", () => {
     expect(association(0, 5, 5, 100)).toEqual({ pmi: 0, ll: 0 });
     expect(association(3, 0, 5, 100)).toEqual({ pmi: 0, ll: 0 });
+  });
+});
+
+describe("mergeCollocations", () => {
+  const a = [
+    { key: "سماء", label: "سماء", count: 5, pmi: 2, ll: 9 },
+    { key: "ارض", label: "أرض", count: 3, pmi: 1, ll: 4 },
+  ];
+  const b = [
+    { key: "سماء", label: "سماء", count: 2, pmi: 1, ll: 3 },
+    { key: "بحر", label: "بحر", count: 4, pmi: 3, ll: 6 },
+  ];
+
+  it("splits neighbours into shared vs. distinct, carrying both terms' figures", () => {
+    const { shared, onlyA, onlyB } = mergeCollocations(a, b);
+    expect(shared).toHaveLength(1);
+    expect(shared[0].key).toBe("سماء");
+    expect(shared[0].a.count).toBe(5);
+    expect(shared[0].b.count).toBe(2);
+    expect(onlyA.map((x) => x.key)).toEqual(["ارض"]);
+    expect(onlyB.map((x) => x.key)).toEqual(["بحر"]);
+  });
+
+  it("preserves input order and tolerates empty lists", () => {
+    expect(mergeCollocations([], b)).toEqual({ shared: [], onlyA: [], onlyB: b });
+    expect(mergeCollocations(a, [])).toEqual({ shared: [], onlyA: a, onlyB: [] });
+    expect(mergeCollocations(undefined, undefined)).toEqual({ shared: [], onlyA: [], onlyB: [] });
   });
 });

@@ -1,0 +1,382 @@
+/* App-chrome strings for QuranGraph.jsx (toolbar, HUD, legend, dock, inspector,
+ * morphology card, boot screens). Arabic is the source/fallback; English mirrors it.
+ * The Qur'anic text, word/lemma/root data and lexicon glosses are never translated. */
+export const ar = {
+  // Brand + language
+  "common.brand.home": "آيات.network — العودة إلى البداية",
+  "common.language": "اللغة (العربية / English)",
+
+  // Search
+  "common.search.button": "بحث",
+  "common.search.aria": "بحث عن كلمة أو جذر",
+  "common.search.phRoot": "ابحث عن جذر…",
+  "common.search.phLemma": "ابحث عن صيغة…",
+  "common.search.phWord": "ابحث عن كلمة…",
+  "common.search.didYouMean1": "هل تقصد «",
+  "common.search.didYouMean2": "»؟",
+  "common.search.modeGroup": "نمط البحث",
+  "common.search.matchWord": "مطابقة الكلمة",
+  "common.search.matchLemma": "مطابقة الصيغة (المعجم)",
+  "common.search.matchRoot": "مطابقة الجذر",
+
+  // Graph mode words (reused: segmented buttons, legend, aria, tags)
+  "common.graphMode.word": "كلمة",
+  "common.graphMode.lemma": "صيغة",
+  "common.graphMode.root": "جذر",
+
+  // Selects
+  "common.select.surah": "السورة",
+  "common.select.ayah": "الآية",
+
+  // Tools popover
+  "common.tools.title": "أدوات الرسم",
+  "common.tools.versesPerWord": "عدد الآيات لكل كلمة",
+  "common.tools.allowBig": "السماح بأكثر من {n} عقدة",
+  "common.tools.allowBigHint": "(قد يبطئ الأجهزة الضعيفة)",
+  "common.tools.hideStop": "إخفاء حروف المعاني",
+  "common.tools.showLoops": "إظهار الحلقات",
+  "common.tools.rareOnly": "روابط نادرة فقط",
+  "common.tools.precision": "دقة المطابقة (وضع الكلمة)",
+  "common.tools.precisionAria": "دقة المطابقة",
+  "common.tools.looseTitle": "تتطابق الرسوم المتقاربة (آية = اية)",
+  "common.tools.loose": "مرنة",
+  "common.tools.strictTitle": "تمييز التاء المربوطة والألف المقصورة والهمزات",
+  "common.tools.strict": "دقيقة",
+  "common.tools.renderer": "محرّك الرسم",
+  "common.tools.svgTitle": "SVG — أدقّ، مناسب للشبكات الصغيرة والمتوسطة",
+  "common.tools.canvasTitle": "Canvas — أسرع للشبكات الكبيرة جدًّا (آلاف العقد)",
+
+  // Toolbar icon buttons
+  "common.help": "مساعدة ودليل",
+  "common.theme": "تبديل السمة",
+
+  // HUD
+  "common.hud.countTitle": "عدد العقد (الكلمات والآيات) وعدد الروابط المعروضة الآن",
+  "common.hud.count": "{n} عقدة · {m} رابط",
+  "common.hud.modeTitle": "نمط الربط الحالي",
+  "common.hud.modeRoot": "جذر ثلاثي",
+  "common.hud.modeLemma": "صيغة معجمية",
+  "common.hud.modeWord": "تطابق الكلمة",
+  "common.hud.morphTitle": "تصفية صرفية فعّالة — تُقيّد الرسم والبحث",
+  "common.hud.noPosTitle": "الشبكة كبيرة: رابط المشاركة سيعيد بناء التوزيع تقريبيًّا ولن يحفظ مواضع العقد بدقّة",
+  "common.hud.noPos": "⚠ الرابط لا يحفظ المواضع",
+
+  // Legend
+  "common.legend.center": "المركز (الآية المختارة)",
+  "common.legend.colorByFreq": " · اللون حسب التكرار",
+  "common.legend.verseDepth": "آية · اللون حسب العمق",
+  "common.legend.link": "الرابط · سُمكه حسب ندرة الكلمة",
+  "common.legend.greenDot": "نقطة خضراء: كلمة موسّعة",
+  "common.legend.purpleRing": "حلقة بنفسجية: آية موسّعة",
+  "common.legend.noRoot": "بلا جذر",
+  "common.legend.noLemma": "بلا صيغة",
+
+  // On-canvas dock
+  "common.dock.fit": "توسيط العرض",
+  "common.dock.zoomIn": "تكبير",
+  "common.dock.zoomOut": "تصغير",
+  "common.dock.clearSel": "إلغاء التحديد",
+  "common.dock.undoTitle": "تراجع (Ctrl+Z)",
+  "common.dock.undo": "تراجع",
+  "common.dock.redoTitle": "إعادة (Ctrl+Y)",
+  "common.dock.redo": "إعادة",
+  "common.dock.collapseAll": "طي الكل",
+  "common.dock.expandedWords": "الكلمات الموسّعة",
+  "common.dock.linkCopied": "نُسخ الرابط ✓",
+  "common.dock.copyLink": "نسخ رابط المشاركة",
+  "common.dock.exportPng": "تصدير صورة PNG",
+  "common.dock.exportSvg": "تصدير SVG",
+
+  // Expanded-words list
+  "common.close": "إغلاق",
+  "common.expanded.goToWord": "انتقل إلى الكلمة",
+  "common.expanded.collapse": "طيّ",
+
+  // Empty / loading states
+  "common.empty.lemmaLoading": "… جارٍ تحميل بيانات الصيغ",
+  "common.empty.noWords": "لا توجد كلمات قابلة للربط في هذه الآية",
+  "common.empty.stopHint": " (جرّب إيقاف «إخفاء حروف المعاني»)",
+
+  // Boot screens
+  "common.boot.error": "تعذّر تحميل بيانات القرآن.",
+  "common.boot.retry": "إعادة المحاولة",
+  "common.boot.loading": "جارٍ نسج الشبكة القرآنية…",
+
+  // SVG graph aria
+  "common.graphRole": "شبكة بيانية",
+  "common.graphAria": "شبكة الآية {sn} {a}: {n} عقدة و{m} رابط، بنمط {mode}. تنقّل بين العقد بمفتاح Tab.",
+
+  // Hover tooltip
+  "common.tip.verse": "آية",
+
+  // Reader dock
+  "common.reader.phrases": "العبارات المشتركة (المتشابهات)",
+  "common.reader.readContext": "اقرأ في السياق",
+  "common.reader.showVerse": "إظهار الآية",
+  "common.reader.hideVerse": "إخفاء الآية",
+
+  // Inspector
+  "common.insp.panel": "لوحة التفصيل",
+  "common.insp.closePanel": "إغلاق اللوحة",
+  "common.insp.verseBadge": "آية",
+  "common.insp.notGrouped": " — غير مجمَّعة",
+  "common.insp.versesLabel": "آية وردت فيها",
+  "common.insp.allVerses": "كل الآيات",
+  "common.insp.distribution": "التوزيع والمجاورات",
+  "common.insp.compareTitle": "قارن بمصطلح آخر",
+  "common.insp.compare": "قارن",
+  "common.insp.lexLoading": "… جارٍ تحميل المعجم",
+  "common.insp.lexNone": "لا يوجد تعريف لهذا الجذر في هذا المعجم — جرّب معجمًا آخر.",
+  "common.insp.chooseLex": "اختر المعجم",
+  "common.insp.lexFallback": "معجم لغوي",
+  "common.insp.more": "المزيد ▼",
+  "common.insp.less": "أقل ▲",
+  "common.insp.from": "من:",
+  "common.insp.sharedWords": "كلمات مشتركة",
+  "common.insp.collapseWords": "طي الكلمات",
+  "common.insp.showWords": "إظهار الكلمات",
+  "common.insp.context": "السياق",
+  "common.insp.phrasesShort": "متشابهات",
+  "common.insp.makeCenter": "اجعلها المركز",
+
+  // Lexicon citation
+  "common.cite.editor": "تحقيق {name}",
+  "common.cite.sep": "، ",
+  "common.cite.title": "بيانات الطبعة من مصدر OpenITI — رقم الجزء/الصفحة تقريبيّ وفق مواضع الترقيم",
+  "common.cite.volPage": "ج{vol} · ص{page}",
+
+  // Morphology card
+  "common.morph.title": "التحليل الصرفي",
+  "common.morph.approx": " (تقريبي)",
+  "common.morph.corpus": " — المدوّنة القرآنية",
+  "common.morph.homograph": "⚠ مشترك لفظي: جذر التجميع «{group}» (بالأغلبية)، أمّا في هذه الآية فالجذر «{here}». المعنى المعجمي أعلاه لجذر التجميع.",
+  "common.morph.formVal": "الصيغة {f}",
+  "common.morph.label.pos": "النوع",
+  "common.morph.label.root": "الجذر (هنا)",
+  "common.morph.label.form": "الوزن",
+  "common.morph.label.aspect": "الزمن",
+  "common.morph.label.voice": "البناء",
+  "common.morph.label.mood": "الإعراب",
+  "common.morph.label.pgn": "الضمير",
+  "common.morph.label.lemma": "الصيغة المعجمية",
+  "common.morph.pos.noun": "اسم",
+  "common.morph.pos.verb": "فعل",
+  "common.morph.pos.particle": "حرف",
+  "common.morph.pos.pn": "اسم علم",
+  "common.morph.pos.pron": "ضمير",
+  "common.morph.pos.adj": "صفة",
+  "common.morph.pos.actpcpl": "اسم فاعل",
+  "common.morph.pos.passpcpl": "اسم مفعول",
+  "common.morph.person.1": "متكلّم",
+  "common.morph.person.2": "مخاطَب",
+  "common.morph.person.3": "غائب",
+  "common.morph.gen.m": "مذكّر",
+  "common.morph.gen.f": "مؤنّث",
+  "common.morph.num.s": "مفرد",
+  "common.morph.num.d": "مثنّى",
+  "common.morph.num.p": "جمع",
+  "common.morph.aspect.perf": "ماضٍ",
+  "common.morph.aspect.impf": "مضارع",
+  "common.morph.aspect.impv": "أمر",
+  "common.morph.voice.act": "معلوم",
+  "common.morph.voice.pass": "مجهول",
+  "common.morph.mood.ind": "مرفوع",
+  "common.morph.mood.subj": "منصوب",
+  "common.morph.mood.jus": "مجزوم",
+  "common.morph.case.nom": "مرفوع",
+  "common.morph.case.acc": "منصوب",
+  "common.morph.case.gen": "مجرور",
+
+  // Occurrence label (collocation co-occurrence)
+  "common.occ.withLabel": "«{a}» مع «{b}»",
+};
+
+export const en = {
+  // Brand + language
+  "common.brand.home": "آيات.network — Back to start",
+  "common.language": "Language (العربية / English)",
+
+  // Search
+  "common.search.button": "Search",
+  "common.search.aria": "Search for a word or root",
+  "common.search.phRoot": "Search for a root…",
+  "common.search.phLemma": "Search for a lemma…",
+  "common.search.phWord": "Search for a word…",
+  "common.search.didYouMean1": "Did you mean «",
+  "common.search.didYouMean2": "»?",
+  "common.search.modeGroup": "Search mode",
+  "common.search.matchWord": "Match word",
+  "common.search.matchLemma": "Match lemma (dictionary)",
+  "common.search.matchRoot": "Match root",
+
+  // Graph mode words
+  "common.graphMode.word": "Word",
+  "common.graphMode.lemma": "Lemma",
+  "common.graphMode.root": "Root",
+
+  // Selects
+  "common.select.surah": "Surah",
+  "common.select.ayah": "Ayah",
+
+  // Tools popover
+  "common.tools.title": "Graph tools",
+  "common.tools.versesPerWord": "Verses per word",
+  "common.tools.allowBig": "Allow more than {n} nodes",
+  "common.tools.allowBigHint": "(may slow weak devices)",
+  "common.tools.hideStop": "Hide function words",
+  "common.tools.showLoops": "Show loops",
+  "common.tools.rareOnly": "Rare links only",
+  "common.tools.precision": "Match precision (word mode)",
+  "common.tools.precisionAria": "Match precision",
+  "common.tools.looseTitle": "Near-identical spellings match (آية = اية)",
+  "common.tools.loose": "Loose",
+  "common.tools.strictTitle": "Distinguish tāʾ marbūṭa, alif maqṣūra and hamzas",
+  "common.tools.strict": "Strict",
+  "common.tools.renderer": "Renderer",
+  "common.tools.svgTitle": "SVG — sharper, suited to small and medium graphs",
+  "common.tools.canvasTitle": "Canvas — faster for very large graphs (thousands of nodes)",
+
+  // Toolbar icon buttons
+  "common.help": "Help & guide",
+  "common.theme": "Toggle theme",
+
+  // HUD
+  "common.hud.countTitle": "Number of nodes (words and verses) and links currently shown",
+  "common.hud.count": "{n} nodes · {m} links",
+  "common.hud.modeTitle": "Current linking mode",
+  "common.hud.modeRoot": "Triliteral root",
+  "common.hud.modeLemma": "Dictionary lemma",
+  "common.hud.modeWord": "Word match",
+  "common.hud.morphTitle": "Morphology filter active — constrains graph and search",
+  "common.hud.noPosTitle": "Large graph: the share link rebuilds the layout approximately and won't save node positions precisely",
+  "common.hud.noPos": "⚠ Link doesn't save positions",
+
+  // Legend
+  "common.legend.center": "Center (selected verse)",
+  "common.legend.colorByFreq": " · color by frequency",
+  "common.legend.verseDepth": "Verse · color by depth",
+  "common.legend.link": "Link · thickness by word rarity",
+  "common.legend.greenDot": "Green dot: expanded word",
+  "common.legend.purpleRing": "Purple ring: expanded verse",
+  "common.legend.noRoot": "No root",
+  "common.legend.noLemma": "No lemma",
+
+  // On-canvas dock
+  "common.dock.fit": "Fit to view",
+  "common.dock.zoomIn": "Zoom in",
+  "common.dock.zoomOut": "Zoom out",
+  "common.dock.clearSel": "Clear selection",
+  "common.dock.undoTitle": "Undo (Ctrl+Z)",
+  "common.dock.undo": "Undo",
+  "common.dock.redoTitle": "Redo (Ctrl+Y)",
+  "common.dock.redo": "Redo",
+  "common.dock.collapseAll": "Collapse all",
+  "common.dock.expandedWords": "Expanded words",
+  "common.dock.linkCopied": "Link copied ✓",
+  "common.dock.copyLink": "Copy share link",
+  "common.dock.exportPng": "Export PNG image",
+  "common.dock.exportSvg": "Export SVG",
+
+  // Expanded-words list
+  "common.close": "Close",
+  "common.expanded.goToWord": "Go to word",
+  "common.expanded.collapse": "Collapse",
+
+  // Empty / loading states
+  "common.empty.lemmaLoading": "… Loading lemma data",
+  "common.empty.noWords": "No linkable words in this verse",
+  "common.empty.stopHint": " (try turning off «Hide function words»)",
+
+  // Boot screens
+  "common.boot.error": "Failed to load Qur'an data.",
+  "common.boot.retry": "Retry",
+  "common.boot.loading": "Weaving the Qur'anic network…",
+
+  // SVG graph aria
+  "common.graphRole": "Network graph",
+  "common.graphAria": "Network for verse {sn} {a}: {n} nodes and {m} links, in {mode} mode. Navigate nodes with Tab.",
+
+  // Hover tooltip
+  "common.tip.verse": "verses",
+
+  // Reader dock
+  "common.reader.phrases": "Shared phrases (mutashābihāt)",
+  "common.reader.readContext": "Read in context",
+  "common.reader.showVerse": "Show verse",
+  "common.reader.hideVerse": "Hide verse",
+
+  // Inspector
+  "common.insp.panel": "Detail panel",
+  "common.insp.closePanel": "Close panel",
+  "common.insp.verseBadge": "Verse",
+  "common.insp.notGrouped": " — not grouped",
+  "common.insp.versesLabel": "verses it appears in",
+  "common.insp.allVerses": "All verses",
+  "common.insp.distribution": "Distribution & collocations",
+  "common.insp.compareTitle": "Compare with another term",
+  "common.insp.compare": "Compare",
+  "common.insp.lexLoading": "… Loading dictionary",
+  "common.insp.lexNone": "No definition for this root in this dictionary — try another one.",
+  "common.insp.chooseLex": "Choose dictionary",
+  "common.insp.lexFallback": "Dictionary",
+  "common.insp.more": "More ▼",
+  "common.insp.less": "Less ▲",
+  "common.insp.from": "From:",
+  "common.insp.sharedWords": "Shared words",
+  "common.insp.collapseWords": "Collapse words",
+  "common.insp.showWords": "Show words",
+  "common.insp.context": "Context",
+  "common.insp.phrasesShort": "Mutashābihāt",
+  "common.insp.makeCenter": "Make center",
+
+  // Lexicon citation
+  "common.cite.editor": "ed. {name}",
+  "common.cite.sep": ", ",
+  "common.cite.title": "Edition data from OpenITI — volume/page number is approximate per pagination markers",
+  "common.cite.volPage": "Vol. {vol} · p. {page}",
+
+  // Morphology card
+  "common.morph.title": "Morphological analysis",
+  "common.morph.approx": " (approximate)",
+  "common.morph.corpus": " — Qur'anic corpus",
+  "common.morph.homograph": "⚠ Homograph: the grouping root «{group}» (by majority); in this verse the root is «{here}». The dictionary meaning above is for the grouping root.",
+  "common.morph.formVal": "Form {f}",
+  "common.morph.label.pos": "Type",
+  "common.morph.label.root": "Root (here)",
+  "common.morph.label.form": "Form",
+  "common.morph.label.aspect": "Aspect",
+  "common.morph.label.voice": "Voice",
+  "common.morph.label.mood": "Mood/Case",
+  "common.morph.label.pgn": "Features",
+  "common.morph.label.lemma": "Lemma",
+  "common.morph.pos.noun": "Noun",
+  "common.morph.pos.verb": "Verb",
+  "common.morph.pos.particle": "Particle",
+  "common.morph.pos.pn": "Proper noun",
+  "common.morph.pos.pron": "Pronoun",
+  "common.morph.pos.adj": "Adjective",
+  "common.morph.pos.actpcpl": "Active participle",
+  "common.morph.pos.passpcpl": "Passive participle",
+  "common.morph.person.1": "1st person",
+  "common.morph.person.2": "2nd person",
+  "common.morph.person.3": "3rd person",
+  "common.morph.gen.m": "masc.",
+  "common.morph.gen.f": "fem.",
+  "common.morph.num.s": "sing.",
+  "common.morph.num.d": "dual",
+  "common.morph.num.p": "plural",
+  "common.morph.aspect.perf": "perfect",
+  "common.morph.aspect.impf": "imperfect",
+  "common.morph.aspect.impv": "imperative",
+  "common.morph.voice.act": "active",
+  "common.morph.voice.pass": "passive",
+  "common.morph.mood.ind": "indicative",
+  "common.morph.mood.subj": "subjunctive",
+  "common.morph.mood.jus": "jussive",
+  "common.morph.case.nom": "nominative",
+  "common.morph.case.acc": "accusative",
+  "common.morph.case.gen": "genitive",
+
+  // Occurrence label (collocation co-occurrence)
+  "common.occ.withLabel": "«{a}» with «{b}»",
+};

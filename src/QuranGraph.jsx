@@ -4,23 +4,27 @@ import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifes
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
-import { createSimulation } from "./graph/simulation.js";
+import { createSimClient } from "./graph/simClient.js";
 import { applyPositions } from "./graph/applyPositions.js";
-import { morphAt, verseGroupingKeys, formRoman, morphFilterActive, EMPTY_MORPH_FILTER } from "./morphology.js";
+import { morphAt, verseGroupingKeys, formRoman, morphFilterActive, morphFilterSummary, filterOccurrencesByMorph, EMPTY_MORPH_FILTER } from "./morphology.js";
 import { serializeSvg, exportSvgFile, exportPngFile } from "./graph/exportGraph.js";
 import { readUrlState, writeUrlState } from "./hooks/useUrlState.js";
 import { HighlightedAyah } from "./components/HighlightedAyah.jsx";
 import { GraphLayer } from "./components/GraphLayer.jsx";
+import { GraphCanvas } from "./components/GraphCanvas.jsx";
+import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
 import { OccurrencesModal } from "./components/OccurrencesModal.jsx";
 import { ContextModal } from "./components/ContextModal.jsx";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { DistributionModal } from "./components/DistributionModal.jsx";
+import { CompareModal } from "./components/CompareModal.jsx";
 import { PhraseModal } from "./components/PhraseModal.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { HelpModal } from "./components/HelpModal.jsx";
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
+import { useI18n } from "./i18n/index.js";
 
 // Fixed virtual canvas the graph is laid out in. Decoupling layout from the
 // live viewport size means a window resize never rebuilds the graph or shifts
@@ -41,6 +45,7 @@ function sanitizeMorphFilter(v) {
 
 /* ═══ MAIN ═══ */
 export default function QuranGraph() {
+  const { t, lang, setLang } = useI18n();
   const [quranRaw, setQuranRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,6 +64,7 @@ export default function QuranGraph() {
   const [activeLexicon, setActiveLexicon] = usePersistedState("qg.lexicon", "maqayis", (v, f) => (typeof v === "string" && v ? v : f));
   const [morphFilter, setMorphFilter] = usePersistedState("qg.morphFilter", EMPTY_MORPH_FILTER, sanitizeMorphFilter);
   const [theme, setTheme] = usePersistedState("qg.theme", "dark", (v, f) => (v === "dark" || v === "light" ? v : f));
+  const [renderer, setRenderer] = usePersistedState("qg.renderer", "svg", (v, f) => (v === "svg" || v === "canvas" ? v : f));
   const [expandedWords, setExpandedWords] = useState(new Set());
   const [expandedVerses, setExpandedVerses] = useState(new Set());
   const [hovered, setHovered] = useState(null);
@@ -84,12 +90,16 @@ export default function QuranGraph() {
   const [dragId, setDragId] = useState(null);
   const dragStartRef = useRef(null);
   const draggedRef = useRef(false); // true once a press turns into a real drag
-  const [sim] = useState(() => createSimulation(VW, VH)); // live force engine (stable)
-  const rafSimRef = useRef(0);
+  const [sim] = useState(() => createSimClient(VW, VH)); // live force engine — runs in a Web Worker (stable)
   // DOM registry for imperative position writes (see GraphLayer + applyPositions).
   // A stable object (not a ref) so it can be passed to GraphLayer without reading
   // .current during render; its Maps are mutated by GraphLayer's ref callbacks.
   const [registry] = useState(() => ({ nodes: new Map(), links: new Map(), loops: new Map() }));
+  const canvasApiRef = useRef(null);   // GraphCanvas's imperative { draw } (canvas renderer)
+  const spatialIndexRef = useRef(null); // grid index for canvas hit-testing (settled positions)
+  const pressNodeRef = useRef(null);   // node grabbed on pointerdown in canvas mode (for click)
+  const canvasHoverRef = useRef(null); // last hovered node id in canvas mode (de-dupe)
+  const onNodeClickRef = useRef(null); // latest onNodeClick, so pointerup can fire it (defined below)
   const containerRef = useRef();
   const toolsRef = useRef(null);
   const pointersRef = useRef(new Map()); // pointerId → {x, y}  (for pan / pinch)
@@ -108,6 +118,7 @@ export default function QuranGraph() {
   const [meaningOpen, setMeaningOpen] = useState(false); // full-text toggle
   const [occ, setOcc] = useState(null); // occurrences popup: { lookup, label, mode, keys }
   const [dist, setDist] = useState(null); // distribution/collocation modal: { lookup, label, mode }
+  const [cmp, setCmp] = useState(null); // compare modal: { A, B } each { lookup, label, mode } | null
   const [ctx, setCtx] = useState(null); // context reader modal: { centerKey }
   const [phrase, setPhrase] = useState(null); // shared-phrase (mutashābihāt) modal: { centerKey }
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
@@ -128,31 +139,27 @@ export default function QuranGraph() {
   // Translate that centres the virtual canvas in the current viewport.
   const homeView = useCallback(() => ({ x: (dims.w - VW) / 2, y: (dims.h - VH) / 2, k: 1 }), [dims.w, dims.h]);
 
-  // Drive the live layout: tick the simulation once per frame, pushing settled
-  // positions into state, until its energy decays to rest. Cheap to call from any
-  // interaction — it no-ops if a loop is already running.
-  // Each frame: step the sim, write positions straight to the DOM (no React
-  // re-render), and mirror them into positionsRef so fit/drag/export can read the
-  // live layout. Only when the sim comes to rest do we commit ONE setPositions
-  // snapshot, so React state holds the settled layout for the next structural
-  // render / fit / export — the per-frame churn never touches React.
-  const runSim = useCallback(() => {
-    if (rafSimRef.current) return;
-    const tick = () => {
-      const alive = sim.step();
-      const p = sim.getPositions();
+  // The force simulation runs in a Web Worker (simClient) so the heavy physics pass no
+  // longer blocks the main thread on large graphs. It streams positions back via
+  // onTick: we mirror them into positionsRef, paint imperatively (SVG + Canvas, never a
+  // React re-render), and commit ONE setPositions snapshot when the layout settles so
+  // React state holds the resting layout for the next structural render / fit / export.
+  // Worker commands (sync/reheat/pin/…) auto-start the worker's stepping, so the old
+  // main-thread rAF driver is gone and runSim() is now a no-op kept for call-site clarity.
+  useEffect(() => {
+    sim.setOnTick((p, alive) => {
       positionsRef.current = p;
-      applyPositions(registry, p);
-      if (alive) rafSimRef.current = requestAnimationFrame(tick);
-      else { rafSimRef.current = 0; setPositions(p); }
-    };
-    rafSimRef.current = requestAnimationFrame(tick);
+      applyPositions(registry, p);        // SVG renderer (no-op if its registry is empty)
+      canvasApiRef.current?.draw();       // Canvas renderer (no-op if not mounted)
+      if (!alive) setPositions(p);
+    });
+    return () => sim.terminate?.();
   }, [sim, registry]);
+  const runSim = useCallback(() => {}, []);
   // After any GraphLayer re-render (structure change, hover, selection, pan) repaint
   // the live positions imperatively so freshly-rendered DOM lands where the sim has
   // it — not at the last committed React snapshot. Cheap: plain attribute writes.
-  useLayoutEffect(() => { applyPositions(registry, positionsRef.current); });
-  useEffect(() => () => { if (rafSimRef.current) cancelAnimationFrame(rafSimRef.current); }, []);
+  useLayoutEffect(() => { applyPositions(registry, positionsRef.current); canvasApiRef.current?.draw(); });
   // Mirror the latest committed positions into a ref so the structure-sync effect
   // can seed new nodes around their parent's CURRENT spot without taking positions
   // as a dependency (which would re-fire it on every simulation frame).
@@ -362,6 +369,9 @@ export default function QuranGraph() {
     return idx;
   }, [quranRaw, verseData, lemmaMap]);
 
+  // Mode → inverted index, for the compare modal's two free-form term pickers.
+  const compareIndices = useMemo(() => ({ exact: w2v, root: r2v, lemma: l2v || {} }), [w2v, r2v, l2v]);
+
   // Effective hidden set the graph actually applies. The grammatical particles are
   // governed by the master "إخفاء حروف المعاني" toggle; content defaults and the
   // user's own added words ALWAYS apply (so editing always affects the graph),
@@ -479,10 +489,15 @@ export default function QuranGraph() {
     });
     sim.sync(seeded, graphLinks);
     if (pendMap) sim.place(pendMap); // force EXISTING bodies too (sync keeps their old spot)
-    // Paint the seeded layout before the browser paints (no flash at build-time seeds).
-    const p = sim.getPositions();
-    positionsRef.current = p;
-    applyPositions(registry, p);
+    // Paint the seeded layout immediately, before the browser paints, from the seeds we
+    // just computed — the worker streams refined positions a frame later, so there's no
+    // flash and no synchronous round-trip waiting on the worker.
+    const seedPos = {};
+    for (const n of seeded) seedPos[n.id] = { x: n.x, y: n.y };
+    if (pendMap) for (const id in pendMap) seedPos[id] = pendMap[id];
+    positionsRef.current = seedPos;
+    applyPositions(registry, seedPos);
+    canvasApiRef.current?.draw();
     if (pendMap) {
       // Pin the restored layout so it matches the source; the user can drag or reset.
       for (const n of graphNodes) if (!n.fixed) sim.stick(n.id);
@@ -590,13 +605,16 @@ export default function QuranGraph() {
     else exportPngFile(svgStr, { name: base + ".png", scale: 2, bbox }).catch(() => {});
   }, [contentBounds, T.bg, surah, safeAyah]);
   const exportGraph = useCallback((kind) => {
-    if (graphNodesRef.current.length > CULL_THRESHOLD) {
+    // Export serialises the SVG. In canvas mode the SVG isn't normally mounted, and on
+    // large graphs it's culled — either way flip `exporting` to render the FULL graph
+    // into the SVG for one frame, let the layout effect paint it, then serialise.
+    if (renderer === "canvas" || graphNodesRef.current.length > CULL_THRESHOLD) {
       setExporting(true);
       requestAnimationFrame(() => requestAnimationFrame(() => { writeExport(kind); setExporting(false); }));
     } else {
       writeExport(kind);
     }
-  }, [writeExport]);
+  }, [writeExport, renderer]);
 
   // Write current state to the URL and copy the deep-link to the clipboard.
   const copyLink = () => {
@@ -626,6 +644,17 @@ export default function QuranGraph() {
   }, [childMap]);
 
   const svgToWorld = useCallback((cx, cy) => { const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return { x: 0, y: 0 }; return { x: (cx - rect.left - transform.x) / transform.k, y: (cy - rect.top - transform.y) / transform.k }; }, [transform]);
+
+  // Canvas mode has no per-node DOM, so rebuild a grid index over the SETTLED node
+  // positions for pointer hit-testing — refreshed when the layout commits or the
+  // structure changes. Null (and skipped) in SVG mode, which hit-tests via the DOM.
+  useEffect(() => { spatialIndexRef.current = renderer === "canvas" ? buildSpatialIndex(graphNodes, positionsRef.current) : null; }, [renderer, graphNodes, positions]);
+  // The node under a client point in canvas mode (world-space hit-test), or null.
+  const hitTestAt = useCallback((clientX, clientY) => {
+    if (renderer !== "canvas" || !spatialIndexRef.current) return null;
+    const w = svgToWorld(clientX, clientY);
+    return hitTest(spatialIndexRef.current, positionsRef.current, w.x, w.y);
+  }, [renderer, svgToWorld]);
   // Begin dragging a node: pin ONLY this node in the sim (grabbed at its current
   // point, not snapped to the cursor). Its linked nodes are left free so they
   // re-gather around it live as it moves, rather than being towed rigidly.
@@ -687,15 +716,23 @@ export default function QuranGraph() {
       return;
     }
 
-    const nodeEl = e.target.closest("[data-node]");
-    if (nodeEl) {
-      const node = nmap[nodeEl.getAttribute("data-node")];
-      if (node && !node.fixed) { startDrag(node.id, e.clientX, e.clientY); return; }
-      return;
+    // Canvas mode: no per-node DOM — hit-test instead. A hit node is grabbed (for a
+    // possible drag) and remembered so pointerup can fire its click; a miss pans.
+    if (renderer === "canvas") {
+      const node = hitTestAt(e.clientX, e.clientY);
+      pressNodeRef.current = node || null;
+      if (node) { if (!node.fixed) startDrag(node.id, e.clientX, e.clientY); return; }
+    } else {
+      const nodeEl = e.target.closest("[data-node]");
+      if (nodeEl) {
+        const node = nmap[nodeEl.getAttribute("data-node")];
+        if (node && !node.fixed) { startDrag(node.id, e.clientX, e.clientY); return; }
+        return;
+      }
     }
     setIsPanning(true);
     setPanStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
-  }, [transform, nmap, startDrag]);
+  }, [transform, nmap, startDrag, renderer, hitTestAt]);
 
   // rAF-throttled: pointermove can fire faster than frames; coalesce to one
   // state update per frame so pan/drag stay smooth on large graphs.
@@ -735,9 +772,19 @@ export default function QuranGraph() {
         runSim();
       } else if (isPanning && panStart) {
         setTransform((t) => ({ ...t, x: cur.x - panStart.x, y: cur.y - panStart.y }));
+      } else if (renderer === "canvas") {
+        // Idle hover in canvas mode: hit-test and mirror onNodeEnter/onNodeLeave.
+        const node = hitTestAt(cur.x, cur.y);
+        const id = node ? node.id : null;
+        if (id !== canvasHoverRef.current) {
+          canvasHoverRef.current = id;
+          setHovered(id);
+          if (node && node.type === "word") setActiveWord(node.lookup || node.wordNorm);
+          else if (!node && !selected) setActiveWord(null);
+        }
       }
     });
-  }, [dragId, isPanning, panStart, svgToWorld, runSim, sim]);
+  }, [dragId, isPanning, panStart, svgToWorld, runSim, sim, renderer, hitTestAt, selected]);
 
   // End a node drag: a node that was actually moved sticks where it was dropped
   // (so it doesn't spring back to its parent); a mere press is released.
@@ -752,16 +799,26 @@ export default function QuranGraph() {
     const pts = pointersRef.current;
     pts.delete(e.pointerId);
     if (pts.size < 2) pinchRef.current = null;
-    if (pts.size === 0) { endDrag(); setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null); }
-  }, [endDrag]);
+    if (pts.size === 0) {
+      // Canvas mode: a press that didn't turn into a drag is a click on that node.
+      if (renderer === "canvas" && pressNodeRef.current) {
+        const node = pressNodeRef.current;
+        if (!draggedRef.current) onNodeClickRef.current?.(node, { stopPropagation() {} });
+      }
+      pressNodeRef.current = null;
+      endDrag(); setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
+    }
+  }, [endDrag, renderer]);
 
   // Pointer left the canvas mid-gesture → end it (mirrors mouse-leave behaviour).
   const onPointerLeave = useCallback(() => {
     pointersRef.current.clear();
     pinchRef.current = null;
+    pressNodeRef.current = null;
+    if (canvasHoverRef.current) { canvasHoverRef.current = null; setHovered(null); if (!selected) setActiveWord(null); }
     endDrag();
     setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
-  }, [endDrag]);
+  }, [endDrag, selected]);
 
   const handleWordClick = useCallback((wordNorm, fromVerseKey) => {
     const vk = fromVerseKey || currentKey;
@@ -786,14 +843,20 @@ export default function QuranGraph() {
     const idx = mode === "root" ? r2v : mode === "lemma" ? (l2v || {}) : w2v;
     const all = idx[lookup];
     if (!all?.length) return false;
-    const ord = [...all].sort((a, b) => {
+    let ord = [...all].sort((a, b) => {
       const [sa, aa] = a.split(":").map(Number), [sb, ab] = b.split(":").map(Number);
       return sa - sb || aa - ab;
     });
+    // Honour an active morphology filter: keep only the occurrences whose reading at
+    // the term's position matches (e.g. root X *as a Form II passive verb*). A no-op
+    // until morphology has loaded; an empty result reports a miss rather than misleads.
+    ord = filterOccurrencesByMorph(ord, lookup, mode, verseData, morph, morphFilter, wordGroupKey);
+    if (!ord.length) return false;
     const keys = ord.includes(currentKey) ? [currentKey, ...ord.filter((k) => k !== currentKey)] : ord;
-    setOcc({ lookup, label, mode, keys });
+    const morphNote = morphFilterActive(morphFilter) ? morphFilterSummary(morphFilter) : null;
+    setOcc({ lookup, label, mode, keys, morphNote });
     return true;
-  }, [w2v, r2v, l2v, currentKey]);
+  }, [w2v, r2v, l2v, currentKey, verseData, morph, morphFilter]);
 
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
@@ -834,6 +897,9 @@ export default function QuranGraph() {
     if (n.type === "word") { setMeaningOpen(false); toggleWord(n.lookup || n.wordNorm, n.parentVerseKey); setActiveWord(n.lookup || n.wordNorm); setSelected(n.id); }
     else if (n.type === "verse") { if (selected === n.id) toggleVerse(n.verseKey); else { setSelected(n.id); setActiveWord(null); } }
   }, [selected, toggleWord, toggleVerse]);
+  // Keep a live ref to onNodeClick so the canvas pointerup (defined earlier) can fire
+  // it without a forward reference. Written in an effect, never during render.
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
 
   const hovNode = hovered ? nmap[hovered] : null;
   const selNode = selected ? nmap[selected] : null;
@@ -861,16 +927,16 @@ export default function QuranGraph() {
   if (error) return (
     <div className="ag-boot">
       <div className="ag-boot-glyph">۞</div>
-      <div className="ag-boot-msg">تعذّر تحميل بيانات القرآن.</div>
+      <div className="ag-boot-msg">{t("common.boot.error")}</div>
       <div className="ag-boot-sub">{error}</div>
-      <button className="ag-btn is-gold" onClick={loadData}>إعادة المحاولة</button>
+      <button className="ag-btn is-gold" onClick={loadData}>{t("common.boot.retry")}</button>
     </div>
   );
 
   if (loading) return (
     <div className="ag-boot">
       <div className="ag-boot-glyph">۞</div>
-      <div className="ag-boot-msg">جارٍ نسج الشبكة القرآنية…</div>
+      <div className="ag-boot-msg">{t("common.boot.loading")}</div>
       <div className="ag-boot-bar"><div /></div>
     </div>
   );
@@ -898,65 +964,65 @@ export default function QuranGraph() {
     <div className="ag-app">
       {/* ── Toolbar ── */}
       <header className="ag-bar">
-        <button type="button" className="ag-brand" aria-label="آيات.network — العودة إلى البداية"
+        <button type="button" className="ag-brand" aria-label={t("common.brand.home")}
           onClick={() => { setSelected(null); setActiveWord(null); setToolsOpen(false); setTransform(homeView()); }}>
           <img src={`${import.meta.env.BASE_URL}logomark.svg`} alt="" className="ag-logo" />
           <span className="ag-wordmark">آيات<i>.network</i></span>
         </button>
 
         <form className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search" style={{ position: "relative" }}>
-          <button type="submit" className="ag-search-btn" aria-label="بحث" title="بحث">⌕</button>
-          <input className="ag-input" type="search" value={query} aria-label="بحث عن كلمة أو جذر"
-            placeholder={searchMode === "root" ? "ابحث عن جذر…" : searchMode === "lemma" ? "ابحث عن صيغة…" : "ابحث عن كلمة…"}
+          <button type="submit" className="ag-search-btn" aria-label={t("common.search.button")} title={t("common.search.button")}>⌕</button>
+          <input className="ag-input" type="search" value={query} aria-label={t("common.search.aria")}
+            placeholder={searchMode === "root" ? t("common.search.phRoot") : searchMode === "lemma" ? t("common.search.phLemma") : t("common.search.phWord")}
             onChange={(e) => { setQuery(e.target.value); if (searchMiss) setSearchMiss(false); if (suggest) setSuggest(null); }} />
           {suggest && (
             <button type="button" className="ag-search-suggest" onClick={acceptSuggest}
               style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "6px 10px", fontSize: "var(--text-sm)", cursor: "pointer", whiteSpace: "nowrap", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))" }}>
-              هل تقصد «<span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)" }}>{suggest.label}</span>»؟
+              {t("common.search.didYouMean1")}<span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)" }}>{suggest.label}</span>{t("common.search.didYouMean2")}
             </button>
           )}
         </form>
 
         <div className="ag-controls">
-          <div className="ag-seg" role="group" aria-label="نمط البحث">
-            <button type="button" className={"" + (searchMode === "exact" ? "is-on" : "")} title="مطابقة الكلمة"
-              aria-pressed={searchMode === "exact"} onClick={() => { setSearchMode("exact"); reset(); }}>كلمة</button>
-            <button type="button" className={"is-lemma " + (searchMode === "lemma" ? "is-on" : "")} title="مطابقة الصيغة (المعجم)"
-              aria-pressed={searchMode === "lemma"} onClick={() => { setSearchMode("lemma"); reset(); }}>صيغة</button>
-            <button type="button" className={"is-root " + (searchMode === "root" ? "is-on" : "")} title="مطابقة الجذر"
-              aria-pressed={searchMode === "root"} onClick={() => { setSearchMode("root"); reset(); }}>جذر</button>
+          <div className="ag-seg" role="group" aria-label={t("common.search.modeGroup")}>
+            <button type="button" className={"" + (searchMode === "exact" ? "is-on" : "")} title={t("common.search.matchWord")}
+              aria-pressed={searchMode === "exact"} onClick={() => { setSearchMode("exact"); reset(); }}>{t("common.graphMode.word")}</button>
+            <button type="button" className={"is-lemma " + (searchMode === "lemma" ? "is-on" : "")} title={t("common.search.matchLemma")}
+              aria-pressed={searchMode === "lemma"} onClick={() => { setSearchMode("lemma"); reset(); }}>{t("common.graphMode.lemma")}</button>
+            <button type="button" className={"is-root " + (searchMode === "root" ? "is-on" : "")} title={t("common.search.matchRoot")}
+              aria-pressed={searchMode === "root"} onClick={() => { setSearchMode("root"); reset(); }}>{t("common.graphMode.root")}</button>
           </div>
 
           <div className="ag-select">
-            <select aria-label="السورة" value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
+            <select aria-label={t("common.select.surah")} value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
               {surahList.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
             </select>
           </div>
           <div className="ag-select is-ayah">
-            <select aria-label="الآية" value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
+            <select aria-label={t("common.select.ayah")} value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
               {Array.from({ length: ayahCount }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
             </select>
           </div>
 
           <div className="ag-tools" ref={toolsRef}>
-            <button type="button" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label="أدوات الرسم"
+            <button type="button" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label={t("common.tools.title")}
               aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>⚙</button>
             {toolsOpen && (
-              <div className="ag-popover" role="dialog" aria-label="أدوات الرسم">
-                <h3 className="ag-pop-h">أدوات الرسم</h3>
+              <div className="ag-popover" role="dialog" aria-label={t("common.tools.title")}>
+                <h3 className="ag-pop-h">{t("common.tools.title")}</h3>
                 {(() => {
                   const sliderMax = allowBig ? branchMax : Math.min(branchMax, SOFT_CAP);
                   return (
                     <div className="ag-range">
                       <div className="ag-range-top">
-                        <span className="ag-range-lab">عدد الآيات لكل كلمة</span>
+                        <span className="ag-range-lab">{t("common.tools.versesPerWord")}</span>
                         <span className="ag-range-val">{Math.min(maxBranch, sliderMax)}<span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}> / {sliderMax}</span></span>
                       </div>
-                      <input type="range" aria-label="عدد الآيات لكل كلمة" min={3} max={sliderMax} value={Math.min(maxBranch, sliderMax)}
+                      <input type="range" aria-label={t("common.tools.versesPerWord")} min={3} max={sliderMax} value={Math.min(maxBranch, sliderMax)}
                         onChange={(e) => setMaxBranch(+e.target.value)} />
                       {branchMax > SOFT_CAP && (
                         <label className="ag-switch" style={{ marginBlockStart: "var(--space-2)" }}>
-                          <span>السماح بأكثر من {SOFT_CAP} عقدة <span style={{ color: "var(--rubric-400)", fontSize: "var(--text-xs)" }}>(قد يبطئ الأجهزة الضعيفة)</span></span>
+                          <span>{t("common.tools.allowBig", { n: SOFT_CAP })} <span style={{ color: "var(--rubric-400)", fontSize: "var(--text-xs)" }}>{t("common.tools.allowBigHint")}</span></span>
                           <input type="checkbox" checked={allowBig} onChange={(e) => setAllowBig(e.target.checked)} />
                           <span className="ag-track" aria-hidden="true" />
                         </label>
@@ -966,33 +1032,44 @@ export default function QuranGraph() {
                 })()}
                 <div className="ag-pop-sec">
                   <label className="ag-switch">
-                    <span>إخفاء حروف المعاني</span>
+                    <span>{t("common.tools.hideStop")}</span>
                     <input type="checkbox" checked={hideStop} onChange={(e) => setHideStop(e.target.checked)} />
                     <span className="ag-track" aria-hidden="true" />
                   </label>
                   <label className="ag-switch">
-                    <span>إظهار الحلقات</span>
+                    <span>{t("common.tools.showLoops")}</span>
                     <input type="checkbox" checked={showLoops} onChange={(e) => setShowLoops(e.target.checked)} />
                     <span className="ag-track" aria-hidden="true" />
                   </label>
                   <label className="ag-switch">
-                    <span>روابط نادرة فقط</span>
+                    <span>{t("common.tools.rareOnly")}</span>
                     <input type="checkbox" checked={rareOnly} onChange={(e) => setRareOnly(e.target.checked)} />
                     <span className="ag-track" aria-hidden="true" />
                   </label>
                 </div>
                 <div className="ag-morph">
                   <div className="ag-morph-grp">
-                    <span className="ag-range-lab">دقة المطابقة (وضع الكلمة)</span>
-                    <div className="ag-seg ag-seg-sm" role="group" aria-label="دقة المطابقة">
-                      <button type="button" className={precision === "loose" ? "is-on" : ""} title="تتطابق الرسوم المتقاربة (آية = اية)"
-                        aria-pressed={precision === "loose"} onClick={() => { setPrecision("loose"); reset(); }}>مرنة</button>
-                      <button type="button" className={precision === "strict" ? "is-on" : ""} title="تمييز التاء المربوطة والألف المقصورة والهمزات"
-                        aria-pressed={precision === "strict"} onClick={() => { setPrecision("strict"); reset(); }}>دقيقة</button>
+                    <span className="ag-range-lab">{t("common.tools.precision")}</span>
+                    <div className="ag-seg ag-seg-sm" role="group" aria-label={t("common.tools.precisionAria")}>
+                      <button type="button" className={precision === "loose" ? "is-on" : ""} title={t("common.tools.looseTitle")}
+                        aria-pressed={precision === "loose"} onClick={() => { setPrecision("loose"); reset(); }}>{t("common.tools.loose")}</button>
+                      <button type="button" className={precision === "strict" ? "is-on" : ""} title={t("common.tools.strictTitle")}
+                        aria-pressed={precision === "strict"} onClick={() => { setPrecision("strict"); reset(); }}>{t("common.tools.strict")}</button>
                     </div>
                   </div>
                 </div>
                 <MorphologyFilter filter={morphFilter} onChange={setMorphFilter} />
+                <div className="ag-morph">
+                  <div className="ag-morph-grp">
+                    <span className="ag-range-lab">{t("common.tools.renderer")}</span>
+                    <div className="ag-seg ag-seg-sm" role="group" aria-label={t("common.tools.renderer")}>
+                      <button type="button" className={renderer === "svg" ? "is-on" : ""} title={t("common.tools.svgTitle")}
+                        aria-pressed={renderer === "svg"} onClick={() => setRenderer("svg")}>SVG</button>
+                      <button type="button" className={renderer === "canvas" ? "is-on" : ""} title={t("common.tools.canvasTitle")}
+                        aria-pressed={renderer === "canvas"} onClick={() => setRenderer("canvas")}>Canvas</button>
+                    </div>
+                  </div>
+                </div>
                 <StopWordEditor
                   particles={[...STOP_PARTICLES]} content={[...STOP_CONTENT_DEFAULT]}
                   hiddenSet={stopSet} extra={stopExtra}
@@ -1003,10 +1080,12 @@ export default function QuranGraph() {
             )}
           </div>
 
-          <button type="button" className="ag-iconbtn" title="مساعدة ودليل" aria-label="مساعدة ودليل"
+          <button type="button" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
-          <button type="button" className="ag-iconbtn" title="تبديل السمة" aria-label="تبديل السمة"
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
+          <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
+            onClick={() => setLang(lang === "ar" ? "en" : "ar")}>{lang === "ar" ? "EN" : "ع"}</button>
+          <button type="button" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
+            onClick={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
         </div>
       </header>
 
@@ -1021,51 +1100,52 @@ export default function QuranGraph() {
 
           {/* HUD: status + mode */}
           <div className="ag-hud">
-            <span className="ag-chip" title="عدد العقد (الكلمات والآيات) وعدد الروابط المعروضة الآن">{graphNodes.length} عقدة · {graphLinks.length} رابط</span>
-            <span className={"ag-chip is-mode" + (searchMode === "root" ? " is-root" : searchMode === "lemma" ? " is-lemma" : "")} title="نمط الربط الحالي">{searchMode === "root" ? "جذر ثلاثي" : searchMode === "lemma" ? "صيغة معجمية" : "تطابق الكلمة"}</span>
-            {layoutNotShared && <span className="ag-chip" style={{ color: "var(--rubric-400)" }} title="الشبكة كبيرة: رابط المشاركة سيعيد بناء التوزيع تقريبيًّا ولن يحفظ مواضع العقد بدقّة">⚠ الرابط لا يحفظ المواضع</span>}
+            <span className="ag-chip" title={t("common.hud.countTitle")}>{t("common.hud.count", { n: graphNodes.length, m: graphLinks.length })}</span>
+            <span className={"ag-chip is-mode" + (searchMode === "root" ? " is-root" : searchMode === "lemma" ? " is-lemma" : "")} title={t("common.hud.modeTitle")}>{searchMode === "root" ? t("common.hud.modeRoot") : searchMode === "lemma" ? t("common.hud.modeLemma") : t("common.hud.modeWord")}</span>
+            {morphFilterActive(morphFilter) && <span className="ag-chip is-morph" title={t("common.hud.morphTitle")}>⚙ {morphFilterSummary(morphFilter)}</span>}
+            {layoutNotShared && <span className="ag-chip" style={{ color: "var(--rubric-400)" }} title={t("common.hud.noPosTitle")}>{t("common.hud.noPos")}</span>}
           </div>
 
           {/* Legend */}
           <div className="ag-legend" aria-hidden="true">
-            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--gold-500)" }} />المركز (الآية المختارة)</div>
-            <div className="ag-legend-row"><span className="ag-legend-swatch ag-legend-freq" />{searchMode === "root" ? "جذر" : searchMode === "lemma" ? "صيغة" : "كلمة"} · اللون حسب التكرار</div>
-            <div className="ag-legend-row"><span className="ag-legend-swatch ag-legend-depth" />آية · اللون حسب العمق</div>
-            <div className="ag-legend-row"><span className="ag-legend-line" />الرابط · سُمكه حسب ندرة الكلمة</div>
-            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "#34d8a8" }} />نقطة خضراء: كلمة موسّعة</div>
-            <div className="ag-legend-row"><span className="ag-legend-ring" />حلقة بنفسجية: آية موسّعة</div>
-            {searchMode !== "exact" && <div className="ag-legend-row"><span className="ag-legend-dot ag-legend-dash" />بلا {searchMode === "root" ? "جذر" : "صيغة"}</div>}
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "var(--gold-500)" }} />{t("common.legend.center")}</div>
+            <div className="ag-legend-row"><span className="ag-legend-swatch ag-legend-freq" />{searchMode === "root" ? t("common.graphMode.root") : searchMode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}{t("common.legend.colorByFreq")}</div>
+            <div className="ag-legend-row"><span className="ag-legend-swatch ag-legend-depth" />{t("common.legend.verseDepth")}</div>
+            <div className="ag-legend-row"><span className="ag-legend-line" />{t("common.legend.link")}</div>
+            <div className="ag-legend-row"><span className="ag-legend-dot" style={{ background: "#34d8a8" }} />{t("common.legend.greenDot")}</div>
+            <div className="ag-legend-row"><span className="ag-legend-ring" />{t("common.legend.purpleRing")}</div>
+            {searchMode !== "exact" && <div className="ag-legend-row"><span className="ag-legend-dot ag-legend-dash" />{searchMode === "root" ? t("common.legend.noRoot") : t("common.legend.noLemma")}</div>}
           </div>
 
           {/* On-canvas graph controls (fit / zoom / collapse / deselect / back) */}
           <div className="ag-dock" data-panel="1">
-            <button type="button" className="ag-iconbtn is-gold" title="توسيط العرض" aria-label="توسيط العرض" onClick={() => setTransform(fitView())}>⤢</button>
-            <button type="button" className="ag-iconbtn" title="تكبير" aria-label="تكبير" onClick={() => zoomBy(1.2)}>＋</button>
-            <button type="button" className="ag-iconbtn" title="تصغير" aria-label="تصغير" onClick={() => zoomBy(0.83)}>－</button>
-            {(selected || activeWord) && <button type="button" className="ag-iconbtn is-gold" title="إلغاء التحديد" aria-label="إلغاء التحديد" onClick={() => { setSelected(null); setActiveWord(null); }}>✦</button>}
-            {canUndo && <button type="button" className="ag-iconbtn" title="تراجع (Ctrl+Z)" aria-label="تراجع" onClick={undo}>↶</button>}
-            {canRedo && <button type="button" className="ag-iconbtn" title="إعادة (Ctrl+Y)" aria-label="إعادة" onClick={redo}>↷</button>}
-            {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title="طي الكل" aria-label="طي الكل" onClick={reset}>↺</button>}
-            {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title="الكلمات الموسّعة" aria-label="الكلمات الموسّعة" aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
-            <button type="button" className="ag-iconbtn" title={linkCopied ? "نُسخ الرابط ✓" : "نسخ رابط المشاركة"} aria-label="نسخ رابط المشاركة" onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
-            <button type="button" className="ag-iconbtn" title="تصدير صورة PNG" aria-label="تصدير صورة PNG" onClick={() => exportGraph("png")}>⤓</button>
-            <button type="button" className="ag-iconbtn" title="تصدير SVG" aria-label="تصدير SVG" onClick={() => exportGraph("svg")}>❖</button>
+            <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.fit")} aria-label={t("common.dock.fit")} onClick={() => setTransform(fitView())}>⤢</button>
+            <button type="button" className="ag-iconbtn" title={t("common.dock.zoomIn")} aria-label={t("common.dock.zoomIn")} onClick={() => zoomBy(1.2)}>＋</button>
+            <button type="button" className="ag-iconbtn" title={t("common.dock.zoomOut")} aria-label={t("common.dock.zoomOut")} onClick={() => zoomBy(0.83)}>－</button>
+            {(selected || activeWord) && <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.clearSel")} aria-label={t("common.dock.clearSel")} onClick={() => { setSelected(null); setActiveWord(null); }}>✦</button>}
+            {canUndo && <button type="button" className="ag-iconbtn" title={t("common.dock.undoTitle")} aria-label={t("common.dock.undo")} onClick={undo}>↶</button>}
+            {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
+            {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
+            {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
+            <button type="button" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
+            <button type="button" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
+            <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
           </div>
 
           {/* Expanded-words list (green-dot words) */}
           {showExpanded && expandedWordNodes.length > 0 && (
             <div className="ag-expanded" data-panel="1">
               <div className="ag-expanded-h">
-                <span><span style={{ color: "#34d8a8" }}>✷</span> الكلمات الموسّعة ({expandedWordNodes.length})</span>
-                <button type="button" className="ag-iconbtn" style={{ width: 26, height: 26, fontSize: 12 }} aria-label="إغلاق" onClick={() => setShowExpanded(false)}>✕</button>
+                <span><span style={{ color: "#34d8a8" }}>✷</span> {t("common.dock.expandedWords")} ({expandedWordNodes.length})</span>
+                <button type="button" className="ag-iconbtn" style={{ width: 26, height: 26, fontSize: 12 }} aria-label={t("common.close")} onClick={() => setShowExpanded(false)}>✕</button>
               </div>
               <div className="ag-expanded-list">
                 {expandedWordNodes.map((n) => (
                   <span key={n.id} className="ag-expanded-chip">
-                    <button type="button" className="ag-expanded-go" title="انتقل إلى الكلمة" onClick={() => focusNode(n.id)}>
+                    <button type="button" className="ag-expanded-go" title={t("common.expanded.goToWord")} onClick={() => focusNode(n.id)}>
                       {n.label}{n.count > 1 ? <b style={{ color: "var(--text-faint)" }}> {n.count}</b> : null}
                     </button>
-                    <button type="button" className="ag-expanded-x" title="طيّ" aria-label="طيّ"
+                    <button type="button" className="ag-expanded-x" title={t("common.expanded.collapse")} aria-label={t("common.expanded.collapse")}
                       onClick={() => toggleWord(n.lookup || n.wordNorm, n.parentVerseKey)}>✕</button>
                   </span>
                 ))}
@@ -1079,7 +1159,7 @@ export default function QuranGraph() {
             <div className="ag-empty">
               <div className="ag-empty-inner">
                 <div className="ag-empty-glyph">۞</div>
-                … جارٍ تحميل بيانات الصيغ
+                {t("common.empty.lemmaLoading")}
               </div>
             </div>
           )}
@@ -1089,24 +1169,35 @@ export default function QuranGraph() {
             <div className="ag-empty">
               <div className="ag-empty-inner">
                 <div className="ag-empty-glyph">۞</div>
-                لا توجد كلمات قابلة للربط في هذه الآية{hideStop ? " (جرّب إيقاف «إخفاء حروف المعاني»)" : ""}.
+                {t("common.empty.noWords")}{hideStop ? t("common.empty.stopHint") : ""}.
               </div>
             </div>
           )}
 
           {/* SVG graph */}
           <svg ref={svgRef} width={dims.w} height={dims.h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-            role="group" aria-roledescription="شبكة بيانية"
-            aria-label={`شبكة الآية ${currentVerse?.sn || ""} ${safeAyah}: ${graphNodes.length} عقدة و${graphLinks.length} رابط، بنمط ${searchMode === "root" ? "الجذر" : searchMode === "lemma" ? "الصيغة" : "الكلمة"}. تنقّل بين العقد بمفتاح Tab.`}>
+            role="group" aria-roledescription={t("common.graphRole")}
+            aria-label={t("common.graphAria", { sn: currentVerse?.sn || "", a: safeAyah, n: graphNodes.length, m: graphLinks.length, mode: searchMode === "root" ? t("common.graphMode.root") : searchMode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word") })}>
             <defs><marker id="arrL" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185" opacity="0.6" /></marker></defs>
             <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`} style={{ pointerEvents: "auto" }}>
-              <GraphLayer
+              {(renderer === "svg" || exporting) && <GraphLayer
                 nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} positions={positions} nmap={nmap} reg={registry} viewport={cullViewport}
                 highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
                 hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme}
-                onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />
+                onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />}
             </g>
           </svg>
+
+          {/* Canvas renderer (high-scale): one canvas instead of N DOM nodes. Pan/zoom/
+              drag/hit-testing stay in the stage's pointer handlers; this only paints. */}
+          {renderer === "canvas" && (
+            <GraphCanvas
+              nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} nmap={nmap} positionsRef={positionsRef}
+              transform={transform} dims={dims} T={T} theme={theme} showLoops={showLoops} viewport={cullViewport}
+              highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
+              hovered={hovered} selected={selected} apiRef={canvasApiRef}
+              onNodeClick={onNodeClick} onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} />
+          )}
 
           {/* Hover tooltip */}
           {hovNode && hovNode.type !== "center" && !selNode && (
@@ -1115,8 +1206,8 @@ export default function QuranGraph() {
                 <div>
                   <div className="ag-tip-word">{hovNode.label}</div>
                   <div className="ag-tip-meta">
-                    {hovNode.rootLabel && <span className="ag-tag" style={{ background: "color-mix(in oklab, var(--viridian-500) 14%, transparent)", color: "var(--viridian-400)", borderColor: "color-mix(in oklab, var(--viridian-500) 30%, transparent)" }}>جذر {hovNode.rootLabel}</span>}
-                    <span className="ag-tag" style={{ color: fColor(hovNode.count, theme), background: fColor(hovNode.count, theme) + "22", borderColor: fColor(hovNode.count, theme) + "44" }}>{hovNode.count} آية</span>
+                    {hovNode.rootLabel && <span className="ag-tag" style={{ background: "color-mix(in oklab, var(--viridian-500) 14%, transparent)", color: "var(--viridian-400)", borderColor: "color-mix(in oklab, var(--viridian-500) 30%, transparent)" }}>{t("common.graphMode.root")} {hovNode.rootLabel}</span>}
+                    <span className="ag-tag" style={{ color: fColor(hovNode.count, theme), background: fColor(hovNode.count, theme) + "22", borderColor: fColor(hovNode.count, theme) + "44" }}>{hovNode.count} {t("common.tip.verse")}</span>
                   </div>
                   {hovNode.root && meanings?.[hovNode.root] && <div className="ag-tip-mean">{meanings[hovNode.root].c}</div>}
                 </div>
@@ -1143,11 +1234,11 @@ export default function QuranGraph() {
                   </span>
                   <span style={{ display: "flex", gap: 4 }}>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label="العبارات المشتركة (المتشابهات)" title="العبارات المشتركة (المتشابهات)" onClick={() => openPhrases(currentKey)}>⧉</button>
+                      aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label="اقرأ في السياق" title="اقرأ في السياق" onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
+                      aria-label={t("common.reader.readContext")} title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={readerCollapsed ? "إظهار الآية" : "إخفاء الآية"} aria-expanded={!readerCollapsed}
+                      aria-label={readerCollapsed ? t("common.reader.showVerse") : t("common.reader.hideVerse")} aria-expanded={!readerCollapsed}
                       onClick={() => setReaderCollapsed((c) => !c)}>{readerCollapsed ? "▴" : "▾"}</button>
                   </span>
                 </div>
@@ -1164,33 +1255,37 @@ export default function QuranGraph() {
         {/* Inspector — selected node detail (side panel ↔ mobile drawer) */}
         <div className={"ag-scrim" + (inspOpen && sheetOpen ? " is-open" : "")} onClick={() => { setSelected(null); setActiveWord(null); }} />
         {selNode && (
-          <aside className={"ag-inspector" + (sheetOpen ? " is-open" : "")} aria-label="لوحة التفصيل">
-            <button type="button" className="ag-sheet-grab" aria-label="إغلاق اللوحة" onClick={() => { setSelected(null); setActiveWord(null); }} />
+          <aside className={"ag-inspector" + (sheetOpen ? " is-open" : "")} aria-label={t("common.insp.panel")}>
+            <button type="button" className="ag-sheet-grab" aria-label={t("common.insp.closePanel")} onClick={() => { setSelected(null); setActiveWord(null); }} />
             {selNode.type === "word" ? (
               <>
                 <div className="ag-insp-head">
                   <div className="ag-insp-title">
-                    <span className="ag-badge t-word">كلمة</span>
+                    <span className="ag-badge t-word">{t("common.graphMode.word")}</span>
                     <h2 className="ag-insp-word">{selNode.label}</h2>
-                    {selNode.rootLabel && <span className="ag-insp-root">جذر «{selNode.rootLabel}»</span>}
-                    {selNode.uncovered && <span className="ag-insp-root" style={{ color: "var(--text-faint)" }}>بلا {searchMode === "root" ? "جذر" : "صيغة"} — غير مجمَّعة</span>}
+                    {selNode.rootLabel && <span className="ag-insp-root">{t("common.graphMode.root")} «{selNode.rootLabel}»</span>}
+                    {selNode.uncovered && <span className="ag-insp-root" style={{ color: "var(--text-faint)" }}>{searchMode === "root" ? t("common.legend.noRoot") : t("common.legend.noLemma")}{t("common.insp.notGrouped")}</span>}
                   </div>
-                  <button type="button" className="ag-iconbtn" title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
+                  <button type="button" className="ag-iconbtn" title={t("common.close")} aria-label={t("common.close")} onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
                 </div>
                 <div className="ag-insp-scroll">
                   <div className="ag-insp-stat">
                     <span className="ag-insp-num" style={{ color: fColor(selNode.count, theme) }}>{selNode.count}</span>
-                    <span className="ag-insp-cap">آية وردت فيها</span>
+                    <span className="ag-insp-cap">{t("common.insp.versesLabel")}</span>
                   </div>
                   {selNode.count > 1 && (
                     <div className="ag-insp-actions">
                       <button type="button" className="ag-btn is-gold ag-occ-btn"
                         onClick={() => openOcc(selNode.lookup || selNode.wordNorm, selNode.label, searchMode)}>
-                        ⌖ كل الآيات ({selNode.count})
+                        ⌖ {t("common.insp.allVerses")} ({selNode.count})
                       </button>
                       <button type="button" className="ag-btn"
                         onClick={() => setDist({ lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode })}>
-                        ▦ التوزيع والمجاورات
+                        ▦ {t("common.insp.distribution")}
+                      </button>
+                      <button type="button" className="ag-btn" title={t("common.insp.compareTitle")}
+                        onClick={() => setCmp({ A: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode }, B: null })}>
+                        ⇄ {t("common.insp.compare")}
                       </button>
                     </div>
                   )}
@@ -1211,29 +1306,43 @@ export default function QuranGraph() {
                     return (
                       <div className="ag-insp-card t-mean">
                         <div className="ag-insp-mean" style={!m ? { color: "var(--text-faint)", fontStyle: "italic" } : undefined}>
-                          {meanings == null ? "… جارٍ تحميل المعجم"
+                          {meanings == null ? t("common.insp.lexLoading")
                             : m ? <>{body}{loadingFull ? " …" : ""}</>
-                            : "لا يوجد تعريف لهذا الجذر في هذا المعجم — جرّب معجمًا آخر."}
+                            : t("common.insp.lexNone")}
                         </div>
                         <div className="ag-insp-card-h" style={{ marginBottom: 0, marginTop: 6 }}>
                           <span className="ag-insp-card-lab" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                             {lexicons?.length > 1
-                              ? <select className="ag-lex-select" value={activeLexicon} aria-label="اختر المعجم" onChange={(e) => setActiveLexicon(e.target.value)}>
+                              ? <select className="ag-lex-select" value={activeLexicon} aria-label={t("common.insp.chooseLex")} onChange={(e) => setActiveLexicon(e.target.value)}>
                                   {lexicons.map((L) => <option key={L.id} value={L.id}>{L.label}</option>)}
                                 </select>
-                              : <span>{lexicons?.find((L) => L.id === activeLexicon)?.label || "معجم لغوي"}</span>}
-                            <span style={{ color: "var(--text-faint)" }}>· جذر {sr}</span>
+                              : <span>{lexicons?.find((L) => L.id === activeLexicon)?.label || t("common.insp.lexFallback")}</span>}
+                            <span style={{ color: "var(--text-faint)" }}>· {t("common.graphMode.root")} {sr}</span>
                           </span>
-                          {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? "أقل ▲" : "المزيد ▼"}</button>}
+                          {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? t("common.insp.less") : t("common.insp.more")}</button>}
                         </div>
+                        {m && (() => {
+                          // Edition citation: the print volume/page this gloss sits on (from the
+                          // OpenITI page milestones — approximate) + the edition's editor/publisher.
+                          const ed = lexicons?.find((L) => L.id === activeLexicon)?.edition;
+                          const ct = m.cite;
+                          if (!ed && !ct) return null;
+                          const edStr = ed ? [ed.editor && t("common.cite.editor", { name: ed.editor }), ed.publisher, ed.year].filter(Boolean).join(t("common.cite.sep")) : "";
+                          return (
+                            <div className="ag-insp-cite" title={t("common.cite.title")}>
+                              {ct && <span className="ag-insp-cite-pg">{t("common.cite.volPage", { vol: ct.vol, page: ct.page })}</span>}
+                              {edStr && <span className="ag-insp-cite-ed">{edStr}</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
                   {(() => {
                     const m = morphAt(morph, selNode.parentVerseKey, selNode.wordIndex);
                     if (!m) return null;
-                    const POS_AR = { noun: "اسم", verb: "فعل", particle: "حرف", pn: "اسم علم", pron: "ضمير", adj: "صفة", actpcpl: "اسم فاعل", passpcpl: "اسم مفعول" };
-                    const PERSON_AR = { 1: "متكلّم", 2: "مخاطَب", 3: "غائب" }, GEN_AR = { m: "مذكّر", f: "مؤنّث" }, NUM_AR = { s: "مفرد", d: "مثنّى", p: "جمع" };
+                    const POS_AR = { noun: t("common.morph.pos.noun"), verb: t("common.morph.pos.verb"), particle: t("common.morph.pos.particle"), pn: t("common.morph.pos.pn"), pron: t("common.morph.pos.pron"), adj: t("common.morph.pos.adj"), actpcpl: t("common.morph.pos.actpcpl"), passpcpl: t("common.morph.pos.passpcpl") };
+                    const PERSON_AR = { 1: t("common.morph.person.1"), 2: t("common.morph.person.2"), 3: t("common.morph.person.3") }, GEN_AR = { m: t("common.morph.gen.m"), f: t("common.morph.gen.f") }, NUM_AR = { s: t("common.morph.num.s"), d: t("common.morph.num.d"), p: t("common.morph.num.p") };
                     const pgn = [PERSON_AR[m.person], GEN_AR[m.gender], NUM_AR[m.number]].filter(Boolean).join(" ");
                     // The root the corpus assigns to THIS occurrence (position-correct),
                     // vs. the majority-vote grouping root the graph links by. When they
@@ -1243,25 +1352,25 @@ export default function QuranGraph() {
                     const groupRoot = selNode.root || rootOf(selNode.wordNorm);
                     const divergent = m.root && groupRoot && m.root !== groupRoot;
                     const rows = [
-                      ["النوع", POS_AR[m.pos]],
-                      ["الجذر (هنا)", m.root],
-                      ["الوزن", m.vf ? `الصيغة ${formRoman(m.vf)}` : null],
-                      ["الزمن", { perf: "ماضٍ", impf: "مضارع", impv: "أمر" }[m.aspect]],
-                      ["البناء", { act: "معلوم", pass: "مجهول" }[m.voice]],
-                      ["الإعراب", { ind: "مرفوع", subj: "منصوب", jus: "مجزوم" }[m.mood] || { nom: "مرفوع", acc: "منصوب", gen: "مجرور" }[m.gcase]],
-                      ["الضمير", pgn || null],
-                      ["الصيغة المعجمية", m.lemma],
+                      [t("common.morph.label.pos"), POS_AR[m.pos]],
+                      [t("common.morph.label.root"), m.root],
+                      [t("common.morph.label.form"), m.vf ? t("common.morph.formVal", { f: formRoman(m.vf) }) : null],
+                      [t("common.morph.label.aspect"), { perf: t("common.morph.aspect.perf"), impf: t("common.morph.aspect.impf"), impv: t("common.morph.aspect.impv") }[m.aspect]],
+                      [t("common.morph.label.voice"), { act: t("common.morph.voice.act"), pass: t("common.morph.voice.pass") }[m.voice]],
+                      [t("common.morph.label.mood"), { ind: t("common.morph.mood.ind"), subj: t("common.morph.mood.subj"), jus: t("common.morph.mood.jus") }[m.mood] || { nom: t("common.morph.case.nom"), acc: t("common.morph.case.acc"), gen: t("common.morph.case.gen") }[m.gcase]],
+                      [t("common.morph.label.pgn"), pgn || null],
+                      [t("common.morph.label.lemma"), m.lemma],
                     ].filter(([, v]) => v);
                     if (!rows.length) return null;
                     return (
                       <div className="ag-insp-card t-morph">
-                        <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>التحليل الصرفي{m.precise ? "" : " (تقريبي)"} — المدوّنة القرآنية</div>
+                        <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>{t("common.morph.title")}{m.precise ? "" : t("common.morph.approx")}{t("common.morph.corpus")}</div>
                         <div className="ag-morph-rows">
                           {rows.map(([k, v]) => <div className="ag-morph-row" key={k}><span className="ag-morph-k">{k}</span><span className="ag-morph-v">{v}</span></div>)}
                         </div>
                         {divergent && (
                           <div className="ag-insp-note" style={{ marginTop: 8, fontSize: "var(--text-xs)", color: "var(--rubric-400)", lineHeight: 1.6 }}>
-                            ⚠ مشترك لفظي: جذر التجميع «{groupRoot}» (بالأغلبية)، أمّا في هذه الآية فالجذر «{m.root}». المعنى المعجمي أعلاه لجذر التجميع.
+                            {t("common.morph.homograph", { group: groupRoot, here: m.root })}
                           </div>
                         )}
                       </div>
@@ -1269,7 +1378,7 @@ export default function QuranGraph() {
                   })()}
                   {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (
                     <div className="ag-insp-card">
-                      <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>من: {parent.label}</div>
+                      <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>{t("common.insp.from")} {parent.label}</div>
                       <div className="ag-insp-verse"><HighlightedAyah text={parent.text} primaryWord={selNode.lookup || selNode.wordNorm} searchMode={searchMode} precision={precision} theme={theme} interactive={true} onWordClick={(wn) => handleWordClick(wn, parent.verseKey)} /></div>
                     </div>); return null; })()}
                 </div>
@@ -1278,10 +1387,10 @@ export default function QuranGraph() {
               <>
                 <div className="ag-insp-head">
                   <div className="ag-insp-title">
-                    <span className="ag-badge t-verse">آية</span>
+                    <span className="ag-badge t-verse">{t("common.insp.verseBadge")}</span>
                     <h2 className="ag-insp-word" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)" }}>{selNode.label}</h2>
                   </div>
-                  <button type="button" className="ag-iconbtn" title="إغلاق" aria-label="إغلاق" onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
+                  <button type="button" className="ag-iconbtn" title={t("common.close")} aria-label={t("common.close")} onClick={() => { setSelected(null); setActiveWord(null); }}>✕</button>
                 </div>
                 <div className="ag-insp-scroll">
                   <div className="ag-insp-card">
@@ -1292,17 +1401,17 @@ export default function QuranGraph() {
                   </div>
                   {(selNode.sharedWords || []).length > 0 && (
                     <div>
-                      <div className="ag-insp-card-lab" style={{ marginBottom: 8 }}>كلمات مشتركة</div>
+                      <div className="ag-insp-card-lab" style={{ marginBottom: 8 }}>{t("common.insp.sharedWords")}</div>
                       <div className="ag-insp-tags">
                         {selNode.sharedWords.map((w, i) => <span key={i} className="ag-tag">{w}</span>)}
                       </div>
                     </div>
                   )}
                   <div className="ag-insp-actions">
-                    <button type="button" className="ag-btn is-gold" title={selNode.isExpanded ? "طي الكلمات" : "إظهار الكلمات"} onClick={() => toggleVerse(selNode.verseKey)}>{selNode.isExpanded ? "⊖ طي الكلمات" : "⊕ إظهار الكلمات"}</button>
-                    <button type="button" className="ag-btn" title="اقرأ في السياق" onClick={() => setCtx({ centerKey: selNode.verseKey })}>☰ السياق</button>
-                    <button type="button" className="ag-btn" title="العبارات المشتركة (المتشابهات)" onClick={() => openPhrases(selNode.verseKey)}>⧉ متشابهات</button>
-                    <button type="button" className="ag-btn" title="اجعلها المركز" aria-label="اجعلها المركز" onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ اجعلها المركز</button>
+                    <button type="button" className="ag-btn is-gold" title={selNode.isExpanded ? t("common.insp.collapseWords") : t("common.insp.showWords")} onClick={() => toggleVerse(selNode.verseKey)}>{selNode.isExpanded ? "⊖ " + t("common.insp.collapseWords") : "⊕ " + t("common.insp.showWords")}</button>
+                    <button type="button" className="ag-btn" title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: selNode.verseKey })}>☰ {t("common.insp.context")}</button>
+                    <button type="button" className="ag-btn" title={t("common.reader.phrases")} onClick={() => openPhrases(selNode.verseKey)}>⧉ {t("common.insp.phrasesShort")}</button>
+                    <button type="button" className="ag-btn" title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ {t("common.insp.makeCenter")}</button>
                   </div>
                 </div>
               </>
@@ -1322,6 +1431,7 @@ export default function QuranGraph() {
           index={dist.mode === "root" ? r2v : dist.mode === "lemma" ? (l2v || {}) : w2v}
           verseData={verseData} surahList={surahList} stopSet={stopSet} theme={theme}
           onNavigate={(s, a) => { setDist(null); navigate(s, a); }}
+          onCompare={(term) => { setDist(null); setCmp({ A: term, B: null }); }}
           onPick={(key, label) => {
             // Show only the verses where the neighbour co-occurs WITH the original
             // word — computed the SAME way the collocation count is (scan the
@@ -1334,10 +1444,15 @@ export default function QuranGraph() {
               .sort((a, b) => { const [sa, aa] = a.split(":").map(Number), [sb, ab] = b.split(":").map(Number); return sa - sb || aa - ab; });
             const back = dist;
             setDist(null);
-            setOcc({ lookup: key, label: `«${label}» مع «${dist.label}»`, mode: dist.mode, keys: shared, back });
+            setOcc({ lookup: key, label: t("common.occ.withLabel", { a: label, b: dist.label }), mode: dist.mode, keys: shared, back });
           }}
           onClose={() => setDist(null)} />
       )}
+
+      <CompareModal cmp={cmp} indices={compareIndices} verseData={verseData} surahList={surahList} stopSet={stopSet} precision={precision}
+        onNavigate={(s, a) => { setCmp(null); navigate(s, a); }}
+        onPick={(key, label, mode) => { setCmp(null); openOcc(key, label, mode); }}
+        onClose={() => setCmp(null)} />
 
       {ctx && (
         <ContextModal ctx={ctx} orderedKeys={orderedKeys} verseData={verseData}

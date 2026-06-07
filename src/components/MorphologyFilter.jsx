@@ -1,4 +1,5 @@
 import { formRoman } from "../morphology.js";
+import { useI18n } from "../i18n/index.js";
 
 /* ═══ Morphology filter ═══
  *
@@ -7,15 +8,13 @@ import { formRoman } from "../morphology.js";
  * constraint. Pure presentational — state lives in QuranGraph (`qg.morphFilter`).
  */
 
-const POS = [
-  ["noun", "اسم"], ["verb", "فعل"], ["particle", "حرف"], ["pn", "علم"],
-  ["pron", "ضمير"], ["adj", "صفة"], ["actpcpl", "اسم فاعل"], ["passpcpl", "اسم مفعول"],
-];
+const POS = ["noun", "verb", "particle", "pn", "pron", "adj", "actpcpl", "passpcpl"];
 const FORMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Form I–X (XI is vanishingly rare)
-const ASPECT = [["perf", "ماضٍ"], ["impf", "مضارع"], ["impv", "أمر"]];
-const VOICE = [["act", "معلوم"], ["pass", "مجهول"]];
+const ASPECT = ["perf", "impf", "impv"];
+const VOICE = ["act", "pass"];
 
 export function MorphologyFilter({ filter, onChange }) {
+  const { t } = useI18n();
   const f = filter || { pos: [], form: [], aspect: [], voice: [] };
   const toggle = (cat, val) => {
     const cur = f[cat] || [];
@@ -40,13 +39,13 @@ export function MorphologyFilter({ filter, onChange }) {
   return (
     <div className="ag-morph">
       <div className="ag-pop-h-row">
-        <h3 className="ag-pop-h" style={{ margin: 0 }}>تصفية صرفية</h3>
-        {active ? <button type="button" className="ag-btn" onClick={() => onChange({ pos: [], form: [], aspect: [], voice: [] })}>مسح</button> : null}
+        <h3 className="ag-pop-h" style={{ margin: 0 }}>{t("morph.title")}</h3>
+        {active ? <button type="button" className="ag-btn" onClick={() => onChange({ pos: [], form: [], aspect: [], voice: [] })}>{t("morph.clear")}</button> : null}
       </div>
-      {group("pos", "نوع الكلمة", POS)}
-      {group("form", "الوزن", FORMS.map((n) => [n, formRoman(n)]))}
-      {group("aspect", "الزمن", ASPECT)}
-      {group("voice", "البناء", VOICE)}
+      {group("pos", t("morph.pos"), POS.map((c) => [c, t("morph.pos." + c)]))}
+      {group("form", t("morph.form"), FORMS.map((n) => [n, formRoman(n)]))}
+      {group("aspect", t("morph.aspect"), ASPECT.map((c) => [c, t("morph.aspect." + c)]))}
+      {group("voice", t("morph.voice"), VOICE.map((c) => [c, t("morph.voice." + c)]))}
     </div>
   );
 }

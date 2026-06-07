@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
+import { useI18n } from "../i18n/index.js";
 
 /* ═══ Context reader ═══
  *
@@ -11,6 +12,7 @@ import { useModalFocus } from "../hooks/useModalFocus.js";
  * out the centre's sūrah).
  */
 export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose }) {
+  const { t } = useI18n();
   // The centre āya's sūrah, in order — the only context we show.
   const suraKeys = useMemo(() => {
     if (!ctx) return [];
@@ -40,7 +42,7 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
       <li key={key} ref={rowRef(i)}>
         {i === 0 && <div className="ag-ctx-surahead">{v.s}. {v.sn}</div>}
         <button type="button" className={"ag-ctx-aya" + (isCenter ? " is-center" : "")}
-          onClick={() => onNavigate(v.s, v.a)} title="اجعلها مركز الشبكة">
+          onClick={() => onNavigate(v.s, v.a)} title={t("ctx.makeCenter")}>
           <span className="ag-ctx-num">{v.a}</span>
           <span className="ag-ctx-text">{v.text}</span>
         </button>
@@ -50,14 +52,14 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
 
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`سياق الآية ${center ? center.sn + " " + center.a : ""}`}
+      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("ctx.ariaLabel", { ref: center ? center.sn + " " + center.a : "" })}
         ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="ag-modal-head">
           <div className="ag-modal-title">
-            <span className="ag-badge t-verse">سياق</span>
+            <span className="ag-badge t-verse">{t("ctx.badge")}</span>
             <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{center ? `${center.sn} ${center.a}` : ""}</h2>
           </div>
-          <button type="button" className="ag-iconbtn" aria-label="إغلاق" onClick={onClose}>✕</button>
+          <button type="button" className="ag-iconbtn" aria-label={t("ctx.close")} onClick={onClose}>✕</button>
         </div>
 
         <ul className="ag-modal-list ag-ctx-list" ref={scrollRef} onScroll={onScroll} dir="rtl">

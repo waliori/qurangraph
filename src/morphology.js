@@ -74,3 +74,40 @@ export function passesMorphFilter(m, f) {
 /* Roman numeral for a verb Form (1..11) — for display. */
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"];
 export function formRoman(vf) { return vf > 0 && vf < ROMAN.length ? ROMAN[vf] : vf ? String(vf) : ""; }
+
+/* ═══ Morphology-constrained search ═══
+ *
+ * The morphology filter already prunes the GRAPH (see getUW). These let a SEARCH /
+ * occurrence list honour it too: keep only the verses where the term actually
+ * occurs WITH a matching morphological reading at its position — so "root X as a
+ * Form II passive verb" returns just those occurrences, not every verse with X.
+ */
+const POS_AR = { noun: "اسم", verb: "فعل", particle: "حرف", pn: "علم", pron: "ضمير", adj: "صفة", actpcpl: "اسم فاعل", passpcpl: "اسم مفعول" };
+const ASPECT_AR = { perf: "ماضٍ", impf: "مضارع", impv: "أمر" };
+const VOICE_AR = { act: "معلوم", pass: "مجهول" };
+
+/* A short human summary of the active filter, e.g. "فعل · الصيغة II · مجهول". */
+export function morphFilterSummary(f) {
+  if (!morphFilterActive(f)) return "";
+  const parts = [];
+  if (f.pos?.length) parts.push(f.pos.map((p) => POS_AR[p] || p).join("/"));
+  if (f.form?.length) parts.push("الصيغة " + f.form.map((v) => formRoman(v)).join("/"));
+  if (f.aspect?.length) parts.push(f.aspect.map((a) => ASPECT_AR[a] || a).join("/"));
+  if (f.voice?.length) parts.push(f.voice.map((v) => VOICE_AR[v] || v).join("/"));
+  return parts.join(" · ");
+}
+
+/* Keep only the verse keys where `lookup` (in `mode`) occurs at a position whose
+ * morphology satisfies `filter`. A no-op (returns `keys` as-is) when the filter is
+ * inactive or morphology (`M`) hasn't loaded — so search degrades gracefully to the
+ * unfiltered list rather than appearing to find nothing. `groupKeyOf` is injected
+ * (wordGroupKey) to avoid a module cycle with arabic-utils. */
+export function filterOccurrencesByMorph(keys, lookup, mode, verseData, M, filter, groupKeyOf) {
+  if (!morphFilterActive(filter) || !M || !groupKeyOf) return keys;
+  return keys.filter((vk) => {
+    const v = verseData[vk]; if (!v) return false;
+    const rows = M.v?.[vk];
+    return v.words.some((w, idx) =>
+      groupKeyOf(w, mode) === lookup && passesMorphFilter(rows ? decodeMorph(rows[idx], M) : null, filter));
+  });
+}

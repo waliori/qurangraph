@@ -1,0 +1,33 @@
+export const ar = {
+  "occ.title": "الآيات التي ترد فيها {label}",
+  "occ.makeCenter": "اجعلها مركز الشبكة",
+  "occ.backToDistribution": "رجوع إلى التوزيع",
+  "occ.back": "رجوع",
+  "occ.badge.root": "جذر",
+  "occ.badge.lemma": "صيغة",
+  "occ.badge.word": "كلمة",
+  "occ.verses": "آية",
+  "occ.morphNoteTitle": "القائمة مُقيّدة بالتصفية الصرفية",
+  "occ.exportCsv": "تصدير قائمة الآيات (CSV)",
+  "occ.exportKwic": "تصدير كشاف سياقي (الكلمة مع ما قبلها وبعدها) — KWIC",
+  "occ.kwicBtn": "سياقي",
+  "occ.exportJson": "تصدير البيانات (JSON)",
+  "occ.close": "إغلاق",
+};
+
+export const en = {
+  "occ.title": "Verses in which {label} appears",
+  "occ.makeCenter": "Make it the network center",
+  "occ.backToDistribution": "Back to distribution",
+  "occ.back": "Back",
+  "occ.badge.root": "Root",
+  "occ.badge.lemma": "Lemma",
+  "occ.badge.word": "Word",
+  "occ.verses": "verses",
+  "occ.morphNoteTitle": "The list is restricted by the morphological filter",
+  "occ.exportCsv": "Export verse list (CSV)",
+  "occ.exportKwic": "Export concordance (word with its context before and after) — KWIC",
+  "occ.kwicBtn": "KWIC",
+  "occ.exportJson": "Export data (JSON)",
+  "occ.close": "Close",
+};

@@ -121,6 +121,47 @@ export function matchRoot(root, headerSet, normMap) {
 const PAGE_RE = /^#\s*PageV/;
 const META_RE = /^#META#/;
 
+/* ═══ Citation metadata (OpenITI) ═══
+ *
+ * OpenITI texts carry a `#META#` header block (edition: editor, publisher, year,
+ * volumes…) and inline `# PageVxxPyyy` page milestones. These extract both so each
+ * gloss can cite its edition + (approximate) volume/page. The page milestone marks
+ * the END of a printed page, so an entry's page is taken as the FIRST milestone that
+ * follows its header (the page its text sits on), falling back to the last seen.
+ */
+const META_LINE = /^#META#\s+([0-9]+\.\w+)\s*::\s*(.*)$/;
+const BAD_META = new Set(["NODATA", "NOTGIVEN", "NOCODE", "NULL", ""]);
+const PAGE_PARSE = /PageV(\d+)P(\d+)/;
+
+/* { vol, page } from a `PageVxxPyyy` milestone line, or null. */
+export function parsePageMarker(line) {
+  const m = PAGE_PARSE.exec(line || "");
+  return m ? { vol: +m[1], page: +m[2] } : null;
+}
+
+/* Edition/author fields from the `#META#` block, placeholders dropped. Returns only
+ * the keys that have real values: { title, author, died, editor, publisher, year, vols }. */
+export function parseLexMeta(text) {
+  const meta = {};
+  for (const line of (text || "").split("\n")) {
+    if (/^#META#Header#End#/.test(line)) break;
+    const m = META_LINE.exec(line);
+    if (!m) continue;
+    const v = m[2].trim();
+    if (!BAD_META.has(v) && !meta[m[1]]) meta[m[1]] = v;
+  }
+  const pick = (suffix) => { for (const k in meta) if (k.endsWith(suffix)) return meta[k]; return null; };
+  const out = {};
+  const title = pick("BookTITLE"); if (title) out.title = title;
+  const author = pick("AuthorAKA") || pick("AuthorNAME"); if (author) out.author = author;
+  const died = pick("AuthorDIED"); if (died && /\d/.test(died)) out.died = died;
+  const editor = pick("EdEDITOR"); if (editor) out.editor = editor;
+  const publisher = pick("EdPUBLISHER"); if (publisher) out.publisher = publisher;
+  const year = pick("EdYEAR"); if (year) out.year = year;
+  const vols = pick("BookVOLS"); if (vols && /^\d+$/.test(vols)) out.vols = +vols;
+  return out;
+}
+
 function cleanProse(s) {
   return s
     .replace(/\bms\d+\b/g, " ")
@@ -193,32 +234,37 @@ function pack(rootText, bodyLines, maxFull) {
 export function parseLexiconText(text, format, maxFull = 600) {
   const lines = text.split("\n");
   const out = {};
-  const add = (root, body) => {
+  const add = (root, body, cite) => {
     const r = (root || "").replace(/[^ء-ي]/g, "");
     if (!/^[ء-ي]{2,6}$/.test(r) || out[r]) return;
     const e = pack(r, body, maxFull);
-    if (e) out[r] = { c: e.c, f: e.f, full: e.full };
+    if (e) { const o = { c: e.c, f: e.f, full: e.full }; if (cite) o.cite = cite; out[r] = o; }
   };
+  let lastPage = null, entryPage = null; // entryPage: first milestone after the open header
 
   if (format === "mufradat") {
     const HEAD = /^#\s*([ء-ي]{2,6})\s*:\s*(.*)$/;
     let root = null, body = [];
     for (const line of lines) {
+      const pg = parsePageMarker(line);
+      if (pg) { lastPage = pg; if (root && entryPage == null) entryPage = pg; }
       const m = HEAD.exec(line);
-      if (m) { add(root, body); root = m[1]; body = [m[2] || ""]; }
+      if (m) { add(root, body, entryPage || lastPage); root = m[1]; body = [m[2] || ""]; entryPage = null; }
       else if (root && /^~~/.test(line)) body.push(line);
       else if (root && /^#\s/.test(line) && !/PageV/.test(line)) body.push(line); // sub-point within entry
     }
-    add(root, body);
+    add(root, body, entryPage || lastPage);
   } else if (format === "lisan") {
     const HEAD = /^#\s*([ء-ي]{2,6})\s*$/; // a line that is only a root
     let root = null, body = [];
     for (const line of lines) {
+      const pg = parsePageMarker(line);
+      if (pg) { lastPage = pg; if (root && entryPage == null) entryPage = pg; }
       const m = HEAD.exec(line);
-      if (m) { add(root, body); root = m[1]; body = []; }
+      if (m) { add(root, body, entryPage || lastPage); root = m[1]; body = []; entryPage = null; }
       else if (root && (/^~~/.test(line) || /^#\s/.test(line)) && !/PageV/.test(line)) body.push(line);
     }
-    add(root, body);
+    add(root, body, entryPage || lastPage);
   }
   return out;
 }

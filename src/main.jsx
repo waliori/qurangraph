@@ -3,12 +3,15 @@ import { createRoot } from 'react-dom/client'
 import './styles/theme.css'
 import QuranGraph from './QuranGraph.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
+import { I18nProvider } from './i18n/index.js'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ErrorBoundary>
-      <QuranGraph />
-    </ErrorBoundary>
+    <I18nProvider>
+      <ErrorBoundary>
+        <QuranGraph />
+      </ErrorBoundary>
+    </I18nProvider>
   </StrictMode>,
 )
 

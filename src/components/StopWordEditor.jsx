@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { norm } from "../arabic-utils.js";
+import { useI18n } from "../i18n/index.js";
 
 /* ═══ Stop-word editor ═══
  *
@@ -10,6 +11,7 @@ import { norm } from "../arabic-utils.js";
  * "hide particles" toggle; particles only hide while that toggle is on.
  */
 export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle, onAddExtra, onRemoveExtra }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const [showParticles, setShowParticles] = useState(false);
   const isHidden = (w) => hiddenSet.has(norm(w));
@@ -17,7 +19,7 @@ export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle,
 
   const chip = (w, onClick, removable) => (
     <button key={w} type="button" className={"ag-morph-chip" + (isHidden(w) ? " is-on" : "")}
-      aria-pressed={isHidden(w)} title={isHidden(w) ? "مخفية — اضغط لإظهارها" : "ظاهرة — اضغط لإخفائها"} onClick={onClick}>
+      aria-pressed={isHidden(w)} title={isHidden(w) ? t("stop.chipHidden") : t("stop.chipShown")} onClick={onClick}>
       {w}{removable ? " ✕" : ""}
     </button>
   );
@@ -25,33 +27,33 @@ export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle,
 
   return (
     <div className="ag-morph">
-      <h3 className="ag-pop-h" style={{ margin: 0 }}>الكلمات المخفية</h3>
-      <p className="ag-hint">الكلمة المضيئة مخفية من الشبكة — اضغطها لإظهارها. تُطابق بحروفها دون تشكيل («علي» ≠ «عليهم»). حروف المعاني تُخفى بزرّ «إخفاء حروف المعاني» أعلاه، أو اضغط الحرف هنا لإخفائه وحده.</p>
+      <h3 className="ag-pop-h" style={{ margin: 0 }}>{t("stop.title")}</h3>
+      <p className="ag-hint">{t("stop.hint")}</p>
 
       <div className="ag-morph-grp">
-        <span className="ag-range-lab">كلمات محتوى (مخفية افتراضيًا)</span>
+        <span className="ag-range-lab">{t("stop.contentGroup")}</span>
         <div className="ag-morph-chips">{content.map((w) => chip(w, () => onToggle(w)))}</div>
       </div>
 
       {custom.length > 0 && (
         <div className="ag-morph-grp">
-          <span className="ag-range-lab">كلمات أضفتها</span>
+          <span className="ag-range-lab">{t("stop.customGroup")}</span>
           <div className="ag-morph-chips">{custom.map((w) => chip(w, () => onRemoveExtra(w), true))}</div>
         </div>
       )}
 
       <div className="ag-morph-grp">
-        <span className="ag-range-lab">إضافة كلمة لإخفائها</span>
+        <span className="ag-range-lab">{t("stop.addGroup")}</span>
         <div className="ag-stop-add">
-          <input className="ag-input" type="text" value={draft} placeholder="كلمة…"
+          <input className="ag-input" type="text" value={draft} placeholder={t("stop.inputPlaceholder")}
             onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
-          <button type="button" className="ag-btn is-gold" onClick={add}>إضافة</button>
+          <button type="button" className="ag-btn is-gold" onClick={add}>{t("stop.addBtn")}</button>
         </div>
       </div>
 
       <div className="ag-morph-grp">
         <button type="button" className="ag-btn" aria-expanded={showParticles} onClick={() => setShowParticles((s) => !s)}>
-          حروف المعاني ({particles.length}) {showParticles ? "▲" : "▼"}
+          {t("stop.particlesToggle", { count: particles.length })} {showParticles ? "▲" : "▼"}
         </button>
         {showParticles && (
           <div className="ag-morph-chips ag-stop-particles">{particles.map((w) => chip(w, () => onToggle(w)))}</div>

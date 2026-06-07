@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "fs";
-import { parseMaqayisEntry, parseLexiconText, matchNorm, matchRoot } from "./lib/parse.js";
+import { parseMaqayisEntry, parseLexiconText, matchNorm, matchRoot, parseLexMeta, parsePageMarker } from "./lib/parse.js";
 import { FULL_SHARDS, shardOf } from "../src/lexiconShard.js";
 
 /* ═══ Build swappable Arabic lexicons ═══
@@ -19,15 +19,18 @@ const roots = JSON.parse(readFileSync("public/data/roots.json", "utf8"));
 const presentRoots = new Set(Object.values(roots).filter(Boolean));
 
 // Maqāyīs uses `### | (root)` headers — parse with the dedicated per-entry helper.
+// Tracks the inline page milestones so each entry carries its (approximate) page.
 function parseMaqayis(text) {
   const entries = {}, lines = text.split("\n");
   const headerRe = /^###\s*\|\s*\(([^)]+)\)/, isRoot = (s) => /^[ء-ي]{2,6}$/.test(s);
-  let cur = null, body = [];
-  const flush = () => { if (cur && !entries[cur]) { const p = parseMaqayisEntry(body); if (p) entries[cur] = p; } };
+  let cur = null, body = [], lastPage = null, entryPage = null;
+  const flush = () => { if (cur && !entries[cur]) { const p = parseMaqayisEntry(body); if (p) { const cite = entryPage || lastPage; if (cite) p.cite = cite; entries[cur] = p; } } };
   for (const line of lines) {
+    const pg = parsePageMarker(line);
+    if (pg) { lastPage = pg; if (cur && entryPage == null) entryPage = pg; }
     const m = headerRe.exec(line);
-    if (m) { flush(); const r = m[1].replace(/[^ء-ي]/g, ""); cur = isRoot(r) ? r : null; body = []; }
-    else if (line.startsWith("###")) { flush(); cur = null; body = []; }
+    if (m) { flush(); const r = m[1].replace(/[^ء-ي]/g, ""); cur = isRoot(r) ? r : null; body = []; entryPage = null; }
+    else if (line.startsWith("###")) { flush(); cur = null; body = []; entryPage = null; }
     else if (cur) body.push(line);
   }
   flush();
@@ -44,6 +47,7 @@ const manifest = [];
 for (const lex of LEXICONS) {
   if (!existsSync(lex.file)) { console.log(`skip ${lex.id} (missing ${lex.file})`); continue; }
   const text = readFileSync(lex.file, "utf8");
+  const edition = parseLexMeta(text); // editor / publisher / year / volumes for the citation
   const entries = lex.format === "maqayis" ? parseMaqayis(text) : parseLexiconText(text, lex.format);
   const headerSet = new Set(Object.keys(entries));
   const normMap = new Map();
@@ -55,6 +59,7 @@ for (const lex of LEXICONS) {
     const h = matchRoot(root, headerSet, normMap);
     if (h && entries[h]) {
       meanings[root] = { c: entries[h].c, f: entries[h].f };
+      if (entries[h].cite) meanings[root].cite = entries[h].cite; // { vol, page }
       if (entries[h].full && entries[h].full !== entries[h].f) full[root] = entries[h].full;
       matched++;
     }
@@ -76,7 +81,7 @@ for (const lex of LEXICONS) {
     buckets.forEach((b, i) => { if (Object.keys(b).length) writeFileSync(`${dir}/${i}.json`, JSON.stringify(b)); });
   }
   const cov = ((100 * matched) / presentRoots.size).toFixed(1);
-  manifest.push({ id: lex.id, label: lex.label, license: lex.license, hasFull, fullShards: hasFull ? FULL_SHARDS : 0, coverage: +cov });
+  manifest.push({ id: lex.id, label: lex.label, license: lex.license, edition, hasFull, fullShards: hasFull ? FULL_SHARDS : 0, coverage: +cov });
   console.log(`${lex.id}: ${Object.keys(entries).length} entries → ${matched}/${presentRoots.size} roots matched (${cov}%)${hasFull ? `, ${fullRoots.length} full → ${FULL_SHARDS} shards` : ""}`);
 }
 
