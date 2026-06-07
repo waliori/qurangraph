@@ -1,7 +1,7 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useState } from "react";
 import { findSharedPhrases } from "../analytics/phrases.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
-import { useModalFocus } from "../hooks/useModalFocus.js";
+import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 
@@ -34,48 +34,57 @@ function PhraseVerse({ words, phraseNorm }) {
 }
 
 export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose }) {
-  const { t } = useI18n();
+  const { t, fmtNum } = useI18n();
   const ws = useWorkspace();
   const centerKey = phrase?.centerKey;
-  const phrases = useMemo(
-    () => (centerKey && seedIndex ? findSharedPhrases(centerKey, verseData, seedIndex) : []),
-    [centerKey, verseData, seedIndex]
-  );
-
-  const dialogRef = useRef(null);
-  useModalFocus(!!phrase, dialogRef, { onEscape: onClose });
+  // findSharedPhrases scans the corpus and can take tens of ms on a long, recurrent
+  // verse — running it synchronously on open janks the modal. Defer it to an idle
+  // callback so the dialog paints immediately with a loading state, then fills in.
+  const [result, setResult] = useState(null); // null = still computing
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!centerKey || !seedIndex) { setResult([]); return undefined; }
+    setResult(null);
+    let alive = true;
+    const ric = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+    const cic = window.cancelIdleCallback || clearTimeout;
+    const id = ric(() => { const r = findSharedPhrases(centerKey, verseData, seedIndex); if (alive) setResult(r); }, { timeout: 250 });
+    return () => { alive = false; cic(id); };
+  }, [centerKey, verseData, seedIndex]);
+  const phrases = result || [];
+  const computing = result === null;
 
   if (!phrase) return null;
   const cv = verseData[centerKey];
 
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("phrase.ariaLabel", { surah: cv?.sn, ayah: cv?.a })} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title">
-            <span className="ag-badge t-verse">{t("phrase.badge")}</span>
-            <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{cv?.sn} {cv?.a}</h2>
-            <span className="ag-modal-count"><b>{phrases.length}</b> {t("phrase.sharedPhrases")}</span>
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-            {cv && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
-              onClick={() => { ws.saveItem({ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }); ws.toast(t("ws.saved")); }}>★</button>}
-            {phrases.length > 0 && (
-              <button type="button" className="ag-btn" title={t("phrase.exportCsv")}
-                onClick={() => exportCsvFile(
-                  [[t("phrase.csvPhrase"), t("phrase.csvWordCount"), t("phrase.csvAyahCount"), t("phrase.csvAyat")],
-                   ...phrases.map((p) => [p.tokens.join(" "), p.len, p.verses.length, p.verses.join(t("phrase.listSep"))])],
-                  t("phrase.csvFilename", { surah: cv?.sn, ayah: cv?.a }))}>⤓ CSV</button>
-            )}
-            <button type="button" className="ag-iconbtn" aria-label={t("phrase.close")} onClick={onClose}>✕</button>
-          </div>
-        </div>
-
+    <ModalShell open={!!phrase} onClose={onClose} closeLabel={t("phrase.close")}
+      ariaLabel={t("phrase.ariaLabel", { surah: cv?.sn, ayah: cv?.a })}
+      title={<>
+        <span className="ag-badge t-verse">{t("phrase.badge")}</span>
+        <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{cv?.sn} {cv?.a}</h2>
+        <span className="ag-modal-count">{computing ? "…" : <><b>{fmtNum(phrases.length)}</b> {t("phrase.sharedPhrases")}</>}</span>
+      </>}
+      actions={<>
+        {cv && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
+          onClick={() => { ws.saveItem({ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }); ws.toast(t("ws.saved")); }}>★</button>}
+        {phrases.length > 0 && (
+          <button type="button" className="ag-btn" title={t("phrase.exportCsv")}
+            onClick={() => exportCsvFile(
+              [[t("phrase.csvPhrase"), t("phrase.csvWordCount"), t("phrase.csvAyahCount"), t("phrase.csvAyat")],
+               ...phrases.map((p) => [p.tokens.join(" "), p.len, p.verses.length, p.verses.join(t("phrase.listSep"))])],
+              t("phrase.csvFilename", { surah: cv?.sn, ayah: cv?.a }))}>⤓ CSV</button>
+        )}
+      </>}>
         <div className="ag-help-body">
           <p className="ag-hint">
             {t("phrase.hint")}
           </p>
-          {phrases.length === 0 ? (
+          {computing ? (
+            <div className="ag-empty-inner" style={{ paddingBlock: "var(--space-5)", textAlign: "center", color: "var(--text-faint)" }}>
+              {t("phrase.computing")}
+            </div>
+          ) : phrases.length === 0 ? (
             <div className="ag-empty-inner" style={{ paddingBlock: "var(--space-5)", textAlign: "center", color: "var(--text-faint)" }}>
               {t("phrase.empty")}
             </div>
@@ -109,7 +118,6 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
             );
           })}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

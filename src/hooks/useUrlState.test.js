@@ -40,6 +40,20 @@ describe("URL state round-trip", () => {
     expect(back.expandedWords).toEqual([]);
   });
 
+  it("omits theme + activeLexicon when absent so a shared link can't clobber personal prefs", () => {
+    // A sparse share link (just a graph, author on default theme/lexicon) must NOT
+    // carry theme/activeLexicon, so the recipient's own prefs survive applyState.
+    const enc = encodeState({ surah: 2, ayah: 255, theme: "dark", activeLexicon: "maqayis", expandedWords: new Set(["a@2:255"]) });
+    const back = decodeState(enc);
+    expect(back.theme).toBeUndefined();
+    expect(back.activeLexicon).toBeUndefined();
+    // A link that DID change theme/lexicon still round-trips them.
+    const enc2 = encodeState({ surah: 2, ayah: 255, theme: "light", activeLexicon: "lisan" });
+    const back2 = decodeState(enc2);
+    expect(back2.theme).toBe("light");
+    expect(back2.activeLexicon).toBe("lisan");
+  });
+
   it("returns null on garbage", () => {
     expect(decodeState("")).toBe(null);
     expect(decodeState("#s=not%20json")).toBe(null);

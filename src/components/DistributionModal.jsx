@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { distributionBySura, collocations, directNeighbors } from "../analytics/stats.js";
-import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
-import { useModalFocus } from "../hooks/useModalFocus.js";
+import { exportCsvFile, exportJsonFile, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
+import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 import { fColor } from "../theme.js";
@@ -42,9 +42,6 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
     return nbrAll.filter((n) => metric(n) > 0).sort((x, y) => metric(y) - metric(x) || x.key.localeCompare(y.key)).slice(0, 60);
   }, [nbrAll, nbrSide]);
 
-  const dialogRef = useRef(null);
-  useModalFocus(!!dist, dialogRef, { onEscape: onClose });
-
   if (!dist || !data) return null;
   const { distribution, colloc, total, max } = data;
   // The association figure shown on each chip tracks the active sort.
@@ -54,15 +51,14 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   const nbrCount = (n) => (nbrSide === "before" ? n.before : nbrSide === "after" ? n.after : n.total);
 
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("dist.title", { label: dist.label })} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title">
-            <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{t("dist.badge." + dist.mode)}</span>
-            <h2 className="ag-modal-word">{dist.label}</h2>
-            <span className="ag-modal-count"><b>{total}</b> {t("dist.in")} <b>{distribution.length}</b> {t("dist.surahs")}</span>
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+    <ModalShell open={!!dist} onClose={onClose} closeLabel={t("dist.close")}
+      ariaLabel={t("dist.title", { label: dist.label })}
+      title={<>
+        <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{t("dist.badge." + dist.mode)}</span>
+        <h2 className="ag-modal-word">{dist.label}</h2>
+        <span className="ag-modal-count"><b>{total}</b> {t("dist.in")} <b>{distribution.length}</b> {t("dist.surahs")}</span>
+      </>}
+      actions={<>
             <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "dist", title: dist.label, payload: { lookup: dist.lookup, label: dist.label, mode: dist.mode } }); ws.toast(t("ws.saved")); }}>★</button>
             {onCompare && <button type="button" className="ag-btn" title={t("dist.compareTitle")} onClick={() => onCompare({ lookup: dist.lookup, label: dist.label, mode: dist.mode })}>⇄ {t("dist.compare")}</button>}
             <button type="button" className="ag-btn" title={t("dist.exportJson")}
@@ -71,10 +67,18 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
                 distribution: distribution.map((d) => ({ sura: d.sura, name: d.name, count: d.count })),
                 collocations: colloc.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
               }, t("dist.fileAnalysis", { label: dist.label }))}>⤓ JSON</button>
-            <button type="button" className="ag-iconbtn" aria-label={t("dist.close")} onClick={onClose}>✕</button>
-          </div>
-        </div>
-
+            <button type="button" className="ag-btn" title={t("common.cite.resultTitle")}
+              onClick={() => {
+                const bib = buildResultBibtex({
+                  key: `ayatnet_dist_${(dist.lookup || "term").replace(/[^A-Za-z0-9؀-ۿ]/g, "").slice(0, 16)}`,
+                  title: t("common.cite.distTitle", { label: dist.label, mode: t(`common.graphMode.${dist.mode}`) }),
+                  note: t("common.cite.note", { count: total }),
+                  url: typeof location !== "undefined" ? location.href : "",
+                  year: new Date().getFullYear(), keywords: [dist.lookup, dist.label],
+                });
+                exportTextFile(bib, `cite-dist-${dist.lookup || "term"}.bib`, "application/x-bibtex");
+              }}>⧉ {t("common.cite.cite")}</button>
+      </>}>
         <div className="ag-dist-body">
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h">
@@ -155,7 +159,6 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

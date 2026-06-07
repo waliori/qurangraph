@@ -1,9 +1,8 @@
-import { useRef } from "react";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
-import { exportCsvFile, exportJsonFile, buildConcordance } from "../graph/exportGraph.js";
+import { ModalShell } from "./ModalShell.jsx";
+import { exportCsvFile, exportJsonFile, exportTextFile, buildConcordance, buildResultBibtex } from "../graph/exportGraph.js";
 import { wordGroupKey } from "../arabic-utils.js";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
-import { useModalFocus } from "../hooks/useModalFocus.js";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 
@@ -12,15 +11,11 @@ import { useWorkspace } from "../hooks/useWorkspace.js";
  * graph on that āyah. Driven by `occ = { lookup, label, mode, keys }`. The list is
  * virtualized (useVirtualRows) so even اللّٰه (~2700 occurrences) opens instantly. */
 export function OccurrencesModal({ occ, verseData, searchMode, precision = "loose", theme, onNavigate, onBack, onClose }) {
-  const { t } = useI18n();
+  const { t, tn } = useI18n();
   const ws = useWorkspace();
   const n = occ?.keys?.length || 0;
   const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
     useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${n}` });
-
-  // Focus trap + restoration; Esc goes back if there's a back target, else closes.
-  const dialogRef = useRef(null);
-  useModalFocus(!!occ, dialogRef, { onEscape: () => (occ?.back && onBack ? onBack() : onClose()) });
 
   if (!occ) return null;
   const primary = occ.lookup;
@@ -46,18 +41,17 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   }
 
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("occ.title", { label: occ.label })}
-        ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title">
-            {occ.back && onBack && <button type="button" className="ag-iconbtn" title={t("occ.backToDistribution")} aria-label={t("occ.back")} onClick={onBack}>→</button>}
-            <span className={"ag-badge " + (occ.mode === "root" ? "t-root" : occ.mode === "lemma" ? "t-lemma" : "t-word")}>{occ.mode === "root" ? t("occ.badge.root") : occ.mode === "lemma" ? t("occ.badge.lemma") : t("occ.badge.word")}</span>
-            <h2 className="ag-modal-word">{occ.label}</h2>
-            <span className="ag-modal-count"><b>{n}</b> {t("occ.verses")}</span>
-            {occ.morphNote && <span className="ag-chip is-morph" title={t("occ.morphNoteTitle")}>⚙ {occ.morphNote}</span>}
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+    <ModalShell open={!!occ} onClose={onClose} closeLabel={t("occ.close")}
+      onEscape={() => (occ?.back && onBack ? onBack() : onClose())}
+      ariaLabel={t("occ.title", { label: occ.label })}
+      title={<>
+        {occ.back && onBack && <button type="button" className="ag-iconbtn" title={t("occ.backToDistribution")} aria-label={t("occ.back")} onClick={onBack}>→</button>}
+        <span className={"ag-badge " + (occ.mode === "root" ? "t-root" : occ.mode === "lemma" ? "t-lemma" : "t-word")}>{occ.mode === "root" ? t("occ.badge.root") : occ.mode === "lemma" ? t("occ.badge.lemma") : t("occ.badge.word")}</span>
+        <h2 className="ag-modal-word">{occ.label}</h2>
+        <span className="ag-modal-count">{tn("occ.versesCount", n)}</span>
+        {occ.morphNote && <span className="ag-chip is-morph" title={t("occ.morphNoteTitle")}>⚙ {occ.morphNote}</span>}
+      </>}
+      actions={<>
             <button type="button" className="ag-btn" title={t("ws.saveTitle")}
               onClick={() => { ws.saveItem({ type: "occ", title: occ.label, payload: { lookup: occ.lookup, label: occ.label, mode: occ.mode } }); ws.toast(t("ws.saved")); }}>★</button>
             <button type="button" className="ag-btn" title={t("occ.exportCsv")}
@@ -76,16 +70,24 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
                 term: occ.label, lookup: occ.lookup, mode: occ.mode, count: n,
                 verses: keys.map((k) => { const v = verseData[k]; return { sura: v.s, ayah: v.a, ref: `${v.sn} ${v.a}`, text: v.text }; }),
               }, `${t("occ.file.verses", { label: occ.label })}.json`)}>⤓ JSON</button>
-            <button type="button" className="ag-iconbtn" aria-label={t("occ.close")} onClick={onClose}>✕</button>
-          </div>
-        </div>
-
+            <button type="button" className="ag-btn" title={t("common.cite.resultTitle")}
+              onClick={() => {
+                const mode = occ.mode || searchMode;
+                const bib = buildResultBibtex({
+                  key: `ayatnet_occ_${(occ.lookup || "term").replace(/[^A-Za-z0-9؀-ۿ]/g, "").slice(0, 16)}`,
+                  title: t("common.cite.occTitle", { label: occ.label, mode: t(`common.graphMode.${mode}`) }),
+                  note: t("common.cite.note", { count: n }),
+                  url: typeof location !== "undefined" ? location.href : "",
+                  year: new Date().getFullYear(), keywords: [occ.lookup, occ.label],
+                });
+                exportTextFile(bib, `cite-occ-${occ.lookup || "term"}.bib`, "application/x-bibtex");
+              }}>⧉ {t("common.cite.cite")}</button>
+      </>}>
         <ul className="ag-modal-list" ref={scrollRef} onScroll={onScroll}>
           <li className="ag-vspace" aria-hidden="true" style={{ height: padTop }} />
           {rows}
           <li className="ag-vspace" aria-hidden="true" style={{ height: padBottom }} />
         </ul>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

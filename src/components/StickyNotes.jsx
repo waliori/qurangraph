@@ -50,12 +50,12 @@ export function StickyNotes({ notes, positions, transform, currentKey, nmap, onM
               <button type="button" className="ag-sticky-grip" title={t("ws.moveNote")} aria-label={t("ws.moveNote")}
                 onPointerDown={(e) => onDown(e, n)} onPointerMove={onMoveEvt} onPointerUp={onUp} onPointerCancel={onUp}
                 onKeyDown={(e) => onKey(e, n)}>⠿</button>
-              <input className="ag-sticky-titlein" value={n.title} placeholder={t("ws.noteTitlePh")}
-                onChange={(e) => onEdit(n.id, { title: e.target.value })} />
+              <input className="ag-sticky-titlein" defaultValue={n.title} placeholder={t("ws.noteTitlePh")}
+                onBlur={(e) => { if (e.target.value !== n.title) onEdit(n.id, { title: e.target.value }); }} />
               <button type="button" className="ag-sticky-x" aria-label={t("ws.unpin")} title={t("ws.unpin")} onClick={() => onUnpin(n.id)}>✕</button>
             </div>
-            <textarea className="ag-sticky-bodyin" value={n.body} placeholder={t("ws.noteBodyPh")} rows={3}
-              onChange={(e) => onEdit(n.id, { body: e.target.value })} />
+            <textarea className="ag-sticky-bodyin" defaultValue={n.body} placeholder={t("ws.noteBodyPh")} rows={3}
+              onBlur={(e) => { if (e.target.value !== n.body) onEdit(n.id, { body: e.target.value }); }} />
           </div>
         );
       })}

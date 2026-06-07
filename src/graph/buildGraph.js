@@ -107,6 +107,14 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
       v.words.filter((w) => centerLookups.has(wordKey(w, searchMode))).map((w) => w.orig)
     ),
   ];
+  // Just the distinct-shared-word COUNT (the ranking key) without allocating the
+  // word array — used to rank candidates so a hub word with thousands of occurrences
+  // doesn't materialise thousands of throwaway arrays just to keep the top maxBranch.
+  const sharedCountOf = (v) => {
+    const s = new Set();
+    for (const w of v.words) if (centerLookups.has(wordKey(w, searchMode))) s.add(w.orig);
+    return s.size;
+  };
 
   let seed = 0;
   const place = (depth, fixed) => {
@@ -160,19 +168,22 @@ export function buildLazyGraph(centerKey, verseData, w2v, r2v, expandedWords, ex
         if (isExp) queue.push({ type: "show-verses", wordId: wid, lookup: w.lookup, fromVerseKey: item.verseKey, depth: item.depth + 1 });
       });
     } else if (item.type === "show-verses") {
-      // Rank candidate verses by shared-word count with the centre, most first.
-      const rankedAll = (index[item.lookup] || [])
+      // Rank candidate verses by shared-word count with the centre, most first. Score
+      // with the cheap count, then build the full shared-word array only for the
+      // maxBranch survivors (see sharedCountOf) — same ordering as before, far fewer
+      // allocations on hub words.
+      const scored = (index[item.lookup] || [])
         .filter((vk) => vk !== item.fromVerseKey)
         .map((vk) => {
           const v = verseData[vk];
-          return v ? { vk, v, shared: sharedOf(v) } : null;
+          return v ? { vk, v, n: sharedCountOf(v) } : null;
         })
         .filter(Boolean)
-        .sort((a, b) => b.shared.length - a.shared.length || a.vk.localeCompare(b.vk));
-      const ranked = rankedAll.slice(0, maxBranch);
+        .sort((a, b) => b.n - a.n || a.vk.localeCompare(b.vk));
+      const ranked = scored.slice(0, maxBranch).map(({ vk, v }) => ({ vk, v, shared: sharedOf(v) }));
       // Verses this word reaches but that the per-word cap hides. Surfaced below as a
       // single overflow node (and tallied for the HUD) instead of being dropped silently.
-      const hidden = rankedAll.length - ranked.length;
+      const hidden = scored.length - ranked.length;
 
       // Spring length for this word's verse fan-out. A fixed distance seats every
       // verse on one ring around the word — fine for 3 verses, hopeless for 100

@@ -27,6 +27,10 @@ function mockFetch() {
 describe("QuranGraph", () => {
   beforeEach(() => {
     localStorage.clear();
+    // Suppress the first-run onboarding tour: it auto-starts on load (react-joyride,
+    // now a lazy chunk) and is global UI unrelated to what these tests assert — leaving
+    // it on makes the synchronous selection assertion race with the tour mounting.
+    localStorage.setItem("qg.tourHide", "1");
     vi.stubGlobal("fetch", mockFetch());
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -69,7 +73,8 @@ describe("QuranGraph", () => {
     await screen.findByLabelText("السورة");
     // The graph word node carries a descriptive aria-label ("كلمة <word>، وردت في
     // <count> آية…"); "العالمين" occurs twice.
-    fireEvent.click(screen.getByLabelText(/كلمة العالمين، وردت في 2 آية/));
+    // Count is rendered in Arabic-Indic digits in the Arabic UI (٢ = 2).
+    fireEvent.click(screen.getByLabelText(/كلمة العالمين، وردت في ٢ آية/));
     // Selection panel (with its close button) appears and stays — the node is selected.
     expect(screen.getByLabelText("إغلاق")).toBeTruthy();
   });

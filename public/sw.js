@@ -7,10 +7,16 @@
  *     — serve from cache instantly, refresh in the background. After the first
  *     visit the whole app + the data it has touched work offline.
  * Hashed asset filenames mean we cache-on-fetch rather than precache a fixed list;
- * the cache name is versioned so a new deploy drops the old one on activate. The
- * huge full-article files (lisan-full ~15MB) are cached only if actually fetched.
+ * the cache name carries a BUILD VERSION (injected at build time, see the sw-version
+ * plugin in vite.config.js) so every deploy drops the previous cache on activate and
+ * re-fetches everything — including the unhashed /data/*.json, which would otherwise
+ * stay stale forever behind stale-while-revalidate. The huge full-article files
+ * (lisan-full ~15MB) are cached only if actually fetched.
+ *
+ * __SW_VERSION__ is replaced with the build stamp; if it's left verbatim (dev), the
+ * SW isn't registered anyway (main.jsx gates registration to production builds).
  */
-const CACHE = "qurangraph-v1";
+const CACHE = "qurangraph-__SW_VERSION__";
 const SHELL = "./index.html";
 
 self.addEventListener("install", (e) => {

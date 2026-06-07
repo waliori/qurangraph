@@ -12,3 +12,6 @@ dist
 /public/data/morphology.json
 /public/data/lexicons/
 /public/data/sources.json
+
+# Resolved commit SHAs written by `npm run data:download` (provenance input, not a source)
+/data/source/source-refs.json

@@ -34,6 +34,7 @@ RUN if [ ! -s data/source/maqayis.txt ] || [ ! -s data/source/quran-morphology.t
 # ── Stage 2: static runtime ────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \

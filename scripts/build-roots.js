@@ -46,7 +46,7 @@ const verseWords = {}; // "s:a" → [{ form, root, lemma, vf, aspect, voice, moo
 const hafs = JSON.parse(readFileSync(HAFS, "utf8"));
 const rootTally = {};  // norm → { root: count }
 const lemmaTally = {}; // norm → { lemma(bare): count }
-let contentTokens = 0, rootedTokens = 0, lemmatizedTokens = 0, mismatchVerses = 0;
+let contentTokens = 0, rootedTokens = 0, lemmatizedTokens = 0, mismatchVerses = 0, versesWithMorph = 0;
 
 const vote = (tally, n, val) => {
   if (n.length < 2 || !val) return;
@@ -71,7 +71,7 @@ for (const sura of hafs) {
     const tokens = v.text.split(/\s+/).filter(Boolean);
     const corpus = verseWords[`${sura.id}:${v.id}`] || [];
     const aligned = corpus.length === tokens.length;
-    if (!aligned && corpus.length) mismatchVerses++;
+    if (corpus.length) { versesWithMorph++; if (!aligned) mismatchVerses++; }
 
     // Surface fallback map for this verse: norm(corpusForm) → morphology record.
     const surface = {};
@@ -144,6 +144,23 @@ if (rootCov < ROOT_FLOOR || lemmaCov < LEMMA_FLOOR) {
     `ERROR: coverage below sanity floor — root ${(rootCov * 100).toFixed(1)}% (min ${ROOT_FLOOR * 100}%), ` +
     `lemma ${(lemmaCov * 100).toFixed(1)}% (min ${LEMMA_FLOOR * 100}%). ` +
     `The corpus↔morphology alignment is likely broken; refusing to ship a gutted dataset.`
+  );
+  process.exit(1);
+}
+
+/* ── Alignment tripwire ──
+ * Mismatched verses fall back to a per-verse surface map that collapses homographs,
+ * so a few are tolerable (genuine tokenisation differences) but a flood means the
+ * corpus↔Tanzil tokenisation has drifted apart and per-occurrence readings are mostly
+ * lost. This floor is far above the healthy rate (a few %), so it only trips on a real
+ * break — not normal noise. */
+const MISMATCH_CEIL = 0.25;
+const mismatchRate = versesWithMorph ? mismatchVerses / versesWithMorph : 0;
+if (mismatchRate > MISMATCH_CEIL) {
+  console.error(
+    `ERROR: ${(mismatchRate * 100).toFixed(1)}% of verses (${mismatchVerses}/${versesWithMorph}) have a ` +
+    `morphology↔Tanzil token-count mismatch (max ${MISMATCH_CEIL * 100}%). The tokenisations have drifted; ` +
+    `per-occurrence (homograph-correct) readings would be mostly lost. Refusing to ship.`
   );
   process.exit(1);
 }

@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { get } from "https";
-import { SOURCES, raw, sha256 } from "./lib/sources.js";
+import { SOURCES, raw, sha256, resolveRef } from "./lib/sources.js";
 
 const TIMEOUT_MS = 60000;   // per-request socket timeout — never hang the build
 const MAX_REDIRECTS = 10;   // cap redirect chains so a loop can't spin forever
@@ -51,10 +51,14 @@ if (!existsSync("data/source")) mkdirSync("data/source", { recursive: true });
 const report = (buf) => `${buf.length} bytes, sha256 ${sha256(buf)}`;
 
 async function main() {
+  const resolved = {}; // id → the exact commit SHA we actually pulled from
   for (const s of SOURCES) {
     try {
+      const ref = await resolveRef(s.repo, s.ref);
+      if (ref !== s.ref) console.log(`Pinned ${s.id}: ${s.ref} → ${ref}`);
+      resolved[s.id] = ref;
       console.log(`Downloading ${s.label}...`);
-      const buf = await download(raw(s.repo, s.ref, s.path));
+      const buf = await download(raw(s.repo, ref, s.path));
       writeFileSync(s.out, buf);
       console.log(`  -> ${report(buf)}`);
     } catch (e) {
@@ -62,6 +66,9 @@ async function main() {
       console.warn(`  ! skipped ${s.label}: ${e.message}`);
     }
   }
+  // Record the resolved SHAs so the provenance manifest cites exact commits, not
+  // branch labels (the Dockerfile/committed-corpora path simply won't have this file).
+  writeFileSync("data/source/source-refs.json", JSON.stringify(resolved, null, 2));
   console.log("\nDone!");
 }
 

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { loadLexicon, loadLexiconFullShard, loadLexiconManifest } from "../data-loader.js";
 import { shardOf } from "../lexiconShard.js";
-import { useModalFocus } from "../hooks/useModalFocus.js";
+import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { buildBibtex, buildRis, exportTextFile } from "../graph/exportGraph.js";
 
@@ -18,8 +18,6 @@ export function DefinitionModal({ def, onClose }) {
   const [entry, setEntry] = useState(undefined); // concise { c, f, cite } | null (absent) | undefined (loading)
   const [full, setFull] = useState(undefined);   // full article string | undefined
   const [open, setOpen] = useState(false);
-  const dialogRef = useRef(null);
-  useModalFocus(!!def, dialogRef, { onEscape: onClose });
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -53,16 +51,13 @@ export function DefinitionModal({ def, onClose }) {
   };
 
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={`${t("ws.type.lexicon")} ${def.root}`} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title">
-            <span className="ag-badge t-root">{t("ws.type.lexicon")}</span>
-            <h2 className="ag-modal-word">{def.root}</h2>
-            <span className="ag-modal-count">{lex?.label || def.lexicon}</span>
-          </div>
-          <button type="button" className="ag-iconbtn" aria-label={t("ws.close")} onClick={onClose}>✕</button>
-        </div>
+    <ModalShell open={!!def} onClose={onClose} closeLabel={t("ws.close")}
+      ariaLabel={`${t("ws.type.lexicon")} ${def.root}`}
+      title={<>
+        <span className="ag-badge t-root">{t("ws.type.lexicon")}</span>
+        <h2 className="ag-modal-word">{def.root}</h2>
+        <span className="ag-modal-count">{lex?.label || def.lexicon}</span>
+      </>}>
         <div className="ag-dist-body">
           <div className="ag-insp-mean" style={!entry ? { color: "var(--text-faint)", fontStyle: "italic" } : { whiteSpace: "pre-wrap" }}>
             {entry === undefined ? t("common.insp.lexLoading")
@@ -85,7 +80,6 @@ export function DefinitionModal({ def, onClose }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

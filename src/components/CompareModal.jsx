@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { norm, normStrict, groupKey } from "../arabic-utils.js";
 import { distributionBySura, collocations, mergeCollocations } from "../analytics/stats.js";
-import { exportJsonFile } from "../graph/exportGraph.js";
-import { useModalFocus } from "../hooks/useModalFocus.js";
+import { exportJsonFile, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
+import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 
@@ -86,9 +86,6 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
   const [seed, setSeed] = useState(cmp);
   if (cmp !== seed) { setSeed(cmp); setA(cmp?.A || null); setB(cmp?.B || null); }
 
-  const dialogRef = useRef(null);
-  useModalFocus(!!cmp, dialogRef, { onEscape: onClose });
-
   const data = useMemo(() => {
     if (!A || !B) return null;
     const idxA = indices?.[A.mode] || {}, idxB = indices?.[B.mode] || {};
@@ -132,14 +129,12 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
   const ready = A && B && data;
 
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("cmp.dialogAria")} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title">
-            <h2 className="ag-modal-word">{t("cmp.title")}</h2>
-            {ready && <span className="ag-modal-count"><b style={{ color: A_COLOR }}>{data.totalA}</b> · <b style={{ color: B_COLOR }}>{data.totalB}</b></span>}
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+    <ModalShell open={!!cmp} onClose={onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
+      title={<>
+        <h2 className="ag-modal-word">{t("cmp.title")}</h2>
+        {ready && <span className="ag-modal-count"><b style={{ color: A_COLOR }}>{data.totalA}</b> · <b style={{ color: B_COLOR }}>{data.totalB}</b></span>}
+      </>}
+      actions={<>
             {ready && (
               <button type="button" className="ag-btn" title={t("ws.saveTitle")}
                 onClick={() => { ws.saveItem({ type: "compare", title: `${A.label} ⇄ ${B.label}`, payload: { A, B } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
@@ -156,9 +151,20 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
                   onlyB: data.merged.onlyB.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
                 }, t("cmp.fileName", { a: A.label, b: B.label }))}>⤓ JSON</button>
             )}
-            <button type="button" className="ag-iconbtn" aria-label={t("cmp.close")} onClick={onClose}>✕</button>
-          </div>
-        </div>
+            {ready && (
+              <button type="button" className="ag-btn" title={t("common.cite.resultTitle")}
+                onClick={() => {
+                  const bib = buildResultBibtex({
+                    key: `ayatnet_cmp_${(A.label + B.label).replace(/[^A-Za-z0-9؀-ۿ]/g, "").slice(0, 16)}`,
+                    title: t("common.cite.cmpTitle", { a: A.label, b: B.label }),
+                    note: t("common.cite.note", { count: data.totalA + data.totalB }),
+                    url: typeof location !== "undefined" ? location.href : "",
+                    year: new Date().getFullYear(), keywords: [A.label, B.label],
+                  });
+                  exportTextFile(bib, `cite-compare-${A.label}-${B.label}.bib`, "application/x-bibtex");
+                }}>⧉ {t("common.cite.cite")}</button>
+            )}
+      </>}>
 
         <div className="ag-cmp-slots">
           <TermSlot term={A} color={A_COLOR} indices={indices} precision={precision} onSet={setA} />
@@ -223,7 +229,6 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </ModalShell>
   );
 }

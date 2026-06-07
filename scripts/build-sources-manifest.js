@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
-import { SOURCES, sha256 } from "./lib/sources.js";
+import { SOURCES, sha256, isSha } from "./lib/sources.js";
 
 /* ═══ Provenance manifest ═══
  *
@@ -16,8 +16,15 @@ import { SOURCES, sha256 } from "./lib/sources.js";
  * `ref` then names the exact commit and `sha256` lets anyone verify the file. */
 if (!existsSync("public/data")) mkdirSync("public/data", { recursive: true });
 
+// Prefer the SHA the downloader actually pinned (data:download writes source-refs.json);
+// fall back to the descriptor's ref on the committed-corpora path (Docker) where it's
+// absent. `pinned` tells a reader whether `ref` is an exact commit or a moving branch.
+let resolvedRefs = {};
+try { resolvedRefs = JSON.parse(readFileSync("data/source/source-refs.json", "utf8")); } catch { /* committed-corpora path */ }
+
 const sources = SOURCES.map((s) => {
-  const base = { id: s.id, label: s.label, repo: s.repo, ref: s.ref, path: s.path };
+  const ref = resolvedRefs[s.id] || s.ref;
+  const base = { id: s.id, label: s.label, repo: s.repo, ref, pinned: isSha(ref), path: s.path };
   try {
     const buf = readFileSync(s.out);
     return { ...base, bytes: buf.length, sha256: sha256(buf) };

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useModalFocus } from "../hooks/useModalFocus.js";
+import { useEffect, useState } from "react";
+import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { loadSources } from "../data-loader.js";
 
@@ -85,24 +85,15 @@ const sec = (title, illo, items) => (
 
 export function HelpModal({ open, onClose, onStartTour }) {
   const { t } = useI18n();
-  const dialogRef = useRef(null);
-  useModalFocus(open, dialogRef, { onEscape: onClose });
   // Lazy-load the build's source-provenance manifest the first time Help opens; null
   // when the build didn't emit one (older builds), in which case the section is hidden.
   const [sources, setSources] = useState(null);
   useEffect(() => { if (open && !sources) loadSources().then(setSources).catch(() => {}); }, [open, sources]);
 
-  if (!open) return null;
   return (
-    <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className="ag-modal" role="dialog" aria-modal="true" aria-label={t("help.dialogAria")} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="ag-modal-head">
-          <div className="ag-modal-title"><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></div>
-          <span style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-            {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
-            <button type="button" className="ag-iconbtn" aria-label={t("help.close")} onClick={onClose}>✕</button>
-          </span>
-        </div>
+    <ModalShell open={open} onClose={onClose} closeLabel={t("help.close")} ariaLabel={t("help.dialogAria")}
+      title={<><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></>}
+      actions={onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}>
         <div className="ag-help-body">
           {hero(t)}
 
@@ -186,7 +177,6 @@ export function HelpModal({ open, onClose, onStartTour }) {
             {t("help.footer")}
           </p>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

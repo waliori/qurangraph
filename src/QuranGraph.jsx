@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { norm, normStrict, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
@@ -10,23 +10,28 @@ import { morphAt, verseGroupingKeys, formRoman, morphFilterActive, morphFilterSu
 import { serializeSvg, exportSvgFile, exportPngFile, buildBibtex, exportTextFile } from "./graph/exportGraph.js";
 import { readUrlState, writeUrlState, encodeState, decodeState } from "./hooks/useUrlState.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
-import { WorkspaceDrawer } from "./components/WorkspaceDrawer.jsx";
 import { StickyNotes } from "./components/StickyNotes.jsx";
 import { HighlightedAyah } from "./components/HighlightedAyah.jsx";
 import { GraphLayer } from "./components/GraphLayer.jsx";
 import { GraphCanvas } from "./components/GraphCanvas.jsx";
 import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
-import { OccurrencesModal } from "./components/OccurrencesModal.jsx";
-import { ContextModal } from "./components/ContextModal.jsx";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
-import { DistributionModal } from "./components/DistributionModal.jsx";
-import { CompareModal } from "./components/CompareModal.jsx";
-import { DefinitionModal } from "./components/DefinitionModal.jsx";
-import { PhraseModal } from "./components/PhraseModal.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
-import { HelpModal } from "./components/HelpModal.jsx";
-import { Tour } from "./components/Tour.jsx";
+// Modals + the onboarding tour are split into their own chunks (React.lazy) and mounted
+// only when opened — not on the critical path, and react-joyride (the Tour) is heavy and
+// never loads for returning users who dismissed it. Named exports, so map to a default
+// for lazy(). See the gated <Suspense> below.
+const lazyNamed = (loader, name) => lazy(() => loader().then((m) => ({ default: m[name] })));
+const OccurrencesModal = lazyNamed(() => import("./components/OccurrencesModal.jsx"), "OccurrencesModal");
+const ContextModal = lazyNamed(() => import("./components/ContextModal.jsx"), "ContextModal");
+const DistributionModal = lazyNamed(() => import("./components/DistributionModal.jsx"), "DistributionModal");
+const CompareModal = lazyNamed(() => import("./components/CompareModal.jsx"), "CompareModal");
+const DefinitionModal = lazyNamed(() => import("./components/DefinitionModal.jsx"), "DefinitionModal");
+const PhraseModal = lazyNamed(() => import("./components/PhraseModal.jsx"), "PhraseModal");
+const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
+const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
+const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
 import { useI18n } from "./i18n/index.js";
@@ -54,7 +59,7 @@ function sanitizeMorphFilter(v) {
 
 /* ═══ MAIN ═══ */
 export default function QuranGraph() {
-  const { t, lang, setLang } = useI18n();
+  const { t, lang, setLang, numerals, setNumerals } = useI18n();
   const ws = useWorkspace();
   const [wsOpen, setWsOpen] = useState(false); // workspace drawer
   const [quranRaw, setQuranRaw] = useState(null);
@@ -223,7 +228,8 @@ export default function QuranGraph() {
     pendingPosRef.current = u.pos || null; // applied (and pinned) by the structure effect
     if (u.surah) setSurah(u.surah);
     if (u.ayah) setAyah(u.ayah);
-    setSearchMode(u.mode); setPrecision(u.precision); setTheme(u.theme);
+    setSearchMode(u.mode); setPrecision(u.precision);
+    if (u.theme !== undefined) setTheme(u.theme); // personal pref — only if the link carries it
     if (u.activeLexicon) setActiveLexicon(u.activeLexicon);
     setMaxBranch(u.maxBranch); setHideStop(u.hideStop); setShowLoops(u.showLoops); setRareOnly(u.rareOnly);
     if (u.morphFilter) setMorphFilter(sanitizeMorphFilter(u.morphFilter));
@@ -273,10 +279,18 @@ export default function QuranGraph() {
   // node selected (so a word's root meaning surfaces in the inspector in any mode).
   const meaningsWanted = searchMode !== "exact" || selected != null;
 
+  // Lazy resources (lexicon/lemma/morphology) used to fail SILENTLY — a dropped fetch
+  // left the inspector spinning "loading…" or the graph stuck on the lemma empty state
+  // forever. Track which one failed and let the user retry: retryTick is in each
+  // loader effect's deps, so bumping it re-runs the failed fetch.
+  const [dataErr, setDataErr] = useState(null); // "lexicon" | "lemma" | "morph" | null
+  const [retryTick, setRetryTick] = useState(0);
+  const retryLoads = useCallback(() => { setDataErr(null); setRetryTick((n) => n + 1); }, []);
+
   // Load the lexicon manifest once meanings are first wanted (drives the switcher).
   useEffect(() => {
-    if (meaningsWanted && !lexicons) loadLexiconManifest().then(setLexicons).catch(() => {});
-  }, [meaningsWanted, lexicons]);
+    if (meaningsWanted && !lexicons) loadLexiconManifest().then(setLexicons).catch(() => setDataErr("lexicon"));
+  }, [meaningsWanted, lexicons, retryTick]);
 
   // Lazy-load the ACTIVE lexicon's concise meanings; reload (and reset the full
   // text + open state) whenever the user switches lexicon.
@@ -286,17 +300,17 @@ export default function QuranGraph() {
     let live = true;
     setMeanings(null); setMeaningsFull(null); setMeaningOpen(false);
     setFullLoaded(new Set()); // full-article shards are per-lexicon
-    loadLexicon(activeLexicon).then((m) => { if (live) setMeanings(m); }).catch(() => {});
+    loadLexicon(activeLexicon).then((m) => { if (live) setMeanings(m); }).catch(() => { if (live) setDataErr("lexicon"); });
     return () => { live = false; };
-  }, [meaningsWanted, activeLexicon]);
+  }, [meaningsWanted, activeLexicon, retryTick]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Lazy-load the normForm→lemma map the first time lemma mode is used; install it
   // into arabic-utils so groupKey('lemma') resolves, and keep a copy in state so
   // the l2v index + graph rebuild when it arrives.
   useEffect(() => {
-    if (searchMode === "lemma" && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => {});
-  }, [searchMode, lemmaMap]);
+    if (searchMode === "lemma" && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
+  }, [searchMode, lemmaMap, retryTick]);
 
   // Lazy-load per-token morphology when the filter is active (graph filtering), a
   // node is selected (inspector morphology card), or root/lemma mode is active (so
@@ -304,8 +318,8 @@ export default function QuranGraph() {
   // stop linking homographs by their commoner root). ~2.4MB, deferred until needed;
   // the graph renders immediately with the voted grouping and refines when it lands.
   useEffect(() => {
-    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact") && !morph) loadMorphology().then(setMorph).catch(() => {});
-  }, [morphFilter, selected, searchMode, morph]);
+    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact") && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
+  }, [morphFilter, selected, searchMode, morph, retryTick]);
 
   // Drive the CSS design tokens (styles/theme.css) off the React theme state so
   // the whole آيات.network shell — including body + boot screens — recolours.
@@ -342,7 +356,13 @@ export default function QuranGraph() {
         const vk = `${s.id}:${v.id}`;
         // Per-occurrence (position-correct) root/lemma for each word, aligned 1:1
         // with the words we push below — present only once morphology has loaded.
-        const gk = morph ? verseGroupingKeys(morph, vk, norm) : null;
+        // Per-occurrence keys, but only trust them if the morphology row count matches
+        // this verse's kept-word count. A length mismatch means the tuple array is
+        // misaligned with our words (a builder/data drift) — using it would mislabel
+        // homographs, so fall back to the voted roots (gk = null) for the whole verse.
+        const gkRaw = morph ? verseGroupingKeys(morph, vk, norm) : null;
+        const keptCount = v.text.split(/\s+/).reduce((c, raw) => c + (norm(raw).length >= 2 ? 1 : 0), 0);
+        const gk = gkRaw && gkRaw.length === keptCount ? gkRaw : null;
         const words = [];
         const seenN = new Set(), seenR = new Set();
         let wi = 0; // index among kept words — matches the morphology tuple order
@@ -715,6 +735,10 @@ export default function QuranGraph() {
   // ── Unified pointer handling (mouse + touch + pen): pan, node drag, pinch-zoom ──
   const onPointerDown = useCallback((e) => {
     if (e.target.closest("[data-panel]")) return; // let panels handle their own input
+    // Suppress the browser's native text-selection drag while panning/dragging a node
+    // (otherwise gliding a node selects the reader/inspector text). Panels are exempt
+    // (returned above) so their text stays selectable; restored on pointer up/leave.
+    document.body.style.userSelect = "none";
     const pts = pointersRef.current;
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     draggedRef.current = false; // fresh gesture — not a drag until the pointer moves
@@ -822,6 +846,7 @@ export default function QuranGraph() {
       }
       pressNodeRef.current = null;
       endDrag(); setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
+      document.body.style.userSelect = ""; // gesture over — text selectable again
     }
   }, [endDrag, renderer]);
 
@@ -833,6 +858,7 @@ export default function QuranGraph() {
     if (canvasHoverRef.current) { canvasHoverRef.current = null; setHovered(null); if (!selected) setActiveWord(null); }
     endDrag();
     setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
+    document.body.style.userSelect = ""; // gesture over — text selectable again
   }, [endDrag, selected]);
 
   const handleWordClick = useCallback((wordNorm, fromVerseKey) => {
@@ -1211,6 +1237,15 @@ export default function QuranGraph() {
 
   return (
     <div className="ag-app">
+      {/* Recoverable lazy-load failure — dismissible, with retry (replaces the old
+          silent .catch that stranded the inspector/graph in a permanent loading state). */}
+      {dataErr && (
+        <div role="alert" style={{ position: "fixed", insetInlineStart: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--surface-3, #1b2233)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
+          <span>{t(`common.dataErr.${dataErr}`)}</span>
+          <button type="button" className="ag-btn is-gold" style={{ padding: "2px 10px" }} onClick={retryLoads}>{t("common.dataErr.retry")}</button>
+          <button type="button" className="ag-iconbtn" style={{ width: 24, height: 24, fontSize: 12 }} aria-label={t("common.dataErr.dismiss")} onClick={() => setDataErr(null)}>✕</button>
+        </div>
+      )}
       {/* ── Toolbar ── */}
       <header className="ag-bar">
         <button type="button" className="ag-brand" aria-label={t("common.brand.home")}
@@ -1338,6 +1373,17 @@ export default function QuranGraph() {
             onClick={() => setShowHelp(true)}>؟</button>
           <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
             onClick={() => setLang(lang === "ar" ? "en" : "ar")}>{lang === "ar" ? "EN" : "ع"}</button>
+          {/* Numeral system toggle — only meaningful in Arabic (English is always Western).
+              "auto" follows the language; clicking pins arabic↔western. Shows the system it
+              switches TO (like the theme button). */}
+          {lang === "ar" && (() => {
+            const arabicActive = numerals !== "western";
+            return (
+              <button type="button" className="ag-iconbtn" style={{ fontSize: "var(--text-sm)" }}
+                title={t("common.numerals")} aria-label={t("common.numerals")} aria-pressed={!arabicActive}
+                onClick={() => setNumerals(arabicActive ? "western" : "arabic")}>{arabicActive ? "123" : "١٢٣"}</button>
+            );
+          })()}
           <button type="button" data-tour="themeBtn" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
             onClick={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
         </div>
@@ -1696,11 +1742,13 @@ export default function QuranGraph() {
         )}
       </div>
 
+      {/* Lazy-loaded modals + tour: each chunk is fetched only when first opened. */}
+      <Suspense fallback={null}>
       {/* Occurrences popup — every āyah a word/root occurs in, paginated */}
-      <OccurrencesModal occ={occ} verseData={verseData} searchMode={occ?.mode || searchMode} precision={precision} theme={theme}
+      {occ && <OccurrencesModal occ={occ} verseData={verseData} searchMode={occ?.mode || searchMode} precision={precision} theme={theme}
         onNavigate={(s, a) => { navigate(s, a); setOcc(null); }}
         onBack={() => { const d = occ?.back; setOcc(null); if (d) setDist(d); }}
-        onClose={() => setOcc(null)} />
+        onClose={() => setOcc(null)} />}
 
       {dist && (
         <DistributionModal dist={dist}
@@ -1736,27 +1784,28 @@ export default function QuranGraph() {
           onClose={() => setDist(null)} />
       )}
 
-      <CompareModal cmp={cmp} indices={compareIndices} verseData={verseData} surahList={surahList} stopSet={stopSet} precision={precision}
+      {cmp && <CompareModal cmp={cmp} indices={compareIndices} verseData={verseData} surahList={surahList} stopSet={stopSet} precision={precision}
         onNavigate={(s, a) => { setCmp(null); navigate(s, a); }}
         onPick={(key, label, mode) => { setCmp(null); openOcc(key, label, mode); }}
-        onClose={() => setCmp(null)} />
+        onClose={() => setCmp(null)} />}
 
-      <DefinitionModal def={def} onClose={() => setDef(null)} />
+      {def && <DefinitionModal def={def} onClose={() => setDef(null)} />}
 
       {ctx && (
         <ContextModal ctx={ctx} orderedKeys={orderedKeys} verseData={verseData}
           onNavigate={(s, a) => { navigate(s, a); setCtx(null); }} onClose={() => setCtx(null)} />
       )}
 
-      <PhraseModal phrase={phrase} seedIndex={seedIndex} verseData={verseData}
-        onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />
+      {phrase && <PhraseModal phrase={phrase} seedIndex={seedIndex} verseData={verseData}
+        onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />}
 
-      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />
+      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 
       {/* Getting-started tour (interactive; waits for the user on action steps). */}
-      <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour} />
+      {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour} />}
 
-      <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />
+      {wsOpen && <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />}
+      </Suspense>
 
       {/* One-click-save confirmation toast */}
       {ws.toastMsg && <div className="ag-toast" role="status" aria-live="polite">{ws.toastMsg}</div>}

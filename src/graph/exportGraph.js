@@ -132,6 +132,35 @@ export function buildRis(info) {
   return lines.join("\r\n") + "\r\n";
 }
 
+/* ═══ Result citation (BibTeX / RIS) ═══
+ *
+ * Unlike the lexicon citation above (which cites a printed dictionary entry), this cites
+ * an ANALYSIS RESULT produced by the tool — an occurrence list, a distribution, a
+ * comparison — so a paper can reference the exact query, corpus and result, not just a
+ * screenshot. `info`: { key, title, note, url, year, keywords:[] }. The corporate author
+ * is the tool; the deep-link URL pins the reproducible view. Title/note are pre-translated
+ * at the call site. */
+const escBib = (s) => String(s).replace(/[{}]/g, "");
+export function buildResultBibtex(info) {
+  const fields = [["author", "{آيات.network (QuranGraph)}"]]; // double-braced: corporate author
+  if (info.title) fields.push(["title", escBib(info.title)]);
+  if (info.note) fields.push(["note", escBib(info.note)]);
+  if (info.url) fields.push(["howpublished", `\\url{${info.url}}`]);
+  if (info.year) fields.push(["year", String(info.year)]);
+  const body = fields.map(([k, v]) => `  ${k} = {${v}}`).join(",\n");
+  return `@misc{${info.key || "ayatnet_result"},\n${body}\n}\n`;
+}
+export function buildResultRis(info) {
+  const lines = ["TY  - DATA", "AU  - آيات.network (QuranGraph)"];
+  if (info.title) lines.push(`TI  - ${info.title}`);
+  if (info.note) lines.push(`N1  - ${info.note}`);
+  if (info.url) lines.push(`UR  - ${info.url}`);
+  if (info.year) lines.push(`PY  - ${String(info.year)}`);
+  (info.keywords || []).filter(Boolean).forEach((k) => lines.push(`KW  - ${k}`));
+  lines.push("ER  - ");
+  return lines.join("\r\n") + "\r\n";
+}
+
 /* Build a KWIC (keyword-in-context) concordance: every occurrence of a term, with
  * the `window` words on each side, the keyword centred. `verses` is a list of verse
  * keys, `words` resolves a verse key to its word objects, and `isHit(word)` says

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { get } from "node:https";
 
 /* ═══ Upstream source descriptors (single source of truth) ═══
  *
@@ -35,3 +36,26 @@ export const SOURCES = [
 
 export const raw = (repo, r, path) => `https://raw.githubusercontent.com/${repo}/${r}/${path}`;
 export const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+
+export const isSha = (r) => /^[0-9a-f]{40}$/i.test(r || "");
+
+/* Resolve a branch/tag ref to the commit SHA it currently points at, so the build can
+ * record (and download) the EXACT revision instead of a moving branch label — making
+ * `data:download` reproducible by default, not only when QG_<ID>_REF is set to a SHA.
+ * Best-effort: on any failure (offline, rate-limited, non-200) it returns the ref
+ * unchanged so the build still works. Honours GITHUB_TOKEN to dodge the 60/hr limit. */
+export function resolveRef(repo, ref) {
+  if (isSha(ref)) return Promise.resolve(ref);
+  return new Promise((resolve) => {
+    const headers = { "User-Agent": "qurangraph-build", Accept: "application/vnd.github.sha" };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const req = get(`https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`, { headers }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); resolve(ref); return; }
+      let body = "";
+      res.on("data", (c) => (body += c));
+      res.on("end", () => resolve(isSha(body.trim()) ? body.trim() : ref));
+    });
+    req.setTimeout(15000, () => req.destroy());
+    req.on("error", () => resolve(ref));
+  });
+}

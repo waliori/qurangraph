@@ -5,6 +5,7 @@ export const ar = {
   // Brand + language
   "common.brand.home": "آيات.network — العودة إلى البداية",
   "common.language": "اللغة (العربية / English)",
+  "common.numerals": "الأرقام: عربية (١٢٣) أو غربية (123)",
 
   // Search
   "common.search.button": "بحث",
@@ -109,6 +110,13 @@ export const ar = {
   "common.boot.loading": "جارٍ نسج الشبكة القرآنية…",
   "common.boot.crash": "حدث خطأ غير متوقع في الشبكة.",
 
+  // Recoverable lazy-load failures (dismissible banner with retry)
+  "common.dataErr.lexicon": "تعذّر تحميل المعجم.",
+  "common.dataErr.lemma": "تعذّر تحميل بيانات الصيغ.",
+  "common.dataErr.morph": "تعذّر تحميل البيانات الصرفية.",
+  "common.dataErr.retry": "إعادة المحاولة",
+  "common.dataErr.dismiss": "إغلاق",
+
   // SVG graph aria
   "common.graphRole": "شبكة بيانية",
   "common.graphAria": "شبكة الآية {sn} {a}: {n} عقدة و{m} رابط، بنمط {mode}. تنقّل بين العقد بمفتاح Tab.",
@@ -169,6 +177,11 @@ export const ar = {
   "common.cite.bib": "تصدير اقتباس BibTeX",
   "common.cite.ris": "تصدير اقتباس RIS",
   "common.cite.cite": "اقتباس",
+  "common.cite.resultTitle": "تصدير اقتباس لهذه النتيجة (BibTeX)",
+  "common.cite.occTitle": "ورود «{label}» في القرآن الكريم — {mode}",
+  "common.cite.distTitle": "توزيع «{label}» على السور — {mode}",
+  "common.cite.cmpTitle": "موازنة «{a}» و«{b}»",
+  "common.cite.note": "نتيجة تحليلية من آيات.network (QuranGraph) على مدوّنة تنزيل العثمانية (حفص). عدد النتائج: {count}.",
 
   // Morphology card
   "common.morph.title": "التحليل الصرفي",
@@ -220,6 +233,7 @@ export const en = {
   // Brand + language
   "common.brand.home": "آيات.network — Back to start",
   "common.language": "Language (العربية / English)",
+  "common.numerals": "Numerals: Arabic-Indic (١٢٣) or Western (123)",
 
   // Search
   "common.search.button": "Search",
@@ -324,6 +338,13 @@ export const en = {
   "common.boot.loading": "Weaving the Qur'anic network…",
   "common.boot.crash": "An unexpected error occurred in the network.",
 
+  // Recoverable lazy-load failures (dismissible banner with retry)
+  "common.dataErr.lexicon": "Couldn't load the dictionary.",
+  "common.dataErr.lemma": "Couldn't load lemma data.",
+  "common.dataErr.morph": "Couldn't load morphology data.",
+  "common.dataErr.retry": "Retry",
+  "common.dataErr.dismiss": "Dismiss",
+
   // SVG graph aria
   "common.graphRole": "Network graph",
   "common.graphAria": "Network for verse {sn} {a}: {n} nodes and {m} links, in {mode} mode. Navigate nodes with Tab.",
@@ -384,6 +405,11 @@ export const en = {
   "common.cite.bib": "Export BibTeX citation",
   "common.cite.ris": "Export RIS citation",
   "common.cite.cite": "Cite",
+  "common.cite.resultTitle": "Export a citation for this result (BibTeX)",
+  "common.cite.occTitle": "Occurrences of “{label}” in the Qur'an — {mode}",
+  "common.cite.distTitle": "Distribution of “{label}” across sūrahs — {mode}",
+  "common.cite.cmpTitle": "Comparison of “{a}” and “{b}”",
+  "common.cite.note": "Analytical result from آيات.network (QuranGraph) over the Tanzil Uthmani (Ḥafṣ) corpus. Result count: {count}.",
 
   // Morphology card
   "common.morph.title": "Morphological analysis",

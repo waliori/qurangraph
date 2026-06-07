@@ -49,8 +49,12 @@ export function decodeState(str) {
   if (o.a) out.ayah = o.a;
   out.mode = o.m || "exact";
   out.precision = o.p || "loose";
-  out.activeLexicon = o.lx || "maqayis";
-  out.theme = o.th || "dark";
+  // theme + activeLexicon are PERSONAL viewing prefs, not part of the shared graph.
+  // Leave them undefined when absent so opening someone's link can't flip your theme
+  // or active dictionary — applyState only sets them when the link explicitly carries
+  // a non-default value. Everything else below defines the graph and is reproduced.
+  if (o.lx !== undefined) out.activeLexicon = o.lx;
+  if (o.th !== undefined) out.theme = o.th;
   out.maxBranch = o.b || 10;
   out.hideStop = o.hs !== 0;
   out.showLoops = o.sl !== 0;

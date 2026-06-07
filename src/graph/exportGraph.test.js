@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { toCsv, serializeSvg, buildConcordance, buildBibtex, buildRis } from "./exportGraph.js";
+import { toCsv, serializeSvg, buildConcordance, buildBibtex, buildRis, buildResultBibtex, buildResultRis } from "./exportGraph.js";
 
 describe("toCsv", () => {
   it("escapes commas, quotes and newlines; leaves plain cells", () => {
@@ -72,6 +72,21 @@ describe("citation export", () => {
     expect(ris).toContain("KW  - غفر");
     expect(ris).toContain("ER  - ");
     expect(ris).not.toContain("PB  -"); // no publisher → line omitted
+  });
+
+  it("builds a result citation (analysis) in BibTeX + RIS with tool author and deep link", () => {
+    const info = { key: "ayatnet_occ_قول", title: "Occurrences of قول", note: "Result count: 1722.", url: "https://ayat.network/#s=abc", year: 2026, keywords: ["قول"] };
+    const bib = buildResultBibtex(info);
+    expect(bib).toMatch(/^@misc\{ayatnet_occ_قول,/);
+    expect(bib).toContain("author = {{آيات.network (QuranGraph)}}"); // corporate author kept literal
+    expect(bib).toContain("howpublished = {\\url{https://ayat.network/#s=abc}}");
+    expect(bib).toContain("year = {2026}");
+    const ris = buildResultRis(info);
+    expect(ris).toContain("TY  - DATA");
+    expect(ris).toContain("AU  - آيات.network (QuranGraph)");
+    expect(ris).toContain("UR  - https://ayat.network/#s=abc");
+    expect(ris).toContain("KW  - قول");
+    expect(ris.endsWith("ER  - \r\n")).toBe(true);
   });
 });
 
