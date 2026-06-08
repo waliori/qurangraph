@@ -1191,17 +1191,29 @@ export default function QuranGraph() {
   const tourLockSearch = tourRun && !!tourSteps[tourIndex]?.data?.lockSearch;
   useEffect(() => { tourLockSearchRef.current = tourLockSearch; }, [tourLockSearch]);
 
-  // Keep the graph minimal during the tour: cap each word to the fewest verses
-  // (3) so the canvas stays uncluttered; restore the user's setting on exit.
-  const prevBranchRef = useRef(null);
+  // Launch the tour from a clean, predictable state: snapshot the user's settings,
+  // reset the graph-affecting ones to defaults so the scripted example always
+  // behaves the same (SVG renderer — needed for node spotlighting; no rare-only /
+  // morphology filter / custom stop-words hiding the example words; minimal
+  // branching), then restore everything (including the centre verse) on exit.
+  const prevSettingsRef = useRef(null);
   const startTour = () => {
-    prevBranchRef.current = maxBranch;
-    setMaxBranch(3);
+    prevSettingsRef.current = { surah, ayah, searchMode, precision, hideStop, showLoops, rareOnly, morphFilter, renderer, maxBranch, stopExtra, stopDisabled, activeLexicon, theme };
+    setSearchMode("exact"); setPrecision("loose"); setHideStop(true); setShowLoops(true);
+    setRareOnly(false); setMorphFilter({ ...EMPTY_MORPH_FILTER }); setRenderer("svg"); setMaxBranch(3);
+    setStopExtra([]); setStopDisabled([]);
     tourReset(); setTourIndex(0); setTourRun(true);
   };
   const endTour = (dontShow) => {
     setTourRun(false); setTourIndex(0); tourReset();
-    if (prevBranchRef.current != null) { setMaxBranch(prevBranchRef.current); prevBranchRef.current = null; }
+    const s = prevSettingsRef.current;
+    if (s) {
+      setSearchMode(s.searchMode); setPrecision(s.precision); setHideStop(s.hideStop); setShowLoops(s.showLoops);
+      setRareOnly(s.rareOnly); setMorphFilter(s.morphFilter); setRenderer(s.renderer); setMaxBranch(s.maxBranch);
+      setStopExtra(s.stopExtra); setStopDisabled(s.stopDisabled); setActiveLexicon(s.activeLexicon); setTheme(s.theme);
+      setSurah(s.surah); setAyah(s.ayah);
+      prevSettingsRef.current = null;
+    }
     if (dontShow) { try { localStorage.setItem("qg.tourHide", "1"); } catch { /* private mode */ } }
   };
 
