@@ -29,6 +29,7 @@ const OPTIONS = {
   overlayClickAction: false,
   dismissKeyAction: false,
   skipScroll: true,
+  targetWaitTimeout: 4000, // graph nodes (e.g. the كرسي partner verse) can render after a worker re-layout
 };
 const STYLES = { floater: { width: "min(360px, 92vw)", maxWidth: "92vw" } };
 
@@ -133,10 +134,13 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd }) {
     }
     if (type === EVENTS.STEP_AFTER) {
       onStepChange(index + (action === ACTIONS.PREV ? -1 : 1));
-    } else if (type === EVENTS.TARGET_NOT_FOUND) {
-      onStepChange(index + 1); // a target failed to appear — don't get stuck
+    } else if (type === EVENTS.TARGET_NOT_FOUND && !steps[index]?.data?.gated) {
+      // Only skip a missing target on non-action steps. On a gated step the
+      // target (e.g. a freshly-laid-out node) may just be slow; never auto-skip
+      // it — the user's action (or the Skip button) advances instead.
+      onStepChange(index + 1);
     }
-  }, [onStepChange, onEnd]);
+  }, [onStepChange, onEnd, steps]);
 
   const Tooltip = useCallback(
     (props) => <TourTooltip {...props} dontShow={dontShow} onDontShow={setDS} dir={dir} t={t} />,
