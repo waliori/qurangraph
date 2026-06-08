@@ -1175,16 +1175,21 @@ export default function QuranGraph() {
   // the tour) at the capture phase — leaving hover, scroll, and the close button
   // (in the header) / backdrop working.
   const tourModalStep = tourRun && !!tourSteps[tourIndex]?.data?.gate?.startsWith?.("modal:");
+  // The compare step is hands-on: the user builds the comparison by typing a second
+  // term (ٱلْأَرْض) and setting it. Keep the term-picker area live, but still block the
+  // result rows/chips below — those navigate / re-pick and would derail the tour.
+  const tourCmpStep = tourRun && tourSteps[tourIndex]?.data?.gate === "modal:cmp";
   useEffect(() => {
     if (!tourModalStep) return undefined;
     const block = (e) => {
       const inModal = e.target.closest?.(".ag-modal");
       if (!inModal || e.target.closest?.(".ag-modal-head")) return; // backdrop or close/header → allow
+      if (tourCmpStep && e.target.closest?.(".ag-cmp-slots")) return; // compare: term pickers stay live
       e.preventDefault(); e.stopPropagation();
     };
     document.addEventListener("click", block, true);
     return () => document.removeEventListener("click", block, true);
-  }, [tourModalStep]);
+  }, [tourModalStep, tourCmpStep]);
 
   // The search step just *shows* the search bar; it stays read-only so the user
   // doesn't navigate away mid-tour (they use the sūrah/āyah selectors next).

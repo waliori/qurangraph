@@ -73,7 +73,7 @@ export const ar = {
 
   // 10 — Compare
   "tour.compareTitle": "قارِن مصطلحين",
-  "tour.compareBody": "اضغط على «قارِن» لتقارن ٱلسَّمَٰوَٰت بكلمة أخرى (جرّب ٱلْأَرْض) عبر السور والكلمات المجاورة. أغلق النافذة لنُكمل.",
+  "tour.compareBody": "اضغط على «قارِن» لتفتح نافذة المقارنة، ثم اكتب «ٱلْأَرْض» في خانة المصطلح الثاني واضغط «تعيين» لتقارنها بـ ٱلسَّمَٰوَٰت عبر السور والكلمات المجاورة. تصفّح النتيجة، ثم أغلق النافذة لنُكمل.",
 
   // 11 — All verses
   "tour.allversesTitle": "كل الآيات",
@@ -201,7 +201,7 @@ export const en = {
 
   // 10 — Compare
   "tour.compareTitle": "Compare two terms",
-  "tour.compareBody": "Click «Compare» to set ٱلسَّمَٰوَٰت against another term (try ٱلْأَرْض) across chapters and collocations. Close the window to continue.",
+  "tour.compareBody": "Click «Compare» to open the window, then type «ٱلْأَرْض» in the second term box and click «Set» to compare it with ٱلسَّمَٰوَٰت across chapters and collocations. Browse the result, then close the window to continue.",
 
   // 11 — All verses
   "tour.allversesTitle": "All verses",
