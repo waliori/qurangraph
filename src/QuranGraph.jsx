@@ -109,6 +109,8 @@ export default function QuranGraph() {
   const [dragId, setDragId] = useState(null);
   const dragStartRef = useRef(null);
   const draggedRef = useRef(false); // true once a press turns into a real drag
+  const [draggedId, setDraggedId] = useState(null); // last node the user actually dragged (tour gate)
+  const [dragTick, setDragTick] = useState(0); // increments on every real drag, so the gate can require a fresh one
   const [sim] = useState(() => createSimClient(VW, VH)); // live force engine — runs in a Web Worker (stable)
   // DOM registry for imperative position writes (see GraphLayer + applyPositions).
   // A stable object (not a ref) so it can be passed to GraphLayer without reading
@@ -835,7 +837,7 @@ export default function QuranGraph() {
   // (so it doesn't spring back to its parent); a mere press is released.
   const endDrag = useCallback(() => {
     if (!dragId) return;
-    if (draggedRef.current) sim.stick(dragId); else sim.unpin(dragId);
+    if (draggedRef.current) { sim.stick(dragId); setDraggedId(dragId); setDragTick((n) => n + 1); } else sim.unpin(dragId);
     sim.reheat(0.4);
     runSim();
   }, [dragId, runSim, sim]);
@@ -1037,7 +1039,7 @@ export default function QuranGraph() {
     const earth = find(TOUR_EX.earthWi), kurs = find(TOUR_EX.kursWi);
     // The كرسي partner verse (38:34) node — only present once كرسي is expanded.
     const partner = graphNodes.find((g) => g.type === "verse" && g.verseKey === TOUR_EX.kursPartner);
-    return { earthId: earth?.id || null, kursId: kurs?.id || null, earthNorm: earth?.wordNorm || null, kursNorm: kurs?.wordNorm || null, partnerId: partner?.id || null };
+    return { earthId: earth?.id || null, kursId: kurs?.id || null, earthNorm: earth?.wordNorm || null, earthLookup: earth?.lookup || earth?.wordNorm || null, kursNorm: kurs?.wordNorm || null, partnerId: partner?.id || null };
   }, [currentKey, graphNodes]);
 
   const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
@@ -1057,9 +1059,16 @@ export default function QuranGraph() {
     if (cfg.selectId) {
       const n = nmap[cfg.selectId];
       setSelected(cfg.selectId); setActiveWord(n?.lookup || n?.wordNorm || null); setSheetOpen(true);
+      // `collapse`: make sure the selected word is NOT fanned out, so the step's
+      // "click it again to fan out" is a real, repeatable action (the first tap
+      // already toggled it open; undo that here).
+      if (cfg.collapse && n) {
+        const expKey = `${n.lookup || n.wordNorm}@${n.parentVerseKey}`;
+        setExpandedWords((prev) => { if (!prev.has(expKey)) return prev; const nw = new Set(prev); nw.delete(expKey); return nw; });
+      }
     } else { setSelected(null); setActiveWord(null); setSheetOpen(false); }
     await tourSettle();
-  }, [currentKey, navigate, nmap, setSearchMode, tourSettle]);
+  }, [currentKey, navigate, nmap, setSearchMode, setExpandedWords, tourSettle]);
 
   const tourSteps = useMemo(() => {
     const center = (key, content) => ({ target: '[data-tour="stage"]', placement: "center", title: t(`tour.${key}Title`), content: content ?? t(`tour.${key}Body`), before: tourBefore({}) });
@@ -1111,8 +1120,9 @@ export default function QuranGraph() {
       action('[data-tour="picker"]', "picker", {}, "navigate", "bottom"),                             // 4 pick 2:255 (waits for both)
       info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
       info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
-      action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto"),        // 7 tap ٱلْأَرْض (expand)
-      info(earthSel, "dragZoom", { selectId: earthId }, "auto", lit),                                 // 8 drag nodes (children follow) + zoom
+      action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto"),        // 7 tap ٱلْأَرْض (select)
+      action(earthSel, "fanOut", { selectId: earthId, collapse: true }, `expand:${tourEx?.earthLookup || ""}@${TOUR_EX.key}`, "auto", lit), // 8 re-click to fan out its verses
+      action(earthSel, "dragZoom", { selectId: earthId }, `drag:${earthId || ""}`, "auto", lit),                // 9 drag ٱلْأَرْض itself (children follow); auto-zoom-out effect below
       info(".ag-inspector", "inspector", { selectId: earthId }, "auto", noRing),                      // 9
       action('[data-tour="lexSelect"]', "dict", { selectId: earthId }, "lexicon", "auto"),            // 10 switch dictionary
       action('[data-tour="distBtn"]', "dist", { selectId: earthId }, "modal:dist", "auto", lit),      // 11 distribution
@@ -1144,7 +1154,7 @@ export default function QuranGraph() {
     if (!tourRun) return;
     gateRef.current = {
       lex: activeLexicon, theme, lang, rareOnly, renderer,
-      morph: JSON.stringify(morphFilter), saveCount: ws.items.length, expC: exportCount, armed: false,
+      morph: JSON.stringify(morphFilter), saveCount: ws.items.length, expC: exportCount, dragBase: dragTick, armed: false,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourRun, tourIndex]);
@@ -1157,6 +1167,8 @@ export default function QuranGraph() {
     if (gate === "navigate") done = currentKey === TOUR_EX.key;
     else if (gate.startsWith("word:")) { const nw = gate.slice(5); done = !!nw && selNode?.type === "word" && selNode.wordNorm === nw; }
     else if (gate.startsWith("verse:")) { const vk = gate.slice(6); done = selNode?.type === "verse" && selNode.verseKey === vk; }
+    else if (gate.startsWith("expand:")) { const k = gate.slice(7); const exp = expandedWords.has(k); if (!exp) B.armed = true; done = B.armed && exp; } // saw it collapsed → then fanned out
+    else if (gate.startsWith("drag:")) { done = dragTick > B.dragBase && draggedId === gate.slice(5); } // dragged that exact node, during this step
     else if (gate === "lexicon") done = activeLexicon !== B.lex;
     else if (gate === "mode-root") done = searchMode === "root";
     else if (gate === "tools") done = toolsOpen;
@@ -1172,7 +1184,7 @@ export default function QuranGraph() {
       done = B.armed && !open; // …then closed it
     }
     if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
-  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, dist, cmp, occ, phrase, ctx, showHelp]);
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, showHelp]);
 
   // Suppress text selection while the tour runs (so dragging the graph or the
   // tour card never selects page text).
@@ -1207,6 +1219,15 @@ export default function QuranGraph() {
   // doesn't navigate away mid-tour (they use the sūrah/āyah selectors next).
   const tourLockSearch = tourRun && !!tourSteps[tourIndex]?.data?.lockSearch;
   useEffect(() => { tourLockSearchRef.current = tourLockSearch; }, [tourLockSearch]);
+
+  // Entering the "drag ٱلْأَرْض" step, ease the view out a little so the word's
+  // freshly fanned-out verses fit. Done in an effect (reading containerRef via
+  // zoomBy is fine here) and deferred so the setState isn't synchronous in the body.
+  useEffect(() => {
+    if (!tourRun || !tourSteps[tourIndex]?.data?.gate?.startsWith?.("drag:")) return undefined;
+    const id = window.setTimeout(() => zoomBy(0.7), 260); // after the fanned layout settles
+    return () => window.clearTimeout(id);
+  }, [tourRun, tourIndex, tourSteps, zoomBy]);
 
   // Launch the tour from a clean, predictable state: snapshot the user's settings,
   // reset the graph-affecting ones to defaults so the scripted example always

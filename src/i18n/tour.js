@@ -57,13 +57,17 @@ export const ar = {
   "tour.graphTitle": "هذه آية الكرسي",
   "tour.graphBody": "العقدة الذهبية هي الآية، والكلمات حولها. اسحب الخلفية لتحريك الشبكة، وكبّرها بعجلة الفأرة أو بإصبعين. (إن غطّت هذه البطاقة شيئًا، فاسحبها من شريطها العلوي.)",
 
-  // 6 — Tap ٱلْأَرْض (expand it)
+  // 6 — Tap ٱلْأَرْض (select)
   "tour.tapEarthTitle": "ابدأ بكلمة: ٱلْأَرْض",
-  "tour.tapEarthBody": "اضغط على عقدة ٱلْأَرْض المضيئة لتكشف آياتها (فروعها) وتفتح لوحة تفاصيلها.",
+  "tour.tapEarthBody": "اضغط على عقدة ٱلْأَرْض المضيئة لتحديدها وفتح لوحة تفاصيلها.",
 
-  // 6b — Drag nodes + zoom
-  "tour.dragZoomTitle": "حرّك العقد وصغّر العرض",
-  "tour.dragZoomBody": "أصبحت ٱلْأَرْض موسّعة وآياتها حولها. اسحب أيّ عقدة لتحريكها، وتتبعها العقد المتفرّعة عنها. جرّب سحب ٱلْأَرْض، وصغّر العرض (بعجلة الفأرة أو بإصبعين) لترى آياتها كلّها، ثم اضغط «التالي».",
+  // 6b — Re-click to fan out its verses
+  "tour.fanOutTitle": "فرّع آياتها",
+  "tour.fanOutBody": "اضغط على ٱلْأَرْض مرّةً أخرى لتتفرّع آياتها حولها وتظهر في الشبكة.",
+
+  // 6c — Drag the earth node (children follow)
+  "tour.dragZoomTitle": "اسحب ٱلْأَرْض",
+  "tour.dragZoomBody": "صغّرنا العرض قليلًا لترى آيات ٱلْأَرْض المتفرّعة. الآن اسحب عقدة ٱلْأَرْض نفسها لتحريكها، فتتحرّك معها آياتها المتفرّعة عنها.",
 
   // 7 — Inspector
   "tour.inspectorTitle": "لوحة التفاصيل",
@@ -203,13 +207,17 @@ export const en = {
   "tour.graphTitle": "This is Āyat al-Kursī",
   "tour.graphBody": "The gold node is the verse, ringed by its words. Drag the background to pan, zoom with the wheel or two fingers. (Drag this card by its top bar if it covers anything.)",
 
-  // 6 — Tap ٱلْأَرْض (expand it)
+  // 6 — Tap ٱلْأَرْض (select)
   "tour.tapEarthTitle": "Start with a word: ٱلْأَرْض",
-  "tour.tapEarthBody": "Click the highlighted ٱلْأَرْض (the earth) node to reveal its verses (its children) and open its inspector.",
+  "tour.tapEarthBody": "Click the highlighted ٱلْأَرْض (the earth) node to select it and open its details panel.",
 
-  // 6b — Drag nodes + zoom
-  "tour.dragZoomTitle": "Move nodes & zoom out",
-  "tour.dragZoomBody": "ٱلْأَرْض is now expanded, with its verses around it. Drag any node to move it — the nodes branching from it follow along. Try dragging ٱلْأَرْض, then zoom out (wheel or pinch) to see all its verses, and click «Next».",
+  // 6b — Re-click to fan out its verses
+  "tour.fanOutTitle": "Fan out its verses",
+  "tour.fanOutBody": "Click ٱلْأَرْض again to fan out its verses around it in the network.",
+
+  // 6c — Drag the earth node (children follow)
+  "tour.dragZoomTitle": "Drag ٱلْأَرْض",
+  "tour.dragZoomBody": "We've zoomed out a little so you can see ٱلْأَرْض's fanned-out verses. Now drag the ٱلْأَرْض node itself to move it — its branching verses move along with it.",
 
   // 7 — Inspector
   "tour.inspectorTitle": "The inspector",
