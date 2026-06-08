@@ -1,0 +1,17 @@
+services:
+  qurangraph:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qurangraph:latest
+    container_name: qurangraph
+    restart: unless-stopped
+    # No `ports:` — the container is reached only through Nginx Proxy Manager
+    # over the shared proxy_network, not published on the host.
+    networks:
+      - proxy_network
+
+networks:
+  # Created and owned by the Nginx Proxy Manager stack; we just join it.
+  proxy_network:
+    external: true
