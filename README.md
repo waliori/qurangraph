@@ -6,6 +6,8 @@
 
 **An interactive, force-directed graph of the Qurʾān — explore where the text reuses the same word, lemma, and root.**
 
+### 🔗 [**Open the live app → ayat.network**](https://ayat.network)
+
 </div>
 
 Pick a verse and it becomes

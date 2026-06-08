@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#070a12" />
     <meta name="description" content="آيات.network — مستكشف تفاعلي لشبكة الكلمات والجذور في القرآن الكريم." />
+
+    <!-- SEO: canonical + crawl directives -->
+    <link rel="canonical" href="https://ayat.network/" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="waliori@gmail.com" />
+    <meta name="keywords" content="القرآن, جذور, الكلمات القرآنية, شبكة, مقاييس اللغة, تفسير, ayat, quran roots, arabic morphology" />
+
+    <!-- Open Graph (Facebook, WhatsApp, Telegram, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="آيات.network" />
+    <meta property="og:locale" content="ar_AR" />
+    <meta property="og:url" content="https://ayat.network/" />
+    <meta property="og:title" content="آيات.network — شبكة الكلمات القرآنية" />
+    <meta property="og:description" content="مستكشف تفاعلي لشبكة الكلمات والجذور في القرآن الكريم." />
+    <!-- TODO: replace with a 1200×630 PNG for proper social previews (SVG renders on few platforms) -->
+    <meta property="og:image" content="https://ayat.network/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="آيات.network — شبكة الكلمات القرآنية" />
+    <meta name="twitter:description" content="مستكشف تفاعلي لشبكة الكلمات والجذور في القرآن الكريم." />
+    <meta name="twitter:image" content="https://ayat.network/og-image.png" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,6 +39,30 @@
       rel="stylesheet"
     />
     <title>آيات.network — شبكة الكلمات القرآنية</title>
+
+    <!-- Structured data — type="application/ld+json" is data, not executed,
+         so it is not subject to the script-src CSP. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "آيات.network",
+        "url": "https://ayat.network/",
+        "description": "مستكشف تفاعلي لشبكة الكلمات والجذور في القرآن الكريم.",
+        "applicationCategory": "EducationApplication",
+        "operatingSystem": "Any",
+        "inLanguage": "ar",
+        "isAccessibleForFree": true,
+        "author": { "@type": "Person", "name": "Walid Lahnine" }
+      }
+    </script>
+
+    <!-- Plausible CE analytics. NOTE: the `.hash.` variant was intentionally
+         dropped — this app stores its whole serialized state in location.hash
+         (see src/hooks/useUrlState.js), which hash-mode would report as unique
+         pageview URLs. Allowlisted in the build CSP (see vite.config.js). -->
+    <script defer data-domain="ayat.network" src="https://plausible.walidlahnine.com/js/script.file-downloads.outbound-links.pageview-props.tagged-events.js"></script>
+    <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
   </head>
   <body>
     <div id="root"><div class="ag-boot"><div class="ag-boot-glyph">۞</div></div></div>

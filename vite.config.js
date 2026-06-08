@@ -11,7 +11,13 @@ import zlib from 'node:zlib'
 // hence connect-src 'self' and style-src 'unsafe-inline'. The Arabic/Qur'an
 // faces come from Google Fonts, so its stylesheet host (fonts.googleapis.com)
 // and font host (fonts.gstatic.com) are allowed for style-src / font-src.
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'"
+// Plausible CE analytics: its script is loaded from plausible.walidlahnine.com
+// (script-src) and POSTs events back there (connect-src). The inline bootstrap
+// stub is allowed by its sha256 hash rather than 'unsafe-inline', keeping the
+// policy tight — if you ever edit that stub in index.html, recompute the hash.
+const PLAUSIBLE = "https://plausible.walidlahnine.com"
+const PLAUSIBLE_STUB_HASH = "'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='"
+const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH}; connect-src 'self' ${PLAUSIBLE}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
 
 function cspPlugin() {
   return {

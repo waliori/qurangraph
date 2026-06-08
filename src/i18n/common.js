@@ -49,6 +49,7 @@ export const ar = {
 
   // Toolbar icon buttons
   "common.help": "مساعدة ودليل",
+  "common.github": " المصدر على GitHub",
   "common.theme": "تبديل السمة",
 
   // HUD
@@ -277,6 +278,7 @@ export const en = {
 
   // Toolbar icon buttons
   "common.help": "Help & guide",
+  "common.github": "Source code on GitHub",
   "common.theme": "Toggle theme",
 
   // HUD
