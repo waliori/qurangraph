@@ -1850,7 +1850,8 @@ export default function QuranGraph() {
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 
       {/* Getting-started tour (interactive; waits for the user on action steps). */}
-      {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour} />}
+      {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour}
+        theme={theme} onToggleTheme={() => setTheme((th) => (th === "dark" ? "light" : "dark"))} />}
 
       {wsOpen && <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />}
       </Suspense>

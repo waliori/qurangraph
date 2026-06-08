@@ -18,6 +18,13 @@ import { useI18n } from "../i18n/index.js";
  */
 const NoArrow = () => null;
 
+// In-card text-size control: scale the tour copy between these bounds, persisted.
+const SCALE_MIN = 0.85, SCALE_MAX = 1.4, SCALE_STEP = 0.1;
+const clampScale = (v) => Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(v * 100) / 100));
+const readScale = () => {
+  try { const v = parseFloat(localStorage.getItem("qg.tourScale")); return v >= SCALE_MIN && v <= SCALE_MAX ? v : 1; } catch { return 1; }
+};
+
 const OPTIONS = {
   zIndex: 10000,
   overlayColor: "rgba(4, 6, 12, 0.62)",
@@ -42,12 +49,20 @@ function TourTooltip(props) {
 function TourCard({
   index, size, step, isLastStep,
   backProps, primaryProps, skipProps, closeProps, tooltipProps,
-  dontShow, onDontShow, dir, t,
+  dontShow, onDontShow, fontScale, onFontScale, theme, onToggleTheme, dir, t,
 }) {
   const gated = !!step.data?.gated;
   const cardRef = useRef(null);
   const [off, setOff] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
+  // Local mirrors of the in-card controls. react-joyride re-renders the tooltip
+  // only on step changes, NOT when the parent's props change — so driving these
+  // straight from props makes them update a step late (the "checkbox doesn't tick
+  // until Next/Back" bug). Keep the live state here for instant feedback and call
+  // up to persist it; each control re-seeds from its prop when the step remounts.
+  const [dont, setDont] = useState(dontShow);
+  const [scale, setScale] = useState(fontScale);
+  const [themeView, setThemeView] = useState(theme);
 
   // Clamp a desired offset so the whole card stays within the viewport (8px
   // margin). `off` is the currently-applied offset, so the card's base position
@@ -62,6 +77,9 @@ function TourCard({
     return { x, y };
   };
   const onGrabDown = (e) => {
+    // The whole header/title strip drags, but let the controls inside it (theme,
+    // text size, close) take their own clicks instead of starting a drag.
+    if (e.target.closest("button, input, a, select, label")) return;
     dragRef.current = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y };
     e.currentTarget.setPointerCapture?.(e.pointerId);
     e.preventDefault();
@@ -81,13 +99,26 @@ function TourCard({
     return () => { cancelAnimationFrame(id); window.removeEventListener("resize", h); };
   });
 
+  const bumpScale = (d) => { const v = clampScale(scale + d); setScale(v); onFontScale?.(v); };
+  const toggleTheme = () => { onToggleTheme?.(); setThemeView((v) => (v === "dark" ? "light" : "dark")); };
+
   return (
     <div ref={cardRef} className="ag-tour" dir={dir} {...tooltipProps} aria-label={t("tour.ariaLabel")}
-      style={{ transform: `translate(${off.x}px, ${off.y}px)` }}>
-      <div className="ag-tour-grab" title={t("tour.ariaLabel")}
-        onPointerDown={onGrabDown} onPointerMove={onGrabMove} onPointerUp={onGrabUp} onPointerCancel={onGrabUp}>⋮⋮</div>
-      <button type="button" className="ag-tour-x" {...closeProps} title={t("tour.close")} aria-label={t("tour.close")}>✕</button>
-      {step.title && <div className="ag-tour-title">{step.title}</div>}
+      style={{ transform: `translate(${off.x}px, ${off.y}px)`, "--tour-scale": scale }}>
+      <div className="ag-tour-drag"
+        onPointerDown={onGrabDown} onPointerMove={onGrabMove} onPointerUp={onGrabUp} onPointerCancel={onGrabUp}>
+        <div className="ag-tour-head">
+          <span className="ag-tour-grab" title={t("tour.ariaLabel")} aria-hidden="true">⋮⋮</span>
+          <button type="button" className="ag-tour-tool" onClick={toggleTheme}
+            title={t("common.theme")} aria-label={t("common.theme")}>{themeView === "dark" ? "☀" : "☾"}</button>
+          <button type="button" className="ag-tour-tool" onClick={() => bumpScale(-SCALE_STEP)} disabled={scale <= SCALE_MIN}
+            title={t("tour.textSmaller")} aria-label={t("tour.textSmaller")}>A−</button>
+          <button type="button" className="ag-tour-tool" onClick={() => bumpScale(SCALE_STEP)} disabled={scale >= SCALE_MAX}
+            title={t("tour.textLarger")} aria-label={t("tour.textLarger")}>A+</button>
+          <button type="button" className="ag-tour-x" {...closeProps} title={t("tour.close")} aria-label={t("tour.close")}>✕</button>
+        </div>
+        {step.title && <div className="ag-tour-title">{step.title}</div>}
+      </div>
       <div className="ag-tour-body">{step.content}</div>
 
       {gated && <div className="ag-tour-hint"><span className="ag-tour-pulse" aria-hidden="true" />{t("tour.yourTurn")}</div>}
@@ -99,7 +130,7 @@ function TourCard({
       </div>
 
       <label className="ag-tour-dont">
-        <input type="checkbox" checked={dontShow} onChange={(e) => onDontShow(e.target.checked)} />
+        <input type="checkbox" checked={dont} onChange={(e) => { setDont(e.target.checked); onDontShow(e.target.checked); }} />
         <span>{t("tour.dontShow")}</span>
       </label>
 
@@ -116,11 +147,18 @@ function TourCard({
   );
 }
 
-export function Tour({ run, stepIndex, steps, onStepChange, onEnd }) {
+export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onToggleTheme }) {
   const { t, dir } = useI18n();
   const [dontShow, setDontShow] = useState(false);
   const dontShowRef = useRef(false);
   const endedRef = useRef(false);
+  // Text-size preference lives here (not in the per-step card, which remounts) so
+  // it survives step changes; persisted so it sticks across tour runs.
+  const [fontScale, setFontScale] = useState(readScale);
+  const changeScale = useCallback((v) => {
+    setFontScale(v);
+    try { localStorage.setItem("qg.tourScale", String(v)); } catch { /* private mode */ }
+  }, []);
 
   useEffect(() => { if (run) endedRef.current = false; }, [run]);
   const setDS = useCallback((v) => { dontShowRef.current = v; setDontShow(v); }, []);
@@ -143,8 +181,9 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd }) {
   }, [onStepChange, onEnd, steps]);
 
   const Tooltip = useCallback(
-    (props) => <TourTooltip {...props} dontShow={dontShow} onDontShow={setDS} dir={dir} t={t} />,
-    [dontShow, setDS, dir, t],
+    (props) => <TourTooltip {...props} dontShow={dontShow} onDontShow={setDS}
+      fontScale={fontScale} onFontScale={changeScale} theme={theme} onToggleTheme={onToggleTheme} dir={dir} t={t} />,
+    [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, dir, t],
   );
 
   // Pulse a ring on the current step's target element (the dimmed overlay alone
