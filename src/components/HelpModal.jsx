@@ -165,7 +165,14 @@ export function HelpModal({ open, onClose, onStartTour }) {
                   <div className="ag-help-row" key={s.id}>
                     <dt className="ag-help-t">{s.label}</dt>
                     <dd className="ag-help-d" style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", wordBreak: "break-all" }}>
-                      {s.skipped ? t("help.sourcesSkipped") : <>{s.repo}@{String(s.ref).slice(0, 12)}{s.sha256 ? <> · sha256 {s.sha256.slice(0, 12)}…</> : null}</>}
+                      {s.skipped ? t("help.sourcesSkipped") : <>
+                        <a className="ag-help-srclink"
+                          href={s.path ? `https://github.com/${s.repo}/blob/${s.ref}/${s.path}` : `https://github.com/${s.repo}`}
+                          target="_blank" rel="noopener noreferrer" title={t("help.sourcesOpen")}>
+                          {s.repo}@{String(s.ref).slice(0, 12)}
+                        </a>
+                        {s.sha256 ? <> · sha256 {s.sha256.slice(0, 12)}…</> : null}
+                      </>}
                     </dd>
                   </div>
                 ))}

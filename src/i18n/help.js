@@ -153,6 +153,7 @@ export const ar = {
   "help.sourcesIntro": "بُنيت هذه النسخة من المصادر التالية. ",
   "help.sourcesBuilt": "تاريخ البناء: {date}.",
   "help.sourcesSkipped": "— لم يُحمَّل في هذا البناء",
+  "help.sourcesOpen": "افتح المصدر على GitHub (في تبويب جديد)",
 
   // Footer
   "help.footer": "أداة بحثية قرآنية محضة — كل الروابط لغوية (كلمة/صيغة/جذر)، دون تفسير أو ترجمة.",
@@ -312,6 +313,7 @@ export const en = {
   "help.sourcesIntro": "This build was compiled from the following sources. ",
   "help.sourcesBuilt": "Built: {date}.",
   "help.sourcesSkipped": "— not fetched in this build",
+  "help.sourcesOpen": "Open the source on GitHub (new tab)",
 
   "help.footer": "A purely Quranic research tool — all links are linguistic (word / lemma / root), with no exegesis or translation.",
 };

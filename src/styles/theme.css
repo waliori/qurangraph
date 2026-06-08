@@ -353,6 +353,8 @@ body {
 .ag-help-t { align-self: start; color: var(--gold-400); font-weight: var(--fw-semibold); font-size: var(--text-sm);
   background: color-mix(in oklab, var(--gold-500) 10%, transparent); padding: 2px 8px; border-radius: var(--radius-sm); text-align: center; }
 .ag-help-d { color: var(--text-muted); font-size: var(--text-sm); line-height: 1.9; }
+.ag-help-srclink { color: var(--gold-400); text-decoration: none; border-block-end: var(--bw-hair) solid transparent; }
+.ag-help-srclink:hover { border-block-end-color: currentColor; }
 @media (max-width: 560px) { .ag-help-row { grid-template-columns: 1fr; gap: 3px; } .ag-help-t { justify-self: start; } }
 /* Stop-word editor */
 .ag-stop-add { display: flex; gap: var(--space-2); }
