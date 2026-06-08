@@ -111,7 +111,15 @@ export const ar = {
 
   // 19 — Save the view
   "tour.saveViewTitle": "احفظ المشهد",
-  "tour.saveViewBody": "اضغط على «✶» في الشريط السفلي لحفظ لقطة من هذا المشهد. (وفيه أيضًا: الملاءمة، والتكبير، ونسخ رابط الحالة الكاملة، والتصدير صورةً.)",
+  "tour.saveViewBody": "اضغط على «✶» في الشريط السفلي لحفظ لقطة من هذا المشهد إلى مساحة العمل. وسنتعرّف على بقية أزرار الشريط بعد قليل.",
+
+  // 19b — Share a state link (+ the dock buttons)
+  "tour.shareLinkTitle": "شارِك المشهد برابط",
+  "tour.shareLinkBody": "الشريط السفلي يضبط العرض: الملاءمة (⤢)، والتكبير (＋ －)، وحفظ المشهد (✶). واضغط زرّ الرابط (⎘) لنسخ رابطٍ يفتح هذه الحالة بالضبط، فتشاركه ليرى غيرُك ما تراه. اضغطه الآن.",
+
+  // 19c — Download an image
+  "tour.downloadTitle": "نزّل صورة",
+  "tour.downloadBody": "اضغط زرّ التنزيل (⤓) لحفظ صورة PNG للشبكة على جهازك (وزرّ «❖» يصدّرها SVG متّجهة). جرّبه الآن.",
 
   // 20 — Open workspace
   "tour.wsOpenTitle": "افتح مساحة العمل",
@@ -120,6 +128,10 @@ export const ar = {
   // 21 — Workspace detail
   "tour.wsViewTitle": "مساحة العمل",
   "tour.wsViewBody": "ها هي لقطتك محفوظة. تتجمّع هنا كل محفوظاتك (كلمات، ومقارنات، وتوزيعات، ولقطات) مع ملاحظات حرّة وملاحظات لاصقة على العقد. وكلها محفوظة في متصفّحك، ويمكنك تصديرها واستيرادها كملف.",
+
+  // 21b — Help dialog (open & close)
+  "tour.helpTitle": "المساعدة والدليل",
+  "tour.helpBody": "اضغط زرّ «؟» لفتح دليل الاستخدام السريع، ثم أغلقه لنُكمل. تجد فيه شرحًا موجزًا، ومنه تعيد فتح هذه الجولة في أيّ وقت.",
 
   // 22 — Theme / language / offline
   "tour.themeTitle": "المظهر واللغة ودون اتصال",
@@ -239,7 +251,15 @@ export const en = {
 
   // 19 — Save the view
   "tour.saveViewTitle": "Save the view",
-  "tour.saveViewBody": "Click «✶» in the bottom dock to save a snapshot of this view. (The dock also has fit/zoom, copy a full-state link, and image export.)",
+  "tour.saveViewBody": "Click «✶» in the bottom dock to save a snapshot of this view to your Workspace. We'll cover the rest of the dock's buttons next.",
+
+  // 19b — Share a state link (+ the dock buttons)
+  "tour.shareLinkTitle": "Share the view as a link",
+  "tour.shareLinkBody": "The bottom dock controls the view: fit (⤢), zoom (＋ －), and save the view (✶). Click the link button (⎘) to copy a link that reopens this exact state — share it and others see what you see. Click it now.",
+
+  // 19c — Download an image
+  "tour.downloadTitle": "Download an image",
+  "tour.downloadBody": "Click the download button (⤓) to save a PNG image of the network to your device («❖» exports a vector SVG). Try it now.",
 
   // 20 — Open workspace
   "tour.wsOpenTitle": "Open your Workspace",
@@ -248,6 +268,10 @@ export const en = {
   // 21 — Workspace detail
   "tour.wsViewTitle": "Your Workspace",
   "tour.wsViewBody": "There's your snapshot. Everything you save collects here (words, comparisons, distributions, snapshots) with free notes and sticky notes pinned to nodes — all in your browser and exportable/importable as a file.",
+
+  // 21b — Help dialog (open & close)
+  "tour.helpTitle": "Help & guide",
+  "tour.helpBody": "Click the «؟» button to open the quick guide, then close it to continue. It holds a short overview, and you can relaunch this tour from there anytime.",
 
   // 22 — Theme / language / offline
   "tour.themeTitle": "Theme, language & offline",

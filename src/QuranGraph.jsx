@@ -141,6 +141,7 @@ export default function QuranGraph() {
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
   const [linkCopied, setLinkCopied] = useState(false); // share-link confirmation flash
+  const [exportCount, setExportCount] = useState(0); // bumps on each image export (tour download gate)
   const svgRef = useRef(null); // live stage <svg>, for export
   const [hydrated, setHydrated] = useState(false); // URL state applied once after data load
   const [toolsOpen, setToolsOpen] = useState(false); // graph-tools popover
@@ -641,6 +642,7 @@ export default function QuranGraph() {
     else exportPngFile(svgStr, { name: base + ".png", scale: 2, bbox }).catch(() => {});
   }, [contentBounds, T.bg, surah, safeAyah]);
   const exportGraph = useCallback((kind) => {
+    setExportCount((n) => n + 1); // signal an export happened (tour download gate)
     // Export serialises the SVG. In canvas mode the SVG isn't normally mounted, and on
     // large graphs it's culled — either way flip `exporting` to render the FULL graph
     // into the SVG for one frame, let the layout effect paint it, then serialise.
@@ -1037,7 +1039,7 @@ export default function QuranGraph() {
 
   const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
   const tourReset = useCallback(() => {
-    setToolsOpen(false); setWsOpen(false); setSheetOpen(false);
+    setToolsOpen(false); setWsOpen(false); setSheetOpen(false); setShowHelp(false);
     setSelected(null); setActiveWord(null);
     setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null);
   }, []);
@@ -1121,10 +1123,13 @@ export default function QuranGraph() {
       action('[data-tour="tools"]', "toolsOpen", {}, "tools", "bottom"),                              // 18 open tools
       action('[data-tour="toolspop"]', "toolsTry", { tools: true }, "tool-toggle", "left"),           // 19 try a toggle
       action('[data-tour="saveViewBtn"]', "saveView", {}, "save", "left"),                            // 20 save the view
-      action('[data-tour="workspace"]', "wsOpen", {}, "ws", "bottom"),                                // 21 open workspace
-      info('[data-tour="wsdrawer"]', "wsView", { ws: true }, "left", { ...lit, ...noRing }),          // 22 workspace detail
-      action('[data-tour="themeBtn"]', "theme", { ws: false }, "theme", "bottom"),                    // 23 theme/lang
-      center("finish"),                                                                               // 24
+      action('[data-tour="copyLinkBtn"]', "shareLink", {}, "copylink", "left"),                        // 21 share a state link
+      action('[data-tour="exportPngBtn"]', "download", {}, "export", "left"),                          // 22 download an image
+      action('[data-tour="workspace"]', "wsOpen", {}, "ws", "bottom"),                                // 23 open workspace
+      info('[data-tour="wsdrawer"]', "wsView", { ws: true }, "left", { ...lit, ...noRing }),          // 24 workspace detail
+      action('[data-tour="helpBtn"]', "help", {}, "modal:help", "bottom", lit),                        // 25 open & close help
+      action('[data-tour="themeBtn"]', "theme", { ws: false }, "theme", "bottom"),                    // 26 theme/lang
+      center("finish"),                                                                               // 27
     ];
   }, [t, tourEx, tourBefore]);
 
@@ -1135,7 +1140,7 @@ export default function QuranGraph() {
     if (!tourRun) return;
     gateRef.current = {
       lex: activeLexicon, theme, lang, rareOnly, renderer,
-      morph: JSON.stringify(morphFilter), saveCount: ws.items.length, armed: false,
+      morph: JSON.stringify(morphFilter), saveCount: ws.items.length, expC: exportCount, armed: false,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourRun, tourIndex]);
@@ -1153,15 +1158,17 @@ export default function QuranGraph() {
     else if (gate === "tools") done = toolsOpen;
     else if (gate === "tool-toggle") done = rareOnly !== B.rareOnly || renderer !== B.renderer || JSON.stringify(morphFilter) !== B.morph;
     else if (gate === "save") done = ws.items.length > B.saveCount;
+    else if (gate === "copylink") done = linkCopied;              // copied a share link
+    else if (gate === "export") done = exportCount > B.expC;      // downloaded an image
     else if (gate === "ws") done = wsOpen;
     else if (gate === "theme") done = theme !== B.theme || lang !== B.lang;
     else if (gate.startsWith("modal:")) {
-      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : false;
+      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : gate === "modal:help" ? showHelp : false;
       if (open) B.armed = true; // user opened it
       done = B.armed && !open; // …then closed it
     }
     if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
-  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, wsOpen, theme, lang, dist, cmp, occ, phrase, ctx]);
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, dist, cmp, occ, phrase, ctx, showHelp]);
 
   // Suppress text selection while the tour runs (so dragging the graph or the
   // tour card never selects page text).
@@ -1403,7 +1410,7 @@ export default function QuranGraph() {
 
           <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
-          <button type="button" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
+          <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
             title={t("common.github")} aria-label={t("common.github")}>
@@ -1471,8 +1478,8 @@ export default function QuranGraph() {
             {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
             {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
             <button type="button" data-tour="saveViewBtn" className="ag-iconbtn" title={t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>✶</button>
-            <button type="button" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
-            <button type="button" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
+            <button type="button" data-tour="copyLinkBtn" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
+            <button type="button" data-tour="exportPngBtn" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
           </div>
 
