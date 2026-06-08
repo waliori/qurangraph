@@ -146,6 +146,7 @@ export default function QuranGraph() {
   const [toolsOpen, setToolsOpen] = useState(false); // graph-tools popover
   const [query, setQuery] = useState(""); // toolbar search field
   const [searchMiss, setSearchMiss] = useState(false); // last search found nothing
+  const tourLockSearchRef = useRef(false); // true while the tour's search step shows (search disabled)
   const [suggest, setSuggest] = useState(null); // { lookup, label } — "did you mean" offer
   const [readerCollapsed, setReaderCollapsed] = useState(false); // bottom reader dock
   const [showExpanded, setShowExpanded] = useState(false); // expanded-words list panel
@@ -901,6 +902,7 @@ export default function QuranGraph() {
 
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
+    if (tourLockSearchRef.current) return; // search disabled during the tour's search step
     setSuggest(null);
     // Direct verse reference ("2:255", "٢٫٢٥٥", "2 255", "2.255") → jump straight there.
     // Western + Arabic-Indic digits, any of : . / - or space as the separator.
@@ -1100,7 +1102,7 @@ export default function QuranGraph() {
       center("welcome"),                                                                              // 0
       center("basics", basicsContent),                                                                // 1 plain-language idea
       center("colors", colorsContent),                                                                // 2
-      info('[data-tour="search"]', "search", {}, "bottom"),                                           // 3 explain search
+      info('[data-tour="search"]', "search", {}, "bottom", { data: { lockSearch: true } }),            // 3 explain search (read-only here)
       action('[data-tour="picker"]', "picker", {}, "navigate", "bottom"),                             // 4 pick 2:255 (waits for both)
       info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
       info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
@@ -1111,8 +1113,9 @@ export default function QuranGraph() {
       action('[data-tour="compareBtn"]', "compare", { selectId: samId }, "modal:cmp", "auto", lit),   // 11 compare
       action('[data-tour="allVersesBtn"]', "allverses", { selectId: samId }, "modal:occ", "auto", lit), // 12 all verses
       action(kursSel, "tapKursi", { navEx: true }, `word:${tourEx?.kursNorm || ""}`, "auto"),         // 13 rare word
-      action(partnerSel, "kursiVerse", {}, `verse:${TOUR_EX.kursPartner}`, "auto"),                   // 14 the other verse (38:34)
-      action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 15 root mode
+      action(partnerSel, "kursiVerse", {}, `verse:${TOUR_EX.kursPartner}`, "auto"),                   // 14 click the other verse (38:34)
+      info(".ag-inspector", "kursiVerseDetail", { selectId: tourEx?.partnerId }, "auto", noRing),     // 15 its details stay open
+      action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 16 root mode
       action('[data-tour="echoesBtn"]', "echoes", {}, "modal:phrase", "auto", lit),                   // 16 echoes
       action('[data-tour="contextBtn"]', "context", {}, "modal:ctx", "auto", lit),                    // 17 context
       action('[data-tour="tools"]', "toolsOpen", {}, "tools", "bottom"),                              // 18 open tools
@@ -1183,9 +1186,22 @@ export default function QuranGraph() {
     return () => document.removeEventListener("click", block, true);
   }, [tourModalStep]);
 
-  const startTour = () => { tourReset(); setTourIndex(0); setTourRun(true); };
+  // The search step just *shows* the search bar; it stays read-only so the user
+  // doesn't navigate away mid-tour (they use the sūrah/āyah selectors next).
+  const tourLockSearch = tourRun && !!tourSteps[tourIndex]?.data?.lockSearch;
+  useEffect(() => { tourLockSearchRef.current = tourLockSearch; }, [tourLockSearch]);
+
+  // Keep the graph minimal during the tour: cap each word to the fewest verses
+  // (3) so the canvas stays uncluttered; restore the user's setting on exit.
+  const prevBranchRef = useRef(null);
+  const startTour = () => {
+    prevBranchRef.current = maxBranch;
+    setMaxBranch(3);
+    tourReset(); setTourIndex(0); setTourRun(true);
+  };
   const endTour = (dontShow) => {
     setTourRun(false); setTourIndex(0); tourReset();
+    if (prevBranchRef.current != null) { setMaxBranch(prevBranchRef.current); prevBranchRef.current = null; }
     if (dontShow) { try { localStorage.setItem("qg.tourHide", "1"); } catch { /* private mode */ } }
   };
 
@@ -1196,7 +1212,8 @@ export default function QuranGraph() {
     autoTourRef.current = true;
     let hidden = false;
     try { hidden = localStorage.getItem("qg.tourHide") === "1"; } catch { /* ignore */ }
-    if (!hidden) { setTourIndex(0); setTourRun(true); }
+    if (!hidden) startTour();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, error, currentVerse]);
 
   if (error) return (
@@ -1255,8 +1272,8 @@ export default function QuranGraph() {
         </button>
 
         <form data-tour="search" className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search" style={{ position: "relative" }}>
-          <button type="submit" className="ag-search-btn" aria-label={t("common.search.button")} title={t("common.search.button")}>⌕</button>
-          <input className="ag-input" type="search" value={query} aria-label={t("common.search.aria")}
+          <button type="submit" className="ag-search-btn" aria-label={t("common.search.button")} title={t("common.search.button")} disabled={tourLockSearch}>⌕</button>
+          <input className="ag-input" type="search" value={query} aria-label={t("common.search.aria")} readOnly={tourLockSearch}
             placeholder={searchMode === "root" ? t("common.search.phRoot") : searchMode === "lemma" ? t("common.search.phLemma") : t("common.search.phWord")}
             onChange={(e) => { setQuery(e.target.value); if (searchMiss) setSearchMiss(false); if (suggest) setSuggest(null); }} />
           {suggest && (

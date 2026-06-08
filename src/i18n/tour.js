@@ -18,7 +18,7 @@ export const ar = {
 
   // 0 — Welcome
   "tour.welcomeTitle": "أهلًا بك في آيات.network",
-  "tour.welcomeBody": "هذه أداةٌ تعرض القرآنَ كشبكةٍ من الكلمات: تختار آيةً، فتُظهر لك الآياتِ الأخرى التي تشاركها كلماتها — روابط لغوية فقط، دون ترجمةٍ أو تفسير. لا تحتاج خلفيّةً مسبقة؛ سنمرّ معًا بمثالٍ واحد خطوةً خطوة.",
+  "tour.welcomeBody": "هذه أداةٌ تعرض القرآنَ كشبكةٍ من الكلمات: تختار آيةً، فتُظهر لك الآياتِ الأخرى التي تشاركها كلماتها — روابط لغوية فقط، دون ترجمةٍ أو تفسير. لا تحتاج خلفيّةً مسبقة؛ سنمرّ معًا بمثالٍ واحد. وحين تفتح الجولةُ نافذةً فهي للعرض فقط: اطّلع عليها ثم أغلقها (✕) لتتابع.",
 
   // 1 — Basics (plain-language idea + diagram)
   "tour.basicsTitle": "الفكرة باختصار",
@@ -39,9 +39,9 @@ export const ar = {
   "tour.colGreen": "نقطة خضراء = كلمة موسّعة",
   "tour.colPurple": "حلقة بنفسجية = آية موسّعة",
 
-  // 2 — Search (explain)
+  // 2 — Search (explain; read-only during the tour)
   "tour.searchTitle": "البحث",
-  "tour.searchBody": "هنا تبحث: اكتب كلمةً أو جذرًا أو صيغة، أو رقم آيةٍ مثل «2:255» للانتقال السريع. في الخطوة التالية سنستخدم قائمتي السورة والآية.",
+  "tour.searchBody": "هذا شريط البحث: تكتب فيه كلمةً أو جذرًا أو رقم آيةٍ مثل «2:255» للانتقال السريع. وهو معطّلٌ الآن في الجولة — سنستخدم قائمتي السورة والآية في الخطوة التالية.",
 
   // 3 — Picker (ACTION: pick 2:255 — waits for both sūrah & āyah)
   "tour.pickerTitle": "اختر الآية المركزية",
@@ -85,7 +85,9 @@ export const ar = {
 
   // 13 — The other verse (38:34)
   "tour.kursiVerseTitle": "الآية الأخرى الوحيدة",
-  "tour.kursiVerseBody": "وردت كُرْسِيّ في آيةٍ واحدةٍ أخرى فقط — «ص ٣٤». اضغط عقدة تلك الآية المضيئة لتفتح تفاصيلها وكلماتها المشتركة، ويمكنك جعلها مركزًا جديدًا.",
+  "tour.kursiVerseBody": "وردت كُرْسِيّ في آيةٍ واحدةٍ أخرى فقط — «ص ٣٤». اضغط عقدة تلك الآية المضيئة لتفتحها.",
+  "tour.kursiVerseDetailTitle": "تفاصيل الآية الأخرى",
+  "tour.kursiVerseDetailBody": "هذه تفاصيل «ص ٣٤»: نصّها، والكلمة المشتركة (كُرْسِيّ)، وزرّ «اجعلها مركزًا» لبدء استكشافٍ جديدٍ منها. اضغط «التالي» حين تنتهي.",
 
   // 14 — Root mode
   "tour.rootModeTitle": "بدّل إلى وضع «جذر»",
@@ -144,7 +146,7 @@ export const en = {
 
   // 0 — Welcome
   "tour.welcomeTitle": "Welcome to آيات.network",
-  "tour.welcomeBody": "This tool shows the Qur'an as a network of words: you pick a verse, and it reveals the other verses that share its words — linguistic links only, no translation or exegesis. No background needed; we'll walk through one example together, step by step.",
+  "tour.welcomeBody": "This tool shows the Qur'an as a network of words: you pick a verse, and it reveals the other verses that share its words — linguistic links only, no translation or exegesis. No background needed; we'll walk through one example. When the tour opens a window, it's just to look at — read it, then close it (✕) to continue.",
 
   // 1 — Basics (plain-language idea + diagram)
   "tour.basicsTitle": "The idea, in plain words",
@@ -165,9 +167,9 @@ export const en = {
   "tour.colGreen": "Green dot = an expanded word",
   "tour.colPurple": "Purple ring = an expanded verse",
 
-  // 2 — Search (explain)
+  // 2 — Search (explain; read-only during the tour)
   "tour.searchTitle": "Search",
-  "tour.searchBody": "Search here: type a word, root, or lemma — or a verse number like «2:255» to jump straight there. In the next step we'll use the sūrah/āyah menus.",
+  "tour.searchBody": "This is the search bar: you'd type a word, root, or a verse number like «2:255» to jump straight there. It's disabled here in the tour — we'll use the sūrah/āyah menus in the next step.",
 
   // 3 — Picker (ACTION)
   "tour.pickerTitle": "Pick the centre verse",
@@ -211,7 +213,9 @@ export const en = {
 
   // 13 — The other verse (38:34)
   "tour.kursiVerseTitle": "Its only other verse",
-  "tour.kursiVerseBody": "كُرْسِيّ appears in just one other verse — «Ṣād 34». Click that highlighted verse node to open its details and shared words; you can even make it the new centre.",
+  "tour.kursiVerseBody": "كُرْسِيّ appears in just one other verse — «Ṣād 34». Click that highlighted verse node to open it.",
+  "tour.kursiVerseDetailTitle": "The other verse's details",
+  "tour.kursiVerseDetailBody": "Here are the details of «Ṣād 34»: its text, the shared word (كُرْسِيّ), and a «Make centre» button to start a fresh exploration from it. Click «Next» when you're done.",
 
   // 14 — Root mode
   "tour.rootModeTitle": "Switch to «Root» mode",
