@@ -1408,11 +1408,12 @@ export default function QuranGraph() {
           </a>
           <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
             onClick={() => setLang(lang === "ar" ? "en" : "ar")}>{lang === "ar" ? "EN" : "ع"}</button>
-          {/* Numeral system toggle — only meaningful in Arabic (English is always Western).
-              "auto" follows the language; clicking pins arabic↔western. Shows the system it
-              switches TO (like the theme button). */}
-          {lang === "ar" && (() => {
-            const arabicActive = numerals !== "western";
+          {/* Numeral system toggle. "auto" follows the language (Arabic→١٢٣, English→123);
+              clicking pins arabic↔western, so either system works under either language.
+              arabicActive mirrors the effective choice in i18n (not the raw "auto" string).
+              Shows the system it switches TO (like the theme button). */}
+          {(() => {
+            const arabicActive = numerals === "arabic" ? true : numerals === "western" ? false : lang === "ar";
             return (
               <button type="button" className="ag-iconbtn" style={{ fontSize: "var(--text-sm)" }}
                 title={t("common.numerals")} aria-label={t("common.numerals")} aria-pressed={!arabicActive}
