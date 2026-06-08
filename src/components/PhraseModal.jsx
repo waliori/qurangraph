@@ -69,7 +69,7 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
         {cv && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
           onClick={() => { ws.saveItem({ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }); ws.toast(t("ws.saved")); }}>★</button>}
         {phrases.length > 0 && (
-          <button type="button" className="ag-btn" title={t("phrase.exportCsv")}
+          <button type="button" data-export className="ag-btn" title={t("phrase.exportCsv")}
             onClick={() => exportCsvFile(
               [[t("phrase.csvPhrase"), t("phrase.csvWordCount"), t("phrase.csvAyahCount"), t("phrase.csvAyat")],
                ...phrases.map((p) => [p.tokens.join(" "), p.len, p.verses.length, p.verses.join(t("phrase.listSep"))])],

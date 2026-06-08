@@ -47,7 +47,10 @@ const isInt = (v) => Number.isInteger(v);
 // The tour's worked example: Āyat al-Kursī, with the word indices it spotlights
 // (15 = ٱلسَّمَٰوَٰت / heavens, 41 = كُرْسِيّ / a rare word). Module-scoped so it's a
 // stable reference for the tour's memo/effect deps.
-const TOUR_EX = { s: 2, a: 255, key: "2:255", samWi: 15, kursWi: 41, kursPartner: "38:34" };
+// Worked example: Āyat al-Kursī. earthWi = ٱلْأَرْض (word 18) — chosen as the first
+// example word because its root (أرض) has entries in ALL three lexicons, unlike
+// ٱلسَّمَٰوَٰت (root سمو, only in Maqāyīs); kursWi = كُرْسِيّ (word 41, a hapax-like rarity).
+const TOUR_EX = { s: 2, a: 255, key: "2:255", earthWi: 18, kursWi: 41, kursPartner: "38:34" };
 
 // Coerce a persisted morphology filter back to its {pos,form,aspect,voice} shape.
 function sanitizeMorphFilter(v) {
@@ -1031,10 +1034,10 @@ export default function QuranGraph() {
   const tourEx = useMemo(() => {
     if (currentKey !== TOUR_EX.key) return null;
     const find = (wi) => graphNodes.find((g) => g.type === "word" && g.wordIndex === wi && g.parentVerseKey === TOUR_EX.key);
-    const sam = find(TOUR_EX.samWi), kurs = find(TOUR_EX.kursWi);
+    const earth = find(TOUR_EX.earthWi), kurs = find(TOUR_EX.kursWi);
     // The كرسي partner verse (38:34) node — only present once كرسي is expanded.
     const partner = graphNodes.find((g) => g.type === "verse" && g.verseKey === TOUR_EX.kursPartner);
-    return { samId: sam?.id || null, kursId: kurs?.id || null, samNorm: sam?.wordNorm || null, kursNorm: kurs?.wordNorm || null, partnerId: partner?.id || null };
+    return { earthId: earth?.id || null, kursId: kurs?.id || null, earthNorm: earth?.wordNorm || null, kursNorm: kurs?.wordNorm || null, partnerId: partner?.id || null };
   }, [currentKey, graphNodes]);
 
   const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
@@ -1094,10 +1097,10 @@ export default function QuranGraph() {
         <p>{t("tour.basicsP2")}</p>
       </div>
     );
-    const samSel = tourEx?.samId ? `[data-node="${tourEx.samId}"]` : '[data-tour="stage"]';
+    const earthSel = tourEx?.earthId ? `[data-node="${tourEx.earthId}"]` : '[data-tour="stage"]';
     const kursSel = tourEx?.kursId ? `[data-node="${tourEx.kursId}"]` : '[data-tour="stage"]';
     const partnerSel = tourEx?.partnerId ? `[data-node="${tourEx.partnerId}"]` : '[data-tour="stage"]';
-    const samId = tourEx?.samId;
+    const earthId = tourEx?.earthId;
     const lit = { hideOverlay: true }; // modal/canvas steps: keep the page & modal bright + interactive
     const noRing = { data: { noRing: true } }; // large "subject" panels: card explains, no ring
     return [
@@ -1108,12 +1111,13 @@ export default function QuranGraph() {
       action('[data-tour="picker"]', "picker", {}, "navigate", "bottom"),                             // 4 pick 2:255 (waits for both)
       info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
       info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
-      action(samSel, "tapSamawat", { navEx: true }, `word:${tourEx?.samNorm || ""}`, "auto"),         // 7 tap ٱلسَّمَٰوَٰت
-      info(".ag-inspector", "inspector", { selectId: samId }, "auto", noRing),                        // 8
-      action('[data-tour="lexSelect"]', "dict", { selectId: samId }, "lexicon", "auto"),              // 9 switch dictionary
-      action('[data-tour="distBtn"]', "dist", { selectId: samId }, "modal:dist", "auto", lit),        // 10 distribution
-      action('[data-tour="compareBtn"]', "compare", { selectId: samId }, "modal:cmp", "auto", lit),   // 11 compare
-      action('[data-tour="allVersesBtn"]', "allverses", { selectId: samId }, "modal:occ", "auto", lit), // 12 all verses
+      action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto"),        // 7 tap ٱلْأَرْض (expand)
+      info(earthSel, "dragZoom", { selectId: earthId }, "auto", lit),                                 // 8 drag nodes (children follow) + zoom
+      info(".ag-inspector", "inspector", { selectId: earthId }, "auto", noRing),                      // 9
+      action('[data-tour="lexSelect"]', "dict", { selectId: earthId }, "lexicon", "auto"),            // 10 switch dictionary
+      action('[data-tour="distBtn"]', "dist", { selectId: earthId }, "modal:dist", "auto", lit),      // 11 distribution
+      action('[data-tour="compareBtn"]', "compare", { selectId: earthId }, "modal:cmp", "auto", lit), // 12 compare
+      action('[data-tour="allVersesBtn"]', "allverses", { selectId: earthId }, "modal:occ", "auto", lit), // 13 all verses
       action(kursSel, "tapKursi", { navEx: true }, `word:${tourEx?.kursNorm || ""}`, "auto"),         // 13 rare word
       action(partnerSel, "kursiVerse", {}, `verse:${TOUR_EX.kursPartner}`, "auto"),                   // 14 click the other verse (38:34)
       info(".ag-inspector", "kursiVerseDetail", { selectId: tourEx?.partnerId }, "auto", noRing),     // 15 its details stay open
@@ -1192,6 +1196,7 @@ export default function QuranGraph() {
       const inModal = e.target.closest?.(".ag-modal");
       if (!inModal || e.target.closest?.(".ag-modal-head")) return; // backdrop or close/header → allow
       if (tourCmpStep && e.target.closest?.(".ag-cmp-slots")) return; // compare: term pickers stay live
+      if (e.target.closest?.("[data-export]")) return; // downloads (CSV/JSON/…) stay usable during the tour
       e.preventDefault(); e.stopPropagation();
     };
     document.addEventListener("click", block, true);

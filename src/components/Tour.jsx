@@ -49,7 +49,7 @@ function TourTooltip(props) {
 function TourCard({
   index, size, step, isLastStep,
   backProps, primaryProps, skipProps, closeProps, tooltipProps,
-  dontShow, onDontShow, fontScale, onFontScale, theme, onToggleTheme, dir, t,
+  dontShow, onDontShow, fontScale, onFontScale, theme, onToggleTheme, lang, onToggleLang, dir, t,
 }) {
   const gated = !!step.data?.gated;
   const cardRef = useRef(null);
@@ -63,6 +63,7 @@ function TourCard({
   const [dont, setDont] = useState(dontShow);
   const [scale, setScale] = useState(fontScale);
   const [themeView, setThemeView] = useState(theme);
+  const [langView, setLangView] = useState(lang);
 
   // Clamp a desired offset so the whole card stays within the viewport (8px
   // margin). `off` is the currently-applied offset, so the card's base position
@@ -101,6 +102,7 @@ function TourCard({
 
   const bumpScale = (d) => { const v = clampScale(scale + d); setScale(v); onFontScale?.(v); };
   const toggleTheme = () => { onToggleTheme?.(); setThemeView((v) => (v === "dark" ? "light" : "dark")); };
+  const toggleLang = () => { onToggleLang?.(); setLangView((v) => (v === "ar" ? "en" : "ar")); };
 
   return (
     <div ref={cardRef} className="ag-tour" dir={dir} {...tooltipProps} aria-label={t("tour.ariaLabel")}
@@ -108,9 +110,10 @@ function TourCard({
       <div className="ag-tour-drag"
         onPointerDown={onGrabDown} onPointerMove={onGrabMove} onPointerUp={onGrabUp} onPointerCancel={onGrabUp}>
         <div className="ag-tour-head">
-          <span className="ag-tour-grab" title={t("tour.ariaLabel")} aria-hidden="true">⋮⋮</span>
           <button type="button" className="ag-tour-tool" onClick={toggleTheme}
             title={t("common.theme")} aria-label={t("common.theme")}>{themeView === "dark" ? "☀" : "☾"}</button>
+          <button type="button" className="ag-tour-tool ag-tour-lang" onClick={toggleLang}
+            title={t("common.language")} aria-label={t("common.language")}>{langView === "ar" ? "EN" : "ع"}</button>
           <button type="button" className="ag-tour-tool" onClick={() => bumpScale(-SCALE_STEP)} disabled={scale <= SCALE_MIN}
             title={t("tour.textSmaller")} aria-label={t("tour.textSmaller")}>A−</button>
           <button type="button" className="ag-tour-tool" onClick={() => bumpScale(SCALE_STEP)} disabled={scale >= SCALE_MAX}
@@ -148,7 +151,8 @@ function TourCard({
 }
 
 export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onToggleTheme }) {
-  const { t, dir } = useI18n();
+  const { t, dir, lang, setLang } = useI18n();
+  const onToggleLang = useCallback(() => setLang(lang === "ar" ? "en" : "ar"), [lang, setLang]);
   const [dontShow, setDontShow] = useState(false);
   const dontShowRef = useRef(false);
   const endedRef = useRef(false);
@@ -182,8 +186,9 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
 
   const Tooltip = useCallback(
     (props) => <TourTooltip {...props} dontShow={dontShow} onDontShow={setDS}
-      fontScale={fontScale} onFontScale={changeScale} theme={theme} onToggleTheme={onToggleTheme} dir={dir} t={t} />,
-    [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, dir, t],
+      fontScale={fontScale} onFontScale={changeScale} theme={theme} onToggleTheme={onToggleTheme}
+      lang={lang} onToggleLang={onToggleLang} dir={dir} t={t} />,
+    [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, lang, onToggleLang, dir, t],
   );
 
   // Pulse a ring on the current step's target element (the dimmed overlay alone

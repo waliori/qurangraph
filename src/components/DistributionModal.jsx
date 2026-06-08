@@ -83,7 +83,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h">
               <span>{t("dist.bySurah")}</span>
-              <button type="button" className="ag-btn" onClick={() => exportCsvFile([[t("dist.colSurah"), t("dist.colName"), t("dist.colCount")], ...distribution.map((d) => [d.sura, d.name, d.count])], t("dist.fileDistribution", { label: dist.label }))}>⤓ CSV</button>
+              <button type="button" data-export className="ag-btn" onClick={() => exportCsvFile([[t("dist.colSurah"), t("dist.colName"), t("dist.colCount")], ...distribution.map((d) => [d.sura, d.name, d.count])], t("dist.fileDistribution", { label: dist.label }))}>⤓ CSV</button>
             </div>
             <p className="ag-hint">{t("dist.clickSurahHint")}</p>
             <div className="ag-dist-row ag-dist-head">
@@ -106,7 +106,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h">
               <span>{t("dist.collocates")}</span>
-              <button type="button" className="ag-btn" onClick={() => exportCsvFile([[t("dist.colWord"), t("dist.colShared"), "PMI", "G²"], ...colloc.map((c) => [c.label, c.count, c.pmi.toFixed(3), c.ll.toFixed(3)])], t("dist.fileColloc", { label: dist.label }))}>⤓ CSV</button>
+              <button type="button" data-export className="ag-btn" onClick={() => exportCsvFile([[t("dist.colWord"), t("dist.colShared"), "PMI", "G²"], ...colloc.map((c) => [c.label, c.count, c.pmi.toFixed(3), c.ll.toFixed(3)])], t("dist.fileColloc", { label: dist.label }))}>⤓ CSV</button>
             </div>
             <div className="ag-seg ag-seg-sm" role="group" aria-label={t("dist.sortGroup")} style={{ marginBlockEnd: "var(--space-2)" }}>
               {COLLOC_SORT_IDS.map((id) => (
@@ -138,7 +138,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h">
               <span>{t("nbr.title")}</span>
-              <button type="button" className="ag-btn" title={t("nbr.exportCsv")}
+              <button type="button" data-export className="ag-btn" title={t("nbr.exportCsv")}
                 onClick={() => exportCsvFile([[t("nbr.colWord"), t("nbr.colBefore"), t("nbr.colAfter"), t("nbr.colTotal")], ...neighbors.map((n) => [n.label, n.before, n.after, n.total])], t("nbr.file", { label: dist.label }))}>⤓ CSV</button>
             </div>
             <div className="ag-seg ag-seg-sm" role="group" aria-label={t("nbr.title")} style={{ marginBlockEnd: "var(--space-2)" }}>

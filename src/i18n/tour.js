@@ -20,7 +20,7 @@ export const ar = {
 
   // 0 — Welcome
   "tour.welcomeTitle": "أهلًا بك في آيات.network",
-  "tour.welcomeBody": "هذه الأداة تعرض القرآن كشبكة من الكلمات: تختار آية، فتظهر لك الآيات الأخرى التي تشترك معها في الكلمات — روابط لغوية فقط، بلا ترجمة أو تفسير. لا تحتاج إلى معرفة سابقة؛ سنشرح كل شيء بمثال واحد. وحين تفتح الجولة نافذةً، فهي للاطّلاع فقط: اقرأها ثم أغلقها (✕) لتُكمل.",
+  "tour.welcomeBody": "هذه الأداة تعرض القرآن كشبكة من الكلمات: تختار آية، فتظهر لك الآيات الأخرى التي تشترك معها في الكلمات — روابط لغوية فقط، بلا ترجمة أو تفسير. لا تحتاج إلى معرفة سابقة؛ سنشرح كل شيء بمثال واحد. وحين تفتح الجولة نافذةً، فهي للاطّلاع فقط: اقرأها ثم أغلقها (✕) لتُكمل. ويمكنك سحب هذه البطاقة من شريطها العلوي إن غطّت شيئًا، ومن الأعلى أيضًا تبدّل السمة واللغة وحجم النص.",
 
   // 1 — Basics (plain-language idea + diagram)
   "tour.basicsTitle": "الفكرة باختصار",
@@ -55,15 +55,19 @@ export const ar = {
 
   // 5 — Graph intro (pan/zoom)
   "tour.graphTitle": "هذه آية الكرسي",
-  "tour.graphBody": "العقدة الذهبية هي الآية، والكلمات حولها. اسحب الخلفية لتحريك الشبكة، وكبّرها بعجلة الفأرة أو بإصبعين. (إن غطّت هذه البطاقة شيئًا، فاسحبها من المقبض ⋮⋮.)",
+  "tour.graphBody": "العقدة الذهبية هي الآية، والكلمات حولها. اسحب الخلفية لتحريك الشبكة، وكبّرها بعجلة الفأرة أو بإصبعين. (إن غطّت هذه البطاقة شيئًا، فاسحبها من شريطها العلوي.)",
 
-  // 6 — Tap ٱلسَّمَٰوَٰت
-  "tour.tapSamawatTitle": "ابدأ بكلمة: ٱلسَّمَٰوَٰت",
-  "tour.tapSamawatBody": "اضغط على عقدة ٱلسَّمَٰوَٰت المضيئة لتتوسّع إلى آياتها وتفتح لوحة تفاصيلها.",
+  // 6 — Tap ٱلْأَرْض (expand it)
+  "tour.tapEarthTitle": "ابدأ بكلمة: ٱلْأَرْض",
+  "tour.tapEarthBody": "اضغط على عقدة ٱلْأَرْض المضيئة لتكشف آياتها (فروعها) وتفتح لوحة تفاصيلها.",
+
+  // 6b — Drag nodes + zoom
+  "tour.dragZoomTitle": "حرّك العقد وصغّر العرض",
+  "tour.dragZoomBody": "أصبحت ٱلْأَرْض موسّعة وآياتها حولها. اسحب أيّ عقدة لتحريكها، وتتبعها العقد المتفرّعة عنها. جرّب سحب ٱلْأَرْض، وصغّر العرض (بعجلة الفأرة أو بإصبعين) لترى آياتها كلّها، ثم اضغط «التالي».",
 
   // 7 — Inspector
   "tour.inspectorTitle": "لوحة التفاصيل",
-  "tour.inspectorBody": "هذه هي التفاصيل: الجذر س-م-و، والصيغة، والتحليل الصرفي في هذا الموضع، والمعنى من معجم عربي مع ذكر الطبعة.",
+  "tour.inspectorBody": "هذه هي التفاصيل: الجذر أ-ر-ض، والصيغة، والتحليل الصرفي في هذا الموضع، والمعنى من معجم عربي مع ذكر الطبعة.",
 
   // 8 — Switch dictionary
   "tour.dictTitle": "بدّل المعجم",
@@ -71,11 +75,11 @@ export const ar = {
 
   // 9 — Distribution
   "tour.distTitle": "أين ترد الكلمة؟",
-  "tour.distBody": "اضغط على «التوزيع»: ترد ٱلسَّمَٰوَٰت في نحو ١٨٠ آية (في وضع الكلمة)، وأكثر كلمة تجاورها هي ٱلْأَرْض. تصفّح البيانات، ثم أغلق النافذة لنُكمل.",
+  "tour.distBody": "اضغط على «التوزيع»: ترد ٱلْأَرْض في نحو ٢٧٥ آية (في وضع الكلمة)، وأكثر كلمة تجاورها هي ٱلسَّمَٰوَٰت. تصفّح البيانات، ثم أغلق النافذة لنُكمل.",
 
   // 10 — Compare
   "tour.compareTitle": "قارِن مصطلحين",
-  "tour.compareBody": "اضغط على «قارِن» لتفتح نافذة المقارنة، ثم اكتب «ٱلْأَرْض» في خانة المصطلح الثاني واضغط «تعيين» لتقارنها بـ ٱلسَّمَٰوَٰت عبر السور والكلمات المجاورة. تصفّح النتيجة، ثم أغلق النافذة لنُكمل.",
+  "tour.compareBody": "اضغط على «قارِن» لتفتح نافذة المقارنة، ثم اكتب «ٱلسَّمَٰوَٰت» في خانة المصطلح الثاني واضغط «تعيين» لتقارنها بـ ٱلْأَرْض عبر السور والكلمات المجاورة. تصفّح النتيجة، ثم أغلق النافذة لنُكمل.",
 
   // 11 — All verses
   "tour.allversesTitle": "كل الآيات",
@@ -109,7 +113,7 @@ export const ar = {
 
   // 18 — Try a tool
   "tour.toolsTryTitle": "جرّب أداة",
-  "tour.toolsTryBody": "فعّل مثلًا «روابط نادرة فقط» لإبراز الكلمات المميّزة — أو بدّل محرّك الرسم. (إن غطّت البطاقة القائمة، فاسحبها من المقبض ⋮⋮.)",
+  "tour.toolsTryBody": "فعّل مثلًا «روابط نادرة فقط» لإبراز الكلمات المميّزة — أو بدّل محرّك الرسم. (إن غطّت البطاقة القائمة، فاسحبها من شريطها العلوي.)",
 
   // 19 — Save the view
   "tour.saveViewTitle": "احفظ المشهد",
@@ -129,7 +133,7 @@ export const ar = {
 
   // 21 — Workspace detail
   "tour.wsViewTitle": "مساحة العمل",
-  "tour.wsViewBody": "ها هي لقطتك محفوظة. تتجمّع هنا كل محفوظاتك (كلمات، ومقارنات، وتوزيعات، ولقطات) مع ملاحظات حرّة وملاحظات لاصقة على العقد. وكلها محفوظة في متصفّحك، ويمكنك تصديرها واستيرادها كملف.",
+  "tour.wsViewBody": "ها هي لقطتك محفوظة. تتجمّع هنا كل محفوظاتك (كلمات، ومقارنات، وتوزيعات، ولقطات) مع ملاحظات حرّة وملاحظات لاصقة على العقد. لا خادمَ هنا ولا حساب: كل شيء يُحفظ في متصفّحك وحده — فإن مسحت بيانات المتصفّح زالت محفوظاتك. لذا صدّرها ملفًّا للاحتفاظ بها أو نقلها إلى جهاز آخر.",
 
   // 21b — Help dialog (open & close)
   "tour.helpTitle": "المساعدة والدليل",
@@ -162,7 +166,7 @@ export const en = {
 
   // 0 — Welcome
   "tour.welcomeTitle": "Welcome to آيات.network",
-  "tour.welcomeBody": "This tool shows the Qur'an as a network of words: you pick a verse, and it reveals the other verses that share its words — linguistic links only, no translation or exegesis. No background needed; we'll walk through one example. When the tour opens a window, it's just to look at — read it, then close it (✕) to continue.",
+  "tour.welcomeBody": "This tool shows the Qur'an as a network of words: you pick a verse, and it reveals the other verses that share its words — linguistic links only, no translation or exegesis. No background needed; we'll walk through one example. When the tour opens a window, it's just to look at — read it, then close it (✕) to continue. You can drag this card by its top bar if it covers anything — and from the top you can also switch theme, language, and text size.",
 
   // 1 — Basics (plain-language idea + diagram)
   "tour.basicsTitle": "The idea, in plain words",
@@ -197,15 +201,19 @@ export const en = {
 
   // 5 — Graph intro
   "tour.graphTitle": "This is Āyat al-Kursī",
-  "tour.graphBody": "The gold node is the verse, ringed by its words. Drag the background to pan, zoom with the wheel or two fingers. (Drag this card by its ⋮⋮ handle if it covers anything.)",
+  "tour.graphBody": "The gold node is the verse, ringed by its words. Drag the background to pan, zoom with the wheel or two fingers. (Drag this card by its top bar if it covers anything.)",
 
-  // 6 — Tap heavens
-  "tour.tapSamawatTitle": "Start with a word: ٱلسَّمَٰوَٰت",
-  "tour.tapSamawatBody": "Click the highlighted ٱلسَّمَٰوَٰت (the heavens) node to expand it into its verses and open its inspector.",
+  // 6 — Tap ٱلْأَرْض (expand it)
+  "tour.tapEarthTitle": "Start with a word: ٱلْأَرْض",
+  "tour.tapEarthBody": "Click the highlighted ٱلْأَرْض (the earth) node to reveal its verses (its children) and open its inspector.",
+
+  // 6b — Drag nodes + zoom
+  "tour.dragZoomTitle": "Move nodes & zoom out",
+  "tour.dragZoomBody": "ٱلْأَرْض is now expanded, with its verses around it. Drag any node to move it — the nodes branching from it follow along. Try dragging ٱلْأَرْض, then zoom out (wheel or pinch) to see all its verses, and click «Next».",
 
   // 7 — Inspector
   "tour.inspectorTitle": "The inspector",
-  "tour.inspectorBody": "Here are the details: root س-م-و, lemma, the morphological analysis for this spot, and the meaning from an Arabic lexicon with an edition citation.",
+  "tour.inspectorBody": "Here are the details: root أ-ر-ض, lemma, the morphological analysis for this spot, and the meaning from an Arabic lexicon with an edition citation.",
 
   // 8 — Switch dictionary
   "tour.dictTitle": "Switch the dictionary",
@@ -213,11 +221,11 @@ export const en = {
 
   // 9 — Distribution
   "tour.distTitle": "Where does the word occur?",
-  "tour.distBody": "Click «Distribution»: ٱلسَّمَٰوَٰت occurs in ~180 verses (in Word mode), and its top neighbour is ٱلْأَرْض (earth). Explore the data, then close the window to continue.",
+  "tour.distBody": "Click «Distribution»: ٱلْأَرْض occurs in ~275 verses (in Word mode), and its top neighbour is ٱلسَّمَٰوَٰت (the heavens). Explore the data, then close the window to continue.",
 
   // 10 — Compare
   "tour.compareTitle": "Compare two terms",
-  "tour.compareBody": "Click «Compare» to open the window, then type «ٱلْأَرْض» in the second term box and click «Set» to compare it with ٱلسَّمَٰوَٰت across chapters and collocations. Browse the result, then close the window to continue.",
+  "tour.compareBody": "Click «Compare» to open the window, then type «ٱلسَّمَٰوَٰت» in the second term box and click «Set» to compare it with ٱلْأَرْض across chapters and collocations. Browse the result, then close the window to continue.",
 
   // 11 — All verses
   "tour.allversesTitle": "All verses",
@@ -251,7 +259,7 @@ export const en = {
 
   // 18 — Try a tool
   "tour.toolsTryTitle": "Try a tool",
-  "tour.toolsTryBody": "Turn on e.g. «rare links only» to surface distinctive vocabulary — or switch the render engine. (If the card covers the menu, drag it by its ⋮⋮ handle.)",
+  "tour.toolsTryBody": "Turn on e.g. «rare links only» to surface distinctive vocabulary — or switch the render engine. (If the card covers the menu, drag it by its top bar.)",
 
   // 19 — Save the view
   "tour.saveViewTitle": "Save the view",
@@ -271,7 +279,7 @@ export const en = {
 
   // 21 — Workspace detail
   "tour.wsViewTitle": "Your Workspace",
-  "tour.wsViewBody": "There's your snapshot. Everything you save collects here (words, comparisons, distributions, snapshots) with free notes and sticky notes pinned to nodes — all in your browser and exportable/importable as a file.",
+  "tour.wsViewBody": "There's your snapshot. Everything you save collects here (words, comparisons, distributions, snapshots) with free notes and sticky notes pinned to nodes. There's no backend and no account: it all lives in your browser alone — so clearing your browser data erases it. Export it as a file to keep a backup or move it to another device.",
 
   // 21b — Help dialog (open & close)
   "tour.helpTitle": "Help & guide",
