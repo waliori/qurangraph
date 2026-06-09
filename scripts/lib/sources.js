@@ -20,10 +20,22 @@ export const SOURCES = [
   // Per-word morphology (incl. ROOT) — Quranic Arabic Corpus, Arabic-script mirror.
   { id: "morphology", label: "Quranic Arabic Corpus morphology", repo: "mustafa0x/quran-morphology", ref: ref("MORPHOLOGY", "master"),
     path: "quran-morphology.txt", out: "data/source/quran-morphology.txt", core: true },
+  // Kitab al-'Ayn (al-Khalil b. Ahmad al-Farahidi, d.170) — OpenITI (JK). First Arabic lexicon.
+  { id: "ayn", label: "Kitāb al-ʿAyn (al-Khalīl, d.170)", repo: "OpenITI/0175AH", ref: ref("AYN", "master"),
+    path: "data/0170KhalilFarahidi/0170KhalilFarahidi.Cayn/0170KhalilFarahidi.Cayn.JK000930-ara1",
+    out: "data/source/ayn.txt", core: false },
+  // al-Sihah Taj al-Lugha (al-Jawhari, d.393) — OpenITI digitisation (Shamela 23235).
+  { id: "sihah", label: "al-Ṣiḥāḥ (al-Jawharī, d.393)", repo: "OpenITI/0400AH", ref: ref("SIHAH", "master"),
+    path: "data/0393IbnHammadJawhari/0393IbnHammadJawhari.SihahTajLugha/0393IbnHammadJawhari.SihahTajLugha.Shamela0023235-ara1",
+    out: "data/source/sihah.txt", core: false },
   // Mu'jam Maqayis al-Lugha (Ibn Faris, d.395) — OpenITI digitisation (Shamela 21710).
   { id: "maqayis", label: "Maqāyīs al-Lugha (Ibn Fāris, d.395)", repo: "OpenITI/0400AH", ref: ref("MAQAYIS", "master"),
     path: "data/0395IbnFarisQazwini/0395IbnFarisQazwini.MucjamMaqayis/0395IbnFarisQazwini.MucjamMaqayis.Shamela0021710-ara1",
     out: "data/source/maqayis.txt", core: true },
+  // al-Muhkam wa al-Muhit al-A'zam (Ibn Sida, d.458) — OpenITI digitisation (Shamela 9757). Phonetically ordered.
+  { id: "muhkam", label: "al-Muḥkam (Ibn Sīda, d.458)", repo: "OpenITI/0475AH", ref: ref("MUHKAM", "master"),
+    path: "data/0458IbnSidaMursi/0458IbnSidaMursi.MuhkamWaMuhit/0458IbnSidaMursi.MuhkamWaMuhit.Shamela0009757-ara1",
+    out: "data/source/muhkam.txt", core: false },
   // Al-Mufradat fi Gharib al-Qur'an (al-Raghib al-Isfahani, d.502) — OpenITI (JK).
   { id: "mufradat", label: "al-Mufradāt (al-Rāghib al-Iṣfahānī, d.502)", repo: "OpenITI/0525AH", ref: ref("MUFRADAT", "master"),
     path: "data/0502RaghibIsbahani/0502RaghibIsbahani.Mufradat/0502RaghibIsbahani.Mufradat.JK001150-ara1",

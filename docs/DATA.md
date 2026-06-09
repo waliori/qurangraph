@@ -47,7 +47,10 @@ build if missing; optional ones warn and continue.
 |----|--------|------|--------|------|------|
 | `tanzil` | Tanzil Uthmani (Ḥafṣ) | `q-ran/quran` | `tanzil-uthmani.xml` | ~1.5 MB | ✓ |
 | `morphology` | Quranic Arabic Corpus (Arabic mirror) | `mustafa0x/quran-morphology` | `quran-morphology.txt` | ~6.3 MB | ✓ |
+| `ayn` | Kitāb al-ʿAyn, al-Khalīl b. Aḥmad | OpenITI | `ayn.txt` | ~3.5 MB | optional |
+| `sihah` | al-Ṣiḥāḥ, al-Jawharī | OpenITI | `sihah.txt` | ~5.5 MB | optional |
 | `maqayis` | Maqāyīs al-Lugha, Ibn Fāris | OpenITI | `maqayis.txt` | ~3.8 MB | ✓ |
+| `muhkam` | al-Muḥkam, Ibn Sīda | OpenITI | `muhkam.txt` | ~10.6 MB | optional |
 | `mufradat` | Mufradāt, al-Rāghib | OpenITI | `mufradat.txt` | ~2.0 MB | optional |
 | `lisan` | Lisān al-ʿArab, Ibn Manẓūr | OpenITI | `lisan.txt` | ~30 MB | optional |
 
@@ -93,7 +96,9 @@ roots (`matchRoot`: exact → geminate-collapse ربب→رب → alif/hamza fol
 - `lexicons/index.json` — the manifest the app loads first: per lexicon
   `{ id, label, license, edition{…}, hasFull, fullShards, coverage }`.
 
-Coverage (roots matched): Maqāyīs ≈92 %, Lisān ≈91 %, Mufradāt ≈83 % (Qurʾān-scoped).
+Coverage (roots matched, Qurʾān-scoped): Maqāyīs ≈92 %, Lisān ≈91 %, Ṣiḥāḥ ≈90 %,
+Mufradāt ≈83 %, al-ʿAyn ≈79 %, Muḥkam ≈44 %. al-Muḥkam is low because its phonetic
+(تقاليب) ordering only spells some roots out reliably — see `parseMuhkam`.
 
 ### `build-sources-manifest.js` → `sources.json`
 Records, for each file in `data/source/`, the repo/ref/path it came from plus its
@@ -109,8 +114,9 @@ also get a correct manifest.
 Unit-tested (`parse.test.js`) building blocks: `parseMorphology` /
 `aggregateWord` (segment → stem morphology), `matchRoot` / `collapseGeminate`
 (root-to-header fuzzy matching across editions), the per-format dictionary parsers
-(`parseMaqayisEntry`, `parseLexiconText`), and OpenITI metadata/page-milestone
-extraction (`parseLexMeta`, `parsePageMarker`).
+(`parseMaqayisEntry`, `parseLexiconText`, `parseSpacedRoot` for al-Muḥkam's
+phonetically-ordered headers), and OpenITI metadata/page-milestone extraction
+(`parseLexMeta`, `parsePageMarker`).
 
 ---
 

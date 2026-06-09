@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText, parseLexMeta, parsePageMarker } from "./parse.js";
+import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText, parseLexMeta, parsePageMarker, parseSpacedRoot } from "./parse.js";
 
 describe("parseMorphologyRoot", () => {
   it("extracts ROOT when present", () => {
@@ -167,6 +167,23 @@ describe("parseLexiconText", () => {
     // أبا opens after V02P015 and its body crosses into P016 → cited there.
     expect(e["أبا"].cite).toEqual({ vol: 2, page: 16 });
     expect(e["أبد"].cite).toEqual({ vol: 2, page: 16 });
+  });
+});
+
+describe("parseSpacedRoot", () => {
+  it("reads a spaced root from a مقلوبه permutation header", () => {
+    expect(parseSpacedRoot("### | مقلوبه: (ن ز ل)")).toBe("نزل");
+    expect(parseSpacedRoot("مقلوبه: (ع ط ش)")).toBe("عطش");
+  });
+  it("reads a spaced root from an entry-opening bracket", () => {
+    expect(parseSpacedRoot("# [ل ز ن] لزن القوم يلزنون")).toBe("لزن");
+  });
+  it("ignores OpenITI ms/page markers spliced into the letters", () => {
+    expect(parseSpacedRoot("مقلوبه: (ك ms0164 ب ع)")).toBe("كبع");
+  });
+  it("returns null for named-letter (phonetic-order) headers — order is untrustworthy", () => {
+    expect(parseSpacedRoot("### | العين والشين والطاء")).toBeNull();
+    expect(parseSpacedRoot("### | أبواب العين مع الشين")).toBeNull();
   });
 });
 

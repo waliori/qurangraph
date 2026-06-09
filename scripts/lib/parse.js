@@ -125,6 +125,25 @@ export function matchRoot(root, headerSet, normMap) {
   return null;
 }
 
+/* ═══ Spaced-letter root extractor (phonetically-ordered lexicons) ═══
+ *
+ * Ibn Sīda's al-Muḥkam is ordered by al-Khalīl's phonetic scheme, not alphabetically,
+ * so its (OpenITI Shamela) section headers NAME the radicals ("العين والشين والطاء")
+ * rather than spelling the root — and crucially those names are in phonetic order, NOT
+ * the root's order, so they cannot be trusted to reconstruct the headword. The reliable
+ * markers are the ones that spell the root out as spaced single letters:
+ *   - permutation headers:  "مقلوبه: (ن ز ل)"   → نزل
+ *   - entry-opening bracket: "# [ل ز ن] لزن …"   → لزن
+ * Drops the OpenITI page/OCR markers (ms####, PageVxxPyyy) that get spliced mid-token,
+ * then joins the spaced letters. Returns the root (2–6 letters) or null. */
+export function parseSpacedRoot(s) {
+  const cleaned = (s || "").replace(/\bms\d+\b/g, " ").replace(/PageV\d+P\d+/g, " ");
+  const m = /[([]\s*([ء-ي](?:\s+[ء-ي]){1,5})\s*[)\]]/.exec(cleaned);
+  if (!m) return null;
+  const r = m[1].replace(/\s+/g, "");
+  return /^[ء-ي]{2,6}$/.test(r) ? r : null;
+}
+
 const PAGE_RE = /^#\s*PageV/;
 const META_RE = /^#META#/;
 

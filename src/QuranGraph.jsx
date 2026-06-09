@@ -48,8 +48,9 @@ const isInt = (v) => Number.isInteger(v);
 // (15 = ٱلسَّمَٰوَٰت / heavens, 41 = كُرْسِيّ / a rare word). Module-scoped so it's a
 // stable reference for the tour's memo/effect deps.
 // Worked example: Āyat al-Kursī. earthWi = ٱلْأَرْض (word 18) — chosen as the first
-// example word because its root (أرض) has entries in ALL three lexicons, unlike
-// ٱلسَّمَٰوَٰت (root سمو, only in Maqāyīs); kursWi = كُرْسِيّ (word 41, a hapax-like rarity).
+// example word because its root (أرض) has entries in nearly every lexicon (incl. the
+// default Maqāyīs), unlike ٱلسَّمَٰوَٰت (root سمو, only in a couple); kursWi = كُرْسِيّ
+// (word 41, a hapax-like rarity).
 const TOUR_EX = { s: 2, a: 255, key: "2:255", earthWi: 18, kursWi: 41, kursPartner: "38:34" };
 
 // Coerce a persisted morphology filter back to its {pos,form,aspect,voice} shape.
