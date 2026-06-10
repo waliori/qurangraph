@@ -32,6 +32,7 @@ const PhraseModal = lazyNamed(() => import("./components/PhraseModal.jsx"), "Phr
 const RootLabModal = lazyNamed(() => import("./components/RootLabModal.jsx"), "RootLabModal");
 const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "RhymeModal");
 const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
+const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
@@ -150,6 +151,7 @@ export default function QuranGraph() {
   const [lab, setLab] = useState(null); // root analysis lab (derivation/kinship/semantic): { root, label }
   const [rhyme, setRhyme] = useState(null); // verse rhyme/cadence modal: { centerKey, back }
   const [aya, setAya] = useState(null); // āya analysis lab: { centerKey, back }
+  const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
@@ -688,6 +690,12 @@ export default function QuranGraph() {
   // Open the shared-phrase (mutashābihāt) view for a verse. The corpus-wide trigram
   // seed index is heavy (~one entry per word), so build it lazily on first use and
   // rebuild only if the verse data itself changed (e.g. precision toggle).
+  // The sūra lab's "bonds" lens needs the same corpus phrase index; build it lazily when
+  // the lab opens (declared here, after verseData, so it can reference it).
+  useEffect(() => {
+    if (surahLab && seedVdRef.current !== verseData) { seedVdRef.current = verseData; setSeedIndex(buildSeedIndex(verseData)); }
+  }, [surahLab, verseData]);
+
   const openPhrases = useCallback((centerKey) => {
     if (seedVdRef.current !== verseData) { seedVdRef.current = verseData; setSeedIndex(buildSeedIndex(verseData)); }
     setPhrase({ centerKey });
@@ -901,7 +909,7 @@ export default function QuranGraph() {
   // the field can flash when nothing matches.
   // Open the occurrences popup for a word/root: lists every āyah it occurs in,
   // current verse first, then mushaf order. Used by search and the inspector.
-  const openOcc = useCallback((lookup, label, mode) => {
+  const openOcc = useCallback((lookup, label, mode, back) => {
     // Never fall back to the exact index for lemma mode — an unloaded l2v means "not
     // ready", not "use surface forms". An empty index simply reports no occurrences.
     const idx = mode === "root" ? r2v : mode === "lemma" ? (l2v || {}) : w2v;
@@ -918,9 +926,27 @@ export default function QuranGraph() {
     if (!ord.length) return false;
     const keys = ord.includes(currentKey) ? [currentKey, ...ord.filter((k) => k !== currentKey)] : ord;
     const morphNote = morphFilterActive(morphFilter) ? morphFilterSummary(morphFilter) : null;
-    setOcc({ lookup, label, mode, keys, morphNote });
+    setOcc({ lookup, label, mode, keys, morphNote, back });
     return true;
   }, [w2v, r2v, l2v, currentKey, verseData, morph, morphFilter]);
+
+  // ═══ Cross-dialog back-stack ═══
+  // The analysis dialogs (root/āya/sūra/rhyme labs, occurrences) link to one another. To
+  // avoid "jump away and lose the thread", a click OPENS the next dialog carrying a `back`
+  // descriptor of where it came from; its ← button calls reopenLab() to restore it. A
+  // descriptor is { t, …payload, back } and nests, so the trail can be many steps deep.
+  const reopenLab = useCallback((d) => {
+    if (!d) return;
+    setOcc(null); setDist(null); setCmp(null); setDef(null); setLab(null); setAya(null); setSurahLab(null); setRhyme(null);
+    switch (d.t) {
+      case "lab": setLab({ root: d.root, label: d.label, back: d.back }); break;
+      case "aya": setAya({ centerKey: d.centerKey, back: d.back }); break;
+      case "surah": setSurahLab({ surahId: d.surahId, back: d.back }); break;
+      case "rhyme": setRhyme({ centerKey: d.centerKey, back: d.back }); break;
+      case "dist": if (d.dist) setDist(d.dist); break;
+      default: break;
+    }
+  }, []);
 
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
@@ -1061,7 +1087,7 @@ export default function QuranGraph() {
   const tourReset = useCallback(() => {
     setToolsOpen(false); setWsOpen(false); setSheetOpen(false); setShowHelp(false);
     setSelected(null); setActiveWord(null);
-    setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null); setAya(null);
+    setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
   }, []);
   // Each step's `before` sets the canonical UI it needs, then waits for the commit
   // so its target exists before react-joyride measures it. `navEx` guarantees the
@@ -1070,7 +1096,7 @@ export default function QuranGraph() {
     if (cfg.navEx && currentKey !== TOUR_EX.key) navigate(TOUR_EX.s, TOUR_EX.a);
     if (cfg.mode) setSearchMode(cfg.mode); // pin the grouping mode so counts are accurate
     setToolsOpen(!!cfg.tools); setWsOpen(!!cfg.ws);
-    setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null); setAya(null);
+    setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
     if (cfg.selectId) {
       const n = nmap[cfg.selectId];
       setSelected(cfg.selectId); setActiveWord(n?.lookup || n?.wordNorm || null); setSheetOpen(true);
@@ -1635,6 +1661,8 @@ export default function QuranGraph() {
                   <span style={{ display: "flex", gap: 4 }}>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.insp.ayaAnalyze")} title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: currentKey })}>⊞</button>
+                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                      aria-label={t("surah.badge")} title={t("surah.title", { name: currentVerse.sn })} onClick={() => setSurahLab({ surahId: currentVerse.s })}>▦</button>
                     <button type="button" data-tour="echoesBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
@@ -1848,7 +1876,7 @@ export default function QuranGraph() {
       {/* Occurrences popup — every āyah a word/root occurs in, paginated */}
       {occ && <OccurrencesModal occ={occ} verseData={verseData} searchMode={occ?.mode || searchMode} precision={precision} theme={theme}
         onNavigate={(s, a) => { navigate(s, a); setOcc(null); }}
-        onBack={() => { const d = occ?.back; setOcc(null); if (d) setDist(d); }}
+        onBack={() => { const d = occ?.back; setOcc(null); reopenLab(d ? (d.t ? d : { t: "dist", dist: d }) : null); }}
         onClose={() => setOcc(null)} />}
 
       {dist && (
@@ -1901,27 +1929,32 @@ export default function QuranGraph() {
         onNavigate={(s, a) => { setPhrase(null); navigate(s, a); }} onClose={() => setPhrase(null)} />}
 
       {/* Root analysis lab — derivation (ṣarf), letter kinship, semantic neighbours. */}
-      {lab && <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic}
-        onRoot={(r) => { setLab(null); openOcc(r, r, "root"); }}
-        onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys }); }}
-        onClose={() => setLab(null)} />}
+      {lab && (() => { const self = { t: "lab", root: lab.root, label: lab.label, back: lab.back }; return (
+        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} back={lab.back}
+          onRetarget={(r) => setLab({ root: r, label: r, back: self })}
+          onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
+          onBack={() => reopenLab(lab.back)}
+          onClose={() => setLab(null)} />); })()}
 
       {/* Verse rhyme / cadence (fāṣila) — sūrah rhyme scheme + verses sharing the ending. */}
       {rhyme && <RhymeModal rhyme={rhyme} verseData={verseData}
-        onRetarget={(vk) => setRhyme({ centerKey: vk, back: rhyme })}
-        onBack={() => setRhyme(rhyme.back || null)}
+        onRetarget={(vk) => setRhyme({ centerKey: vk, back: { t: "rhyme", centerKey: rhyme.centerKey, back: rhyme.back } })}
+        onBack={() => reopenLab(rhyme.back)}
         onNavigate={(s, a) => { setRhyme(null); navigate(s, a); }} onClose={() => setRhyme(null)} />}
 
-      {/* Āya analysis lab — verse fingerprint + lexically similar verses. */}
+      {/* Āya analysis lab — verse fingerprint + lexically similar verses (read inline). */}
       {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph}
-        onRetarget={(vk) => setAya({ centerKey: vk, back: aya })}
-        onBack={() => setAya(aya.back || null)}
+        onBack={() => reopenLab(aya.back)}
         onNavigate={(s, a) => { setAya(null); navigate(s, a); }}
-        onRoot={(r) => { setAya(null); openOcc(r, r, "root"); }}
-        onPhrases={(ck) => { setAya(null); openPhrases(ck); }}
-        onRhyme={(ck) => { setAya(null); setRhyme({ centerKey: ck }); }}
-        onContext={(ck) => { setAya(null); setCtx({ centerKey: ck }); }}
+        onRoot={(r) => { setAya(null); openOcc(r, r, "root", { t: "aya", centerKey: aya.centerKey, back: aya.back }); }}
         onClose={() => setAya(null)} />}
+
+      {/* Sūra analysis lab — keyness · cohesion · structure · lexical bonds (al-awāṣir). */}
+      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} back={surahLab.back}
+        onNavigate={(s, a) => { setSurahLab(null); navigate(s, a); }}
+        onRoot={(r) => { setSurahLab(null); openOcc(r, r, "root", { t: "surah", surahId: surahLab.surahId, back: surahLab.back }); }}
+        onBack={() => reopenLab(surahLab.back)}
+        onClose={() => setSurahLab(null)} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 

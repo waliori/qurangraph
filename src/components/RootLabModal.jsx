@@ -19,7 +19,7 @@ import { useI18n } from "../i18n/index.js";
  */
 const TABS = ["deriv", "kin", "sem"];
 
-export function RootLabModal({ lab, r2v, verseData, morph, semantic, onRoot, onVerses, onClose }) {
+export function RootLabModal({ lab, r2v, verseData, morph, semantic, back, onRetarget, onVerses, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
   const root = lab?.root;
@@ -53,6 +53,7 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, onRoot, onV
     <ModalShell open={!!lab} onClose={onClose} closeLabel={t("lab.close")}
       ariaLabel={t("lab.title", { label: lab.label })}
       title={<>
+        {back && <button type="button" className="ag-btn" title={t("lab.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-root">{t("common.graphMode.root")}</span>
         <h2 className="ag-modal-word">{lab.label}</h2>
         <span className="ag-modal-count">{t("lab.root")} {root}</span>
@@ -96,7 +97,7 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, onRoot, onV
                 <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-2)" }}><span>{t("lab.kin.anagrams")}</span></div>
                 <div className="ag-dist-tags">
                   {kin.anagrams.map((a) => (
-                    <button type="button" className="ag-tag ag-tag-btn" key={a.root} onClick={() => onRoot?.(a.root)}
+                    <button type="button" className="ag-tag ag-tag-btn" key={a.root} onClick={() => onRetarget?.(a.root)}
                       title={t("lab.kin.chipTitle", { root: a.root, count: a.count, common: a.common })}>
                       {a.root} <b style={{ color: "var(--gold-400)" }}>{a.count}</b>
                     </button>
@@ -107,7 +108,7 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, onRoot, onV
                 <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("lab.kin.shared")}</span></div>
                 <div className="ag-dist-tags">
                   {kin.shared.slice(0, 60).map((s) => (
-                    <button type="button" className="ag-tag ag-tag-btn" key={s.root} onClick={() => onRoot?.(s.root)}
+                    <button type="button" className="ag-tag ag-tag-btn" key={s.root} onClick={() => onRetarget?.(s.root)}
                       title={t("lab.kin.chipTitle", { root: s.root, count: s.count, common: s.common })}>
                       {s.root} <b style={{ color: "var(--gold-400)" }}>{s.count}</b>
                     </button>
@@ -126,7 +127,7 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, onRoot, onV
               : sem.length === 0 ? <span className="ag-dist-name">{t("lab.sem.none")}</span> : (
                 <div className="ag-dist-tags">
                   {sem.map(([r, s]) => (
-                    <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRoot?.(r)}
+                    <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRetarget?.(r)}
                       title={t("lab.sem.chipTitle", { root: r, sim: s })}>
                       {r} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{s}</span>
                     </button>

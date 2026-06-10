@@ -7,24 +7,25 @@ import { useI18n } from "../i18n/index.js";
 
 /* ═══ Āya analysis lab ═══
  *
- * The verse-level complement to the word lab: a structural/lexical fingerprint of one āya
- * (Overview) and the āyāt most lexically similar to it by shared roots (Similar verses) —
- * the non-verbatim counterpart to mutashābihāt. `aya = { centerKey, back? }`. A similar
- * verse re-targets the lab onto itself (with a back step) so exploration stays in-dialog;
- * a separate ⌖ jumps the graph to it. Quick-links open the verse's phrases/rhyme/context.
+ * A focused report on ONE verse — its fingerprint (Overview) and the verses lexically
+ * closest to it by shared roots (Similar). Interaction is deliberately flat: clicking any
+ * verse reference just shows that verse's text in the sticky preview at the foot of the
+ * dialog (read in place — no graph jump, no cascade of modals); only the explicit ⌖ jumps
+ * the graph. `aya = { centerKey, back? }`.
  */
 const TABS = ["overview", "similar"];
 
-export function AyaLabModal({ aya, verseData, r2v, morph, onRetarget, onBack, onNavigate, onRoot, onPhrases, onRhyme, onContext, onClose }) {
+export function AyaLabModal({ aya, verseData, r2v, morph, onBack, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
   const [tab, setTab] = useState("overview");
+  const [preview, setPreview] = useState(null); // verse key shown in the inline preview
   const centerKey = aya?.centerKey;
   const v = centerKey ? verseData[centerKey] : null;
 
   const profile = useMemo(() => (centerKey ? verseProfile(centerKey, verseData, r2v, morph) : null), [centerKey, verseData, r2v, morph]);
-  // similarVerses scans every verse sharing a root — defer to idle so the dialog paints first.
   const [sim, setSim] = useState(null);
   /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => { setPreview(centerKey || null); }, [centerKey]); // preview follows the centre verse
   useEffect(() => {
     if (!centerKey) { setSim([]); return undefined; }
     setSim(null);
@@ -38,6 +39,7 @@ export function AyaLabModal({ aya, verseData, r2v, morph, onRetarget, onBack, on
   if (!aya || !v) return null;
   const ref = `${v.s}:${v.a}`;
   const navTo = (vk) => { const [s, a] = vk.split(":").map(Number); onNavigate?.(s, a); };
+  const pv = preview ? verseData[preview] : null;
 
   return (
     <ModalShell open={!!aya} onClose={onClose} closeLabel={t("aya.close")}
@@ -51,14 +53,6 @@ export function AyaLabModal({ aya, verseData, r2v, morph, onRetarget, onBack, on
       <div className="ag-dist-body">
         <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("aya.title", { ref })} style={{ marginBlockEnd: "var(--space-3)" }}>
           {TABS.map((id) => <button type="button" key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>{t(`aya.tab.${id}`)}</button>)}
-        </div>
-
-        {/* quick links to the verse's other views */}
-        <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-3)" }}>
-          <button type="button" className="ag-btn" onClick={() => onPhrases?.(centerKey)}>⧉ {t("common.insp.phrasesShort")}</button>
-          <button type="button" className="ag-btn" onClick={() => onRhyme?.(centerKey)}>♪ {t("common.insp.rhyme")}</button>
-          <button type="button" className="ag-btn" onClick={() => onContext?.(centerKey)}>☰ {t("common.insp.context")}</button>
-          <button type="button" className="ag-btn is-gold" onClick={() => navTo(centerKey)}>⌖ {t("common.insp.makeCenter")}</button>
         </div>
 
         {tab === "overview" && profile && (
@@ -77,14 +71,14 @@ export function AyaLabModal({ aya, verseData, r2v, morph, onRetarget, onBack, on
               </div>
             </>}
             {profile.forms.length > 0 && <p className="ag-hint" style={{ marginBlockStart: "var(--space-2)" }}>{t("aya.forms")}: {profile.forms.map(formRoman).join("، ")}</p>}
-            {profile.uniqueRoots.length > 0 && <>
-              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("aya.unique")}</span></div>
-              <p className="ag-hint">{t("aya.uniqueHint")}</p>
-              <div className="ag-dist-tags">{profile.uniqueRoots.map((r) => <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRoot?.(r)}>{r}</button>)}</div>
-            </>}
             {profile.rarestRoots.length > 0 && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("aya.rarest")}</span></div>
-              <div className="ag-dist-tags">{profile.rarestRoots.map((r) => <button type="button" className="ag-tag ag-tag-btn" key={r.root} onClick={() => onRoot?.(r.root)} title={t("aya.rootFreq", { n: r.freq })}>{r.root} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{r.freq}</span></button>)}</div>
+              <p className="ag-hint">{t("aya.rarestHint")}</p>
+              <div className="ag-dist-tags">{profile.rarestRoots.map((r) => (
+                <button type="button" className="ag-tag ag-tag-btn" key={r.root} onClick={() => onRoot?.(r.root)} title={t(r.freq <= 1 ? "aya.rootUnique" : "aya.rootFreqGo", { n: r.freq })}>
+                  {r.root} <b style={{ color: "var(--gold-400)" }}>{fmtNum(r.freq)}</b>
+                </button>))}
+              </div>
             </>}
           </div>
         )}
@@ -100,19 +94,33 @@ export function AyaLabModal({ aya, verseData, r2v, morph, onRetarget, onBack, on
                     const ov = verseData[s.vk]; if (!ov) return null;
                     return (
                       <li key={s.vk} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <button type="button" className="ag-modal-row" style={{ flex: 1 }} onClick={() => onRetarget?.(s.vk)} title={t("aya.openRow")}>
-                          <span className="ag-ayah-ref"><span className="ag-ayah-surah">{ov.sn}</span><span className="ag-ayah-num">{ov.a}</span></span>
-                          <span className="ag-modal-text" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-                            <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{[...new Set(s.shared)].slice(0, 8).join("، ")}</span>
-                          </span>
+                        <button type="button" className={"ag-modal-row" + (preview === s.vk ? " is-on" : "")} style={{ flex: 1 }} onClick={() => setPreview(s.vk)} title={t("aya.similarClick")} aria-pressed={preview === s.vk}>
+                          <span className="ag-ayah-ref"><span className="ag-ayah-surah">{ov.sn}</span><span className="ag-ayah-num">{fmtNum(ov.a)}</span></span>
+                          <span className="ag-modal-text" style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", flex: 1 }}>{[...new Set(s.shared)].slice(0, 8).join("، ")}</span>
                           <span className="ag-dist-num" style={{ color: "var(--gold-400)" }}>{Math.round(s.score * 100)}%</span>
                         </button>
-                        <button type="button" className="ag-btn" title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} onClick={() => navTo(s.vk)}>⌖</button>
+                        <button type="button" className="ag-btn" title={t("aya.goTo")} aria-label={t("aya.goTo")} onClick={() => navTo(s.vk)}>⌖</button>
                       </li>
                     );
                   })}
                 </ul>
               )}
+          </div>
+        )}
+
+        {/* Sticky inline preview — clicking any verse fills this; read in place, ⌖ to jump.
+            Opaque background + shadow so it sits above the list, not through it. */}
+        {pv && (
+          <div style={{ position: "sticky", bottom: 0, zIndex: 2, marginBlockStart: "var(--space-3)", padding: "var(--space-2) var(--space-3)",
+            background: "var(--ink-800)", borderBlockStart: "2px solid var(--gold-500)", borderRadius: "var(--radius-sm)", boxShadow: "0 -10px 22px -10px rgba(0,0,0,.5)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span className="ag-ayah-ref"><span className="ag-ayah-surah">{pv.sn}</span><span className="ag-ayah-num">{fmtNum(pv.a)}</span></span>
+              <span style={{ display: "flex", gap: 4 }}>
+                <button type="button" className="ag-btn is-gold" title={t("aya.goTo")} onClick={() => navTo(preview)}>⌖ {t("aya.goTo")}</button>
+                <button type="button" className="ag-iconbtn" title={t("common.close")} aria-label={t("common.close")} style={{ width: 26, height: 26 }} onClick={() => setPreview(null)}>✕</button>
+              </span>
+            </div>
+            <div className="ag-modal-text" dir="rtl" style={{ fontFamily: "var(--font-quran)", marginBlockStart: 4, lineHeight: 1.9 }}>{pv.words.map((w) => w.orig).join(" ")}</div>
           </div>
         )}
       </div>

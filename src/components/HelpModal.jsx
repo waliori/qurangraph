@@ -71,6 +71,22 @@ function modesIllo(t) {
   );
 }
 
+// A miniature self-similarity matrix: lit diagonal (each verse with itself) + lit
+// anti-diagonal (A-B-C-B′-A′ ring), to show what the Structure heatmap reveals.
+function semIllo(t) {
+  const n = 7, s = 11, ox = 168, oy = 6, cells = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const op = i === j ? 0.92 : i === n - 1 - j ? 0.5 : 0.06;
+    cells.push(<rect key={`${i}-${j}`} x={ox + j * s} y={oy + i * s} width={s - 1} height={s - 1} rx={1.5} fill={GOLD} opacity={op} />);
+  }
+  return (
+    <svg viewBox="0 0 420 96" className="ag-help-illo" role="img" aria-label={t("help.semAria")}>
+      {cells}
+      <text x={ox + (n * s) / 2} y={oy + n * s + 12} textAnchor="middle" fontSize="10" fontWeight="600" fill={GOLD}>{t("help.semIllo")}</text>
+    </svg>
+  );
+}
+
 const sec = (title, illo, items) => (
   <section className="ag-help-sec" key={title}>
     <h3 className="ag-help-h">{title}</h3>
@@ -142,11 +158,16 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.citations"), t("help.citationsD")],
           ])}
 
-          {sec(t("help.semTitle"), null, [
-            [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}</>],
-            [t("help.ayaLab"), t("help.ayaLabD")],
-            [t("help.rhyme"), t("help.rhymeD")],
-            [t("help.phrases"), t("help.phrasesD")],
+          {sec(t("help.semTitle"), semIllo(t), [
+            [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}
+              <span style={{ display: "block", marginBlockStart: 4 }}>
+                {ex("عَلِمَ", GREEN)} ← {ex("عالِم", GREEN)} ← {ex("عِلْم", GREEN)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("بصر", BLUE)} {ex("صبر", BLUE)} {ex("برص", BLUE)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("رحم", PURPLE)} ⇢ {ex("غفر", PURPLE)}
+              </span></>],
+            [t("help.ayaLab"), <>{t("help.ayaLabD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("طلق", GREEN)} {ex("عدد", GREEN)}</>],
+            [t("help.rhyme"), <>{t("help.rhymeD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("مُبِين", GOLD)} {ex("الرَّحِيم", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egRhyme")}</span></>],
+            [t("help.phrases"), <>{t("help.phrasesD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("فبأيّ آلاء ربكما تكذبان", GOLD)}</>],
+            [t("help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}
+              <span style={{ display: "block", marginBlockStart: 4 }}>{ex("تلك أمة قد خلت", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egBond")}</span></span></>],
           ])}
 
           {sec(t("help.shareTitle"), null, [
