@@ -11,6 +11,7 @@ dist
 /public/data/lemmas.json
 /public/data/morphology.json
 /public/data/lexicons/
+/public/data/semantic-neighbours.json
 /public/data/sources.json
 
 # Resolved commit SHAs written by `npm run data:download` (provenance input, not a source)

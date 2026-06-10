@@ -28,6 +28,7 @@ RUN if [ ! -s data/source/maqayis.txt ] || [ ! -s data/source/quran-morphology.t
  && npm run data:transform \
  && npm run data:roots \
  && npm run data:lexicons \
+ && npm run data:semantic \
  && npm run data:manifest \
  && npm run build
 

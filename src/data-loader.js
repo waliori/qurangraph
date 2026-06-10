@@ -44,6 +44,13 @@ export function loadMorphology() {
   return fetchJSON("data/morphology.json");
 }
 
+// Distributional semantic neighbours { root → [[neighbourRoot, cosineSim], …] } —
+// meaning-by-context, precomputed offline (lazy; only when the semantic lens is opened).
+// Optional: resolves to {} if the build didn't emit it, so the UI degrades gracefully.
+export function loadSemanticNeighbors() {
+  return fetchJSON("data/semantic-neighbours.json").catch(() => ({}));
+}
+
 // Lexicon manifest: [{ id, label, license, hasFull, fullShards, coverage }] — the swappable
 // Arabic dictionaries (Maqāyīs / Mufradāt / Lisān …). Tiny; load to build the switcher.
 export function loadLexiconManifest() {
