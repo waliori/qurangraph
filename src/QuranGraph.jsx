@@ -31,6 +31,7 @@ const DefinitionModal = lazyNamed(() => import("./components/DefinitionModal.jsx
 const PhraseModal = lazyNamed(() => import("./components/PhraseModal.jsx"), "PhraseModal");
 const RootLabModal = lazyNamed(() => import("./components/RootLabModal.jsx"), "RootLabModal");
 const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "RhymeModal");
+const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
@@ -147,7 +148,8 @@ export default function QuranGraph() {
   const [ctx, setCtx] = useState(null); // context reader modal: { centerKey }
   const [phrase, setPhrase] = useState(null); // shared-phrase (mutashābihāt) modal: { centerKey }
   const [lab, setLab] = useState(null); // root analysis lab (derivation/kinship/semantic): { root, label }
-  const [rhyme, setRhyme] = useState(null); // verse rhyme/cadence modal: { centerKey }
+  const [rhyme, setRhyme] = useState(null); // verse rhyme/cadence modal: { centerKey, back }
+  const [aya, setAya] = useState(null); // āya analysis lab: { centerKey, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
@@ -1059,7 +1061,7 @@ export default function QuranGraph() {
   const tourReset = useCallback(() => {
     setToolsOpen(false); setWsOpen(false); setSheetOpen(false); setShowHelp(false);
     setSelected(null); setActiveWord(null);
-    setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null);
+    setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null); setAya(null);
   }, []);
   // Each step's `before` sets the canonical UI it needs, then waits for the commit
   // so its target exists before react-joyride measures it. `navEx` guarantees the
@@ -1068,7 +1070,7 @@ export default function QuranGraph() {
     if (cfg.navEx && currentKey !== TOUR_EX.key) navigate(TOUR_EX.s, TOUR_EX.a);
     if (cfg.mode) setSearchMode(cfg.mode); // pin the grouping mode so counts are accurate
     setToolsOpen(!!cfg.tools); setWsOpen(!!cfg.ws);
-    setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null);
+    setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null); setAya(null);
     if (cfg.selectId) {
       const n = nmap[cfg.selectId];
       setSelected(cfg.selectId); setActiveWord(n?.lookup || n?.wordNorm || null); setSheetOpen(true);
@@ -1631,8 +1633,12 @@ export default function QuranGraph() {
                     <span className="ag-ayah-num">{currentVerse.a}</span>
                   </span>
                   <span style={{ display: "flex", gap: 4 }}>
+                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                      aria-label={t("common.insp.ayaAnalyze")} title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: currentKey })}>⊞</button>
                     <button type="button" data-tour="echoesBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
+                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                      aria-label={t("common.insp.rhyme")} title={t("common.insp.rhymeTitle")} onClick={() => setRhyme({ centerKey: currentKey })}>♪</button>
                     <button type="button" data-tour="contextBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
                       aria-label={t("common.reader.readContext")} title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
                     <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
@@ -1826,6 +1832,7 @@ export default function QuranGraph() {
                     <button type="button" className="ag-btn" title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: selNode.verseKey })}>☰ {t("common.insp.context")}</button>
                     <button type="button" className="ag-btn" title={t("common.reader.phrases")} onClick={() => openPhrases(selNode.verseKey)}>⧉ {t("common.insp.phrasesShort")}</button>
                     <button type="button" className="ag-btn" title={t("common.insp.rhymeTitle")} onClick={() => setRhyme({ centerKey: selNode.verseKey })}>♪ {t("common.insp.rhyme")}</button>
+                    <button type="button" className="ag-btn" title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: selNode.verseKey })}>⊞ {t("common.insp.ayaAnalyze")}</button>
                     <button type="button" className="ag-btn" title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ {t("common.insp.makeCenter")}</button>
                     <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "verse", title: selNode.label, payload: { surah: selNode.surahNum, ayah: selNode.ayahNum, label: selNode.label } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
                   </div>
@@ -1901,7 +1908,20 @@ export default function QuranGraph() {
 
       {/* Verse rhyme / cadence (fāṣila) — sūrah rhyme scheme + verses sharing the ending. */}
       {rhyme && <RhymeModal rhyme={rhyme} verseData={verseData}
+        onRetarget={(vk) => setRhyme({ centerKey: vk, back: rhyme })}
+        onBack={() => setRhyme(rhyme.back || null)}
         onNavigate={(s, a) => { setRhyme(null); navigate(s, a); }} onClose={() => setRhyme(null)} />}
+
+      {/* Āya analysis lab — verse fingerprint + lexically similar verses. */}
+      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph}
+        onRetarget={(vk) => setAya({ centerKey: vk, back: aya })}
+        onBack={() => setAya(aya.back || null)}
+        onNavigate={(s, a) => { setAya(null); navigate(s, a); }}
+        onRoot={(r) => { setAya(null); openOcc(r, r, "root"); }}
+        onPhrases={(ck) => { setAya(null); openPhrases(ck); }}
+        onRhyme={(ck) => { setAya(null); setRhyme({ centerKey: ck }); }}
+        onContext={(ck) => { setAya(null); setCtx({ centerKey: ck }); }}
+        onClose={() => setAya(null)} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 

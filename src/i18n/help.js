@@ -116,6 +116,23 @@ export const ar = {
   "help.citations": "توثيق المعاجم",
   "help.citationsD": "تعرض بطاقة المعجم الطبعة (المحقّق/الناشر) ورقم الجزء والصفحة التقريبيّ لكل مدخل، من مصدر OpenITI.",
 
+  // Semantic & linguistic analysis (newer lenses)
+  "help.semTitle": "التحليل الدلالي واللغوي",
+  "help.rootLab": "تحليل الجذر",
+  "help.rootLabD1": "من زر «تحليل» في عقدة الكلمة، ثلاث نوافذ: ",
+  "help.rootLabDeriv": "الاشتقاق",
+  "help.rootLabDerivD": " (العائلة الصرفية: كل مشتقات الجذر بصيغها وعددها)، ",
+  "help.rootLabKin": "القرابة الحرفية",
+  "help.rootLabKinD": " (الاشتقاق الأكبر: جذورٌ من الحروف نفسها أو تشترك في حرفين)، و",
+  "help.rootLabSem": "الجوار الدلالي",
+  "help.rootLabSemD": " (جذورٌ ترد في سياقاتٍ متشابهة فتقترب معنًى وإن لم تشترك في حرف).",
+  "help.ayaLab": "تحليل الآية",
+  "help.ayaLabD": "بصمة الآية (طولها، جذورها، تركيبها، فاصلتها، والجذور التي تنفرد بها) وأقرب الآيات إليها معجميًّا — مرجَّحةً بندرة الجذر المشترك، فهي قرابةٌ معنوية لا يكشفها التطابق اللفظي. من شريط القراءة أو عقدة الآية.",
+  "help.rhyme": "الفاصلة",
+  "help.rhymeD": "خاتمة الآية الصوتية، ونظام الفواصل الملوّن للسورة كاملةً، وكل الآيات التي تشترك في الخاتمة نفسها.",
+  "help.phrases": "المتشابهات اللفظية",
+  "help.phrasesD": "العبارات التي ترد بنصّها في آياتٍ أخرى — مع عباراتها الفرعية الأوسع انتشارًا، وخيار «تجاهل حروف المعاني» لمطابقة ما اختلف بحرفٍ فقط (وما، فلا…).",
+
   // Sharing and export
   "help.shareTitle": "المشاركة والتصدير",
   "help.shareLink": "رابط المشاركة",
@@ -274,6 +291,23 @@ export const en = {
   "help.compareD": "Compare two terms side by side: their distribution across chapters, and their shared vs. distinct collocates — from the inspector or the distribution window via the “Compare” button.",
   "help.citations": "Lexicon citations",
   "help.citationsD": "The lexicon card shows the edition (editor/publisher) and the approximate volume and page for each entry, from the OpenITI source.",
+
+  // Semantic & linguistic analysis (newer lenses)
+  "help.semTitle": "Semantic & linguistic analysis",
+  "help.rootLab": "Root analysis",
+  "help.rootLabD1": "The “Analyze” button on a word node opens three lenses: ",
+  "help.rootLabDeriv": "Derivation",
+  "help.rootLabDerivD": " (the ṣarf family — every word derived from the root, with Form and count), ",
+  "help.rootLabKin": "Letter kinship",
+  "help.rootLabKinD": " (al-ishtiqāq al-akbar — roots built from the same letters or sharing two of them), and ",
+  "help.rootLabSem": "Semantic neighbours",
+  "help.rootLabSemD": " (roots that occur in similar contexts, close in meaning even with no shared letter).",
+  "help.ayaLab": "Verse analysis",
+  "help.ayaLabD": "A verse's fingerprint (length, roots, make-up, rhyme, and the roots unique to it) plus the verses lexically closest to it — weighted by rare shared roots, so it surfaces meaning-kinship the verbatim matcher misses. From the reader dock or a verse node.",
+  "help.rhyme": "Rhyme (fāṣila)",
+  "help.rhymeD": "A verse's ending sound, the colour-coded rhyme scheme of the whole sūrah, and every verse that closes on the same rhyme.",
+  "help.phrases": "Shared phrases",
+  "help.phrasesD": "Runs of words that recur verbatim in other verses — including the more widely-shared sub-phrases, with an “ignore particles” option to match verses that differ only by a particle (wa-mā, fa-lā…).",
 
   // Sharing and export
   "help.shareTitle": "Sharing and export",

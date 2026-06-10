@@ -17,6 +17,10 @@ export const ar = {
   "phrase.ayahTag": "{n} آية",
   "phrase.recenter": "اجعلها مركز الشبكة",
   "phrase.moreAyat": "+{n} آية أخرى…",
+  "phrase.minLen": "أقل طول",
+  "phrase.minLenVal": "{n}+ كلمات",
+  "phrase.ignoreParticles": "تجاهل حروف المعاني",
+  "phrase.ignoreParticlesTitle": "طابِق العبارات المشتركة في الكلمات الأصلية حتى لو اختلفت بحرفٍ (وما، فلا، من…)",
 };
 
 export const en = {
@@ -38,4 +42,8 @@ export const en = {
   "phrase.ayahTag": "{n} verses",
   "phrase.recenter": "Make it the centre of the graph",
   "phrase.moreAyat": "+{n} more verses…",
+  "phrase.minLen": "Min length",
+  "phrase.minLenVal": "{n}+ words",
+  "phrase.ignoreParticles": "Ignore particles",
+  "phrase.ignoreParticlesTitle": "Match shared phrases on content words even when they differ by a particle (wa-mā, fa-lā, min…)",
 };

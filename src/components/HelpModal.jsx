@@ -135,11 +135,18 @@ export function HelpModal({ open, onClose, onStartTour }) {
 
           {sec(t("help.analysisTitle"), null, [
             [t("help.morphAnalysis"), t("help.morphAnalysisD")],
-            [t("help.lexicons"), <>{t("help.lexiconsD1")}{ex("مقاييس اللغة", GREEN)}، {ex("المفردات", GREEN)}، {ex("لسان العرب", GREEN)}{t("help.lexiconsD2")}</>],
+            [t("help.lexicons"), <>{t("help.lexiconsD1")}{ex("العين", GREEN)}، {ex("الصحاح", GREEN)}، {ex("مقاييس", GREEN)}، {ex("المحكم", GREEN)}، {ex("المفردات", GREEN)}، {ex("لسان العرب", GREEN)}{t("help.lexiconsD2")}</>],
             [t("help.distribution"), t("help.distributionD")],
             [t("help.compare"), t("help.compareD")],
             [t("help.allVerses"), t("help.allVersesD")],
             [t("help.citations"), t("help.citationsD")],
+          ])}
+
+          {sec(t("help.semTitle"), null, [
+            [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}</>],
+            [t("help.ayaLab"), t("help.ayaLabD")],
+            [t("help.rhyme"), t("help.rhymeD")],
+            [t("help.phrases"), t("help.phrasesD")],
           ])}
 
           {sec(t("help.shareTitle"), null, [
