@@ -123,7 +123,7 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewpo
         const baseOp = rarity ? 0.5 : 0.32;
         return <line key={`l${i}`} ref={(el) => { if (el) reg.links.set(i, { el, s: l.source, t: l.target }); else reg.links.delete(i); }}
           x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-          stroke={bright ? (onA ? "#fcd34d77" : isC ? T.linkCenter : T.link) : baseStroke}
+          stroke={bright ? (onA ? (theme === "light" ? "#b4530977" : "#fcd34d77") : isC ? T.linkCenter : T.link) : baseStroke}
           strokeWidth={bright ? (isC ? 1.8 : 1) : baseWidth}
           strokeOpacity={bright ? 0.7 : baseOp} />;
       })}

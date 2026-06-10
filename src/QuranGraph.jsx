@@ -1137,7 +1137,7 @@ export default function QuranGraph() {
           <circle cx="40" cy="100" r="9" fill="#6aa8ff33" stroke="#6aa8ff" strokeWidth="1.6" />
           <circle cx="120" cy="108" r="9" fill="#6aa8ff33" stroke="#6aa8ff" strokeWidth="1.6" />
           <circle cx="70" cy="40" r="11" fill="#fb718533" stroke="#fb7185" strokeWidth="2" />
-          <circle cx="130" cy="60" r="17" fill="#fbbf2433" stroke="#fbbf24" strokeWidth="3" />
+          <circle cx="130" cy="60" r="17" fill="color-mix(in oklab, var(--gold-400) 20%, transparent)" stroke="var(--gold-400)" strokeWidth="3" />
           <text x="130" y="64" textAnchor="middle" fontSize="11" fill="var(--gold-400)" fontFamily="var(--font-display)">۞</text>
           <text x="130" y="92" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--gold-400)" fontFamily="var(--font-ui)">{t("tour.basicsVerse")}</text>
           <text x="70" y="22" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fb7185" fontFamily="var(--font-ui)">{t("tour.basicsWord")}</text>

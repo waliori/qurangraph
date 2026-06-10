@@ -9,15 +9,20 @@ import { loadSources } from "../data-loader.js";
  * encodings are shown, not just told. Pure content; Esc or backdrop closes it.
  */
 
+// A 33%-opacity border tint that works for both hex colours (#abc → #abc55) and CSS
+// custom-property colours (var(--gold-400) → color-mix), so theme-aware tokens render right.
+const tint = (c, pct = "33%") => (c.startsWith("var(") ? `color-mix(in oklab, ${c} ${pct}, transparent)` : c + "55");
 // Colour-coded example word (Qur'an face) — used inline in descriptions.
-const ex = (t, c = "var(--gold-400)") => <span className="ag-help-ex" style={{ color: c, borderColor: c + "55" }}>{t}</span>;
-const BLUE = "#6aa8ff", GOLD = "#fcd34d", GREEN = "#34d8a8", RED = "#fb7185", PURPLE = "#a78bfa";
+const ex = (t, c = "var(--gold-400)") => <span className="ag-help-ex" style={{ color: c, borderColor: tint(c) }}>{t}</span>;
+// GOLD is the theme-aware token (the dark "aya" amber on the light parchment); the rest
+// are the dark-field jewel tones used in the small illustrations.
+const BLUE = "#6aa8ff", GOLD = "var(--gold-400)", GREEN = "#34d8a8", RED = "#fb7185", PURPLE = "#a78bfa";
 
 // A reusable mini-node for illustrations.
 function gnode(x, y, r, stroke, label, opts = {}) {
   return (
     <g key={label + x}>
-      <circle cx={x} cy={y} r={r} fill={stroke + "26"} stroke={stroke} strokeWidth={opts.sw || 2} strokeDasharray={opts.dash || "none"} />
+      <circle cx={x} cy={y} r={r} fill={tint(stroke, "15%")} stroke={stroke} strokeWidth={opts.sw || 2} strokeDasharray={opts.dash || "none"} />
       {opts.dot && <circle cx={x + r - 2} cy={y - r + 2} r={3.5} fill={GREEN} stroke="#0d1322" strokeWidth={1.2} />}
       {opts.ring && <circle cx={x} cy={y} r={r + 4} fill="none" stroke={PURPLE} strokeWidth={1.5} opacity={0.6} />}
       {label && <text x={x} y={y - r - 6} textAnchor="middle" fontSize={opts.fs || 11} fontWeight="600" fill={stroke} fontFamily="var(--font-quran)">{label}</text>}
@@ -33,7 +38,7 @@ function hero(t) {
         <line x1="210" y1="100" x2="95" y2="55" stroke={GOLD} strokeWidth="3.2" strokeOpacity="0.85" />
         <line x1="210" y1="100" x2="335" y2="55" stroke="#3a4a6a" strokeWidth="1" strokeOpacity="0.7" />
         <line x1="95" y1="55" x2="60" y2="150" stroke={GREEN} strokeWidth="2" strokeOpacity="0.7" />
-        <circle cx="210" cy="100" r="20" fill="#fbbf2433" stroke="#fbbf24" strokeWidth="3.5" />
+        <circle cx="210" cy="100" r="20" fill={tint(GOLD, "20%")} stroke={GOLD} strokeWidth="3.5" />
         <text x="210" y="138" textAnchor="middle" fontSize="13" fontWeight="600" fill={GOLD} fontFamily="var(--font-display)">{t("help.heroCenter")}</text>
         {gnode(95, 55, 13, RED, t("help.heroRareWord"), { dot: true })}
         {gnode(335, 55, 13, "#8d9bb5", t("help.heroCommon"))}
@@ -132,7 +137,7 @@ export function HelpModal({ open, onClose, onStartTour }) {
           ])}
 
           {sec(t("help.colorsTitle"), null, [
-            [t("help.colorCenter"), <><span className="ag-help-dot" style={{ background: "#fbbf24" }} /> {t("help.colorCenterD")}</>],
+            [t("help.colorCenter"), <><span className="ag-help-dot" style={{ background: GOLD }} /> {t("help.colorCenterD")}</>],
             [t("help.colorWordLemmaRoot"), <><span className="ag-legend-swatch ag-legend-freq" /> {t("help.colorFreqD")}</>],
             [t("help.colorVerse"), <><span className="ag-legend-swatch ag-legend-depth" /> {t("help.colorDepthD")}</>],
             [t("help.colorLinks"), <><span className="ag-help-line" /> {t("help.colorLinksD")}</>],

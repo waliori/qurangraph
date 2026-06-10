@@ -61,7 +61,7 @@ export function drawScene(ctx, scene) {
     const baseWidth = rarity ? eWidth(l.weight) : 0.5;
     const baseOp = rarity ? 0.5 : 0.32;
     ctx.globalAlpha = bright ? 0.7 : baseOp;
-    ctx.strokeStyle = bright ? (onA ? "#fcd34d" : isC ? T.linkCenter : T.link) : baseStroke;
+    ctx.strokeStyle = bright ? (onA ? (L ? "#b45309" : "#fcd34d") : isC ? T.linkCenter : T.link) : baseStroke;
     ctx.lineWidth = bright ? (isC ? 1.8 : 1) : baseWidth;
     ctx.beginPath();
     ctx.moveTo(sp.x, sp.y);

@@ -87,8 +87,8 @@
   --text-muted:  #6f6757;
   --text-faint:  #9a9077;
 
-  --gold-400: #c08a1a;
-  --gold-500: #a6750f;
+  --gold-400: #b45309; /* the legible "aya" dark amber — bright yellow washes out on parchment */
+  --gold-500: #92400e;
 
   --border-subtle:  rgba(120,100,50,.16);
   --border-default: rgba(120,100,50,.28);
