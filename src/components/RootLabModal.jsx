@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { derivationFamily } from "../analytics/derivation.js";
 import { radicalKin } from "../analytics/kinship.js";
+import { oppositesOf, candidatesOf } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
@@ -17,9 +18,9 @@ import { useI18n } from "../i18n/index.js";
  * an explicit verse list), turning each lens into a jump-off point. `semantic` is the
  * precomputed neighbour map (null while it's still loading).
  */
-const TABS = ["deriv", "kin", "sem"];
+const TABS = ["deriv", "kin", "opp", "lex", "sem"];
 
-export function RootLabModal({ lab, r2v, verseData, morph, semantic, back, onRetarget, onVerses, onBack, onClose }) {
+export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, back, onRetarget, onVerses, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
   const root = lab?.root;
@@ -27,6 +28,21 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, back, onRet
   const deriv = useMemo(() => (root ? derivationFamily(root, r2v, verseData, morph) : []), [root, r2v, verseData, morph]);
   const kin = useMemo(() => (root ? radicalKin(root, Object.keys(r2v), (r) => (r2v[r] || []).length) : { anagrams: [], shared: [] }), [root, r2v]);
   const sem = useMemo(() => (root && semantic ? semantic[root] || [] : null), [root, semantic]);
+  const opp = useMemo(() => (root && relations ? oppositesOf(root, relations) : null), [root, relations]);
+  const cand = useMemo(() => (root && relations ? candidatesOf(root, relations) : null), [root, relations]);
+
+  // Dictionary↔corpus: each of the six dictionaries' concise entry for this root, the corpus
+  // frequency, and the distinct contrast axes (طباق) the corpus juxtaposes the root with.
+  const lex = useMemo(() => {
+    if (!root || !lexAll || !lexMeta) return null;
+    const entries = lexMeta.map((L) => ({ id: L.id, label: L.label, c: lexAll[L.id]?.[root]?.c || null }));
+    const covered = entries.filter((e) => e.c).length;
+    const freq = (r2v[root] || []).length;
+    const oppList = (root && relations ? oppositesOf(root, relations) : []) || [];
+    const axes = {}; // cat → [opposite roots]
+    for (const o of oppList) { const k = o.cat || "—"; (axes[k] ||= []).push(o.other); }
+    return { entries, covered, freq, axes, axisCount: Object.keys(axes).length, neighbours: (root && semantic ? semantic[root] || [] : []).slice(0, 8) };
+  }, [root, lexAll, lexMeta, r2v, relations, semantic]);
 
   if (!lab) return null;
 
@@ -44,6 +60,10 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, back, onRet
         ...deriv.map((d) => [d.lemma, morphLabel(d), d.count])], `deriv-${root}.csv`);
     } else if (tab === "kin") {
       exportJsonFile({ root, anagrams: kin.anagrams, shared: kin.shared }, `kinship-${root}.json`);
+    } else if (tab === "opp") {
+      exportJsonFile({ root, opposites: opp || [], candidates: cand || [] }, `relations-${root}.json`);
+    } else if (tab === "lex") {
+      exportJsonFile({ root, frequency: lex?.freq || 0, dictionaries: (lex?.entries || []).map((e) => ({ source: e.label, entry: e.c })), contrastAxes: lex?.axes || {}, neighbours: (lex?.neighbours || []).map(([r]) => r) }, `dict-corpus-${root}.json`);
     } else {
       exportJsonFile({ root, neighbours: (sem || []).map(([r, s]) => ({ root: r, similarity: s })) }, `semantic-${root}.json`);
     }
@@ -119,21 +139,132 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, back, onRet
           </div>
         )}
 
+        {tab === "opp" && (
+          <div className="ag-dist-sec">
+            <div className="ag-dist-sec-h"><span>{t("lab.opp.title")}</span></div>
+            <p className="ag-hint">{t("lab.opp.hint")}</p>
+            {opp == null ? <span className="ag-dist-name">{t("lab.opp.loading")}</span> : opp.length === 0 ? <span className="ag-dist-name">{t("lab.opp.none")}</span> : (
+              <ul className="ag-phrase-list">
+                {opp.map((o) => {
+                  const split = o.evidence === "near" || o.evidence === "sample";
+                  const chip = (vk) => <button type="button" className="ag-tag ag-tag-btn" key={vk} onClick={() => onVerses?.(`${root} ↔ ${o.other}`, [vk])} title={vk}>{vk}</button>;
+                  return (
+                  <li key={o.other}><span className="ag-modal-row" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button type="button" className="ag-tag ag-tag-btn" onClick={() => onRetarget?.(o.other)} title={t("lab.opp.go", { root: o.other })} style={{ fontFamily: "var(--font-quran)" }}>{o.other}</button>
+                    {o.framed ? <span title={t("lab.opp.framedTitle")} style={{ color: "var(--gold-400)", fontSize: "var(--text-xs)" }}>⊶ {t("lab.opp.framed")}</span>
+                      : o.evidence && o.evidence !== "same" ? <span className="ag-dist-name" style={{ fontSize: "var(--text-xs)", fontStyle: "italic" }}>{t(`lab.opp.ev.${o.evidence}`)}</span> : null}
+                    <span style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-faint)" }}>{o.cat ? t("lab.opp.how", { cat: o.cat }) : t("lab.opp.howNoCat")}</span>
+                    {split ? (
+                      <span style={{ flexBasis: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span style={{ fontSize: "var(--text-xs)", color: "var(--text-faint)" }}>{t("lab.opp.appearsSep")}</span>
+                        <span style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontFamily: "var(--font-quran)" }}>{root}</b>{(o.versesSelf || []).slice(0, 6).map(chip)}</span>
+                        <span style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontFamily: "var(--font-quran)" }}>{o.other}</b>{(o.versesOther || []).slice(0, 6).map(chip)}</span>
+                      </span>
+                    ) : (o.verses?.length > 0 && (
+                      <span style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{o.verses.slice(0, 6).map(chip)}</span>
+                    ))}
+                  </span></li>
+                  );
+                })}
+              </ul>
+            )}
+            {cand && cand.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("lab.opp.candidates")}</span></div>
+              <p className="ag-hint">{t("lab.opp.candidatesHint")}</p>
+              <div className="ag-dist-tags">
+                {cand.map((c) => (
+                  <button type="button" className="ag-tag ag-tag-btn" key={c.other} onClick={() => onVerses?.(`${root} ↔ ${c.other}`, c.verses)} title={t("lab.opp.attested", { n: c.contrast })} style={{ fontFamily: "var(--font-quran)", opacity: 0.85 }}>
+                    {c.other} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>#{c.contrast}</span>
+                  </button>
+                ))}
+              </div>
+            </>}
+          </div>
+        )}
+
+        {tab === "lex" && (
+          <div className="ag-dist-sec">
+            <div className="ag-dist-sec-h"><span>{t("lab.lex.title")}</span></div>
+            <p className="ag-hint">{t("lab.lex.hint")}</p>
+            {lex == null ? <span className="ag-dist-name">{t("lab.lex.loading")}</span> : (<>
+              {/* ── Dictionary layer: the six classical sources, side by side ── */}
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-2)" }}><span>{t("lab.lex.dicts")}</span></div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {lex.entries.map((e) => (
+                  <div key={e.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--gold-400)" }}>{e.label}</span>
+                    <span className="ag-dist-name" style={{ fontFamily: "var(--font-quran)", color: e.c ? undefined : "var(--text-faint)", lineHeight: 1.7 }}>
+                      {e.c || t("lab.lex.noEntry")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Corpus layer: frequency, contrast axes, distributional neighbours ── */}
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("lab.lex.corpus")}</span></div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--text-faint)" }}>{t("lab.lex.freq", { n: lex.freq })}</span>
+                </div>
+                {Object.keys(lex.axes).length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--text-faint)" }}>{t("lab.lex.axes")}</span>
+                    <div className="ag-dist-tags">
+                      {Object.entries(lex.axes).map(([cat, others]) => others.map((o) => (
+                        <button type="button" className="ag-tag ag-tag-btn" key={cat + o} onClick={() => onRetarget?.(o)} style={{ fontFamily: "var(--font-quran)" }}>
+                          {o}<span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{cat}</span>
+                        </button>
+                      )))}
+                    </div>
+                  </div>
+                )}
+                {lex.neighbours.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--text-faint)" }}>{t("lab.lex.neighbours")}</span>
+                    <div className="ag-dist-tags">
+                      {lex.neighbours.map(([r, s]) => (
+                        <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRetarget?.(r)} style={{ fontFamily: "var(--font-quran)" }}>
+                          {r}<span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{s}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Signals: cheap, falsifiable heuristics (no NLP magic) ── */}
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("lab.lex.signals")}</span></div>
+              <ul className="ag-hint" style={{ margin: 0, paddingInlineStart: "1.2em", lineHeight: 1.9 }}>
+                <li>{t("lab.lex.coverage", { k: lex.covered, n: lex.entries.length })}</li>
+                <li>{lex.axisCount > 1 ? t("lab.lex.polysemy", { n: lex.axisCount }) : t("lab.lex.oneAxis")}</li>
+              </ul>
+              {lex.covered === 0 && lex.freq === 0 && <span className="ag-dist-name">{t("lab.lex.none")}</span>}
+            </>)}
+          </div>
+        )}
+
         {tab === "sem" && (
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h"><span>{t("lab.sem.title")}</span></div>
             <p className="ag-hint">{t("lab.sem.hint")}</p>
             {sem == null ? <span className="ag-dist-name">{t("lab.sem.loading")}</span>
-              : sem.length === 0 ? <span className="ag-dist-name">{t("lab.sem.none")}</span> : (
+              : sem.length === 0 ? <span className="ag-dist-name">{t("lab.sem.none")}</span> : (<>
+                <p className="ag-hint" style={{ color: "var(--text-faint)", fontStyle: "italic" }}>{t("lab.sem.caveat")}</p>
                 <div className="ag-dist-tags">
-                  {sem.map(([r, s]) => (
-                    <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRetarget?.(r)}
-                      title={t("lab.sem.chipTitle", { root: r, sim: s })}>
-                      {r} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{s}</span>
-                    </button>
-                  ))}
+                  {sem.map(([r, s]) => {
+                    // Encode confidence: similarity (max ≈ the top neighbour) → border + text opacity,
+                    // so a strong tie reads boldly and a weak (possibly coincidental) one fades.
+                    const strength = Math.max(0.18, Math.min(1, s / (sem[0]?.[1] || 1)));
+                    return (
+                      <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRetarget?.(r)}
+                        title={t("lab.sem.chipTitle", { root: r, sim: s })}
+                        style={{ borderColor: `color-mix(in srgb, var(--gold-500) ${Math.round(strength * 100)}%, transparent)`, opacity: 0.55 + strength * 0.45 }}>
+                        {r} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{s}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </>)}
           </div>
         )}
       </div>

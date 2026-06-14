@@ -38,17 +38,18 @@ export function morphAt(M, verseKey, wordIndex) {
 /* Position-correct grouping keys for every word of a verse, aligned 1:1 with
  * verseData[vk].words (same word order, same <2-char skip — the builder emits the
  * tuple array against that exact filter). Each entry is { proot, plemma } where
- * plemma is the BARE-normalised lemma so it matches the voted lemma map's keys.
- * Returns null when the verse has no morphology row. The app attaches these to its
- * word objects so wordGroupKey() can disambiguate homographs per occurrence. */
-export function verseGroupingKeys(M, verseKey, normFn) {
+ * plemma is the DIACRITIZED lemma (the corpus's canonical lemma string). It is kept
+ * diacritized — NOT bare-normalised — so distinct lemmas that share a bare skeleton
+ * (عَلِمَ the verb vs عِلْم the noun, both → علم) stay distinct in lemma mode instead of
+ * collapsing toward root granularity. The voted lemma map (lemmas.json) is built
+ * diacritized too, so wordGroupKey()'s pre-morphology fallback and lemma search resolve
+ * to the SAME keys. Returns null when the verse has no morphology row. */
+export function verseGroupingKeys(M, verseKey) {
   const rows = M?.v?.[verseKey];
   if (!rows) return null;
   return rows.map((t) => {
     const m = decodeMorph(t, M);
-    const proot = m?.root || null;
-    const plemma = m?.lemma && normFn ? (normFn(m.lemma) || null) : null;
-    return { proot, plemma };
+    return { proot: m?.root || null, plemma: m?.lemma || null };
   });
 }
 

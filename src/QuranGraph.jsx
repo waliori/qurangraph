@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { norm, normStrict, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadSurahMeta, loadRelations } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
@@ -18,6 +18,7 @@ import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
+import { oppositesOf } from "./analytics/relations.js";
 // Modals + the onboarding tour are split into their own chunks (React.lazy) and mounted
 // only when opened — not on the critical path, and react-joyride (the Tour) is heavy and
 // never loads for returning users who dismissed it. Named exports, so map to a default
@@ -33,6 +34,7 @@ const RootLabModal = lazyNamed(() => import("./components/RootLabModal.jsx"), "R
 const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "RhymeModal");
 const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
 const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
+const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
@@ -44,6 +46,18 @@ import { useI18n } from "./i18n/index.js";
 // live viewport size means a window resize never rebuilds the graph or shifts
 // settled nodes — the pan/zoom transform maps this canvas onto the screen.
 const VW = 1600, VH = 1100;
+// Search forgiveness: the corpus is Uthmani, so a long-ā can be a dagger alef
+// (ٱلسَّلَٰم) or a waw+dagger (ٱلصَّلَوٰة، ٱلرِّبَوٰا). norm() strips the dagger, which makes
+// conventional spellings (السلام، الصلاة، الربا) miss. searchAlef() turns those into a
+// plain alef instead, so every word is also indexed under its imlāʾī (modern) form.
+const DAGGER = "ٰ";
+const HAMZA = /[ءئؤ]/g; // standalone + seated hamza — dropped in the loosest search key
+const searchAlef = (raw) => norm(raw.replace(new RegExp("و" + DAGGER, "g"), "ا").replace(new RegExp(DAGGER, "g"), "ا")).replace(/ا{2,}/g, "ا");
+// Every forgiving key for a word or query: the loose norm, the dagger/waw→alef form, and
+// that same form with hamza-carriers dropped — so a query's hamza seat (ـئـ) still matches
+// the corpus spelling (ـءـ). Used both to index words and to resolve a query. Generic: no
+// word list, it just derives keys from whatever string it's given.
+const looseKeys = (raw) => [...new Set([norm(raw), searchAlef(raw), searchAlef(raw.replace(HAMZA, ""))].filter((k) => k && k.length >= 2))];
 const SOFT_CAP = 300; // per-word fan-out beyond this needs explicit opt-in (perf)
 const CULL_THRESHOLD = 700; // above this many nodes, cull off-screen ones from the SVG
 const POS_LINK_CAP = 600;   // above this, a share link can't embed the exact layout
@@ -139,6 +153,7 @@ export default function QuranGraph() {
   const [meaningsFull, setMeaningsFull] = useState(null); // active lexicon: root → full article (accumulated per fetched shard)
   const [fullLoaded, setFullLoaded] = useState(() => new Set()); // "lexicon:shard" keys already fetched (so a miss doesn't spin forever)
   const [lexicons, setLexicons] = useState(null); // manifest [{id,label,license,hasFull}]
+  const [lexAll, setLexAll] = useState(null); // { id: root→{c,f} } — all six concise lexicons, for the dictionary↔corpus panel (lazy, on RootLab open)
   const [lemmaMap, setLemmaMapState] = useState(null); // normForm → lemma (lazy, for lemma mode)
   const [morph, setMorph] = useState(null); // columnar per-token morphology (lazy)
   const [meaningOpen, setMeaningOpen] = useState(false); // full-text toggle
@@ -153,6 +168,9 @@ export default function QuranGraph() {
   const [aya, setAya] = useState(null); // āya analysis lab: { centerKey, back }
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
+  const [surahMeta, setSurahMeta] = useState(null); // revelation place/order + juzʾ/sajda (lazy, on first sūra lab)
+  const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
+  const [relations, setRelations] = useState(null); // lexical opposition (طباق) + affinity map (lazy)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
   const [linkCopied, setLinkCopied] = useState(false); // share-link confirmation flash
@@ -335,8 +353,10 @@ export default function QuranGraph() {
   // stop linking homographs by their commoner root). ~2.4MB, deferred until needed;
   // the graph renders immediately with the voted grouping and refines when it lands.
   useEffect(() => {
-    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact") && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
-  }, [morphFilter, selected, searchMode, morph, retryTick]);
+    // Also load when an āya/sūra lab is open: their POS breakdown and iltifāt (person-shift)
+    // lens read per-token morphology, degrading gracefully until it lands.
+    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact" || aya || surahLab || corpusOpen) && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
+  }, [morphFilter, selected, searchMode, aya, surahLab, corpusOpen, morph, retryTick]);
 
   // Lazy-load the distributional semantic-neighbour map the first time the root lab is
   // opened (it's only used by that modal's "semantic" tab). Best-effort: stays null on
@@ -344,6 +364,27 @@ export default function QuranGraph() {
   useEffect(() => {
     if (lab && !semantic) loadSemanticNeighbors().then(setSemantic).catch(() => setSemantic({}));
   }, [lab, semantic]);
+
+  // Lazy-load surah metadata (revelation place/order, juzʾ, sajda) the first time the
+  // sūra lab opens. Best-effort: stays null on failure so the lab simply hides the section.
+  useEffect(() => {
+    if (surahLab && surahMeta == null) loadSurahMeta().then((m) => setSurahMeta(m || {})).catch(() => setSurahMeta({}));
+  }, [surahLab, surahMeta]);
+
+  // Lazy-load the lexical-relations map (opposites/affinity) when the root/āya labs or the
+  // corpus explorer open — all surface it. Best-effort: stays {} on failure.
+  useEffect(() => {
+    if ((lab || aya || corpusOpen || selected) && relations == null) loadRelations().then((r) => setRelations(r || {})).catch(() => setRelations({}));
+  }, [lab, aya, corpusOpen, selected, relations]);
+
+  // Load all six concise lexicons when the root lab opens — the dictionary↔corpus tab
+  // juxtaposes what every dictionary says against the corpus behaviour. Best-effort.
+  useEffect(() => {
+    if (!lab || lexAll) return;
+    if (!lexicons) { loadLexiconManifest().then(setLexicons).catch(() => {}); return; }
+    Promise.all(lexicons.map((L) => loadLexicon(L.id).then((m) => [L.id, m]).catch(() => [L.id, {}])))
+      .then((pairs) => setLexAll(Object.fromEntries(pairs)));
+  }, [lab, lexicons, lexAll]);
 
   // Drive the CSS design tokens (styles/theme.css) off the React theme state so
   // the whole آيات.network shell — including body + boot screens — recolours.
@@ -370,10 +411,12 @@ export default function QuranGraph() {
     return () => cancelAnimationFrame(id);
   }, [selected]);
 
-  const { w2v, r2v, verseData, surahList } = useMemo(() => {
-    if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [] };
+  const { w2v, r2v, verseData, surahList, searchAlias } = useMemo(() => {
+    if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [], searchAlias: {} };
     const strict = precision === "strict";
     const w2v = {}, r2v = {}, vd = {}, sl = [];
+    // aggressive (imlāʾī-tolerant) alias → canonical exact key, for forgiving search
+    const searchAlias = {};
     for (const s of quranRaw) {
       sl.push({ id: s.id, name: s.name, count: s.total_verses });
       for (const v of s.verses) {
@@ -384,7 +427,7 @@ export default function QuranGraph() {
         // this verse's kept-word count. A length mismatch means the tuple array is
         // misaligned with our words (a builder/data drift) — using it would mislabel
         // homographs, so fall back to the voted roots (gk = null) for the whole verse.
-        const gkRaw = morph ? verseGroupingKeys(morph, vk, norm) : null;
+        const gkRaw = morph ? verseGroupingKeys(morph, vk) : null;
         const keptCount = v.text.split(/\s+/).reduce((c, raw) => c + (norm(raw).length >= 2 ? 1 : 0), 0);
         const gk = gkRaw && gkRaw.length === keptCount ? gkRaw : null;
         const words = [];
@@ -399,6 +442,9 @@ export default function QuranGraph() {
           words.push(w);
           wi++;
           if (!seenN.has(ex)) { seenN.add(ex); (w2v[ex] ||= []).push(vk); }
+          // Index this word under all forgiving keys (loose, dagger/waw→alef, hamza-dropped)
+          // so a conventional query (السلام، الصلاة، الربا، يستهزئون) resolves to the Uthmani form.
+          for (const k of looseKeys(raw)) if (searchAlias[k] === undefined) searchAlias[k] = ex;
           // Index by the position-correct root (homographs split to their real root);
           // falls back to the voted root until morphology arrives.
           const root = wordGroupKey(w, "root");
@@ -407,7 +453,7 @@ export default function QuranGraph() {
         vd[vk] = { text: v.text, s: s.id, a: v.id, sn: s.name, words };
       }
     }
-    return { w2v, r2v, verseData: vd, surahList: sl };
+    return { w2v, r2v, verseData: vd, surahList: sl, searchAlias };
   }, [quranRaw, precision, morph]);
 
   // Lemma → verses index, built only once lemmas are loaded (lemma mode). Mirrors
@@ -961,31 +1007,54 @@ export default function QuranGraph() {
       if (sur && a >= 1 && a <= sur.total_verses) { setToolsOpen(false); setSearchMiss(false); navigate(s, a); setQuery(""); return; }
       setSearchMiss(true); return;
     }
+    // Search is ALWAYS loose (ignores the strict/precision toggle) and tolerant of Uthmani
+    // orthography: a query is normalised both ways (dagger stripped, and dagger/waw→alef),
+    // then resolved against the alias index to the canonical corpus word.
     const q = norm(query);
     if (q.length < 2) { setSearchMiss(true); return; }
-    const qx = searchMode === "exact" && precision === "strict" ? normStrict(query) : q;
-    const lookup = searchMode === "exact" ? qx : groupKey(q, searchMode);
+    const QS = looseKeys(query); // forgiving query keys (loose, dagger/waw→alef, hamza-dropped)
     const label = query.trim();
     setToolsOpen(false);
-    // Direct hit: show ALL āyāt for the term (no node selected until the user picks
-    // one from the list).
-    if (openOcc(lookup, label, searchMode)) { setSearchMiss(false); setActiveWord(lookup); return; }
-    // No exact match. Rather than silently search for a *different* word that merely
-    // contains the query (which used to relabel the result and could mislead), OFFER
-    // the closest indexed form as an explicit "did you mean" the user can accept.
-    if (searchMode === "exact") {
-      const hit = Object.keys(w2v).find((k) => k.includes(qx));
-      if (hit) { setSuggest({ lookup: hit, label: hit }); setSearchMiss(false); return; }
-    }
-    setSearchMiss(true);
-  }, [query, searchMode, precision, w2v, openOcc, quranRaw, navigate]);
+    // The index for the active mode — search resolves into THIS space, whatever the mode.
+    const idx = searchMode === "root" ? r2v : searchMode === "lemma" ? (l2v || {}) : w2v;
 
-  // Accept the "did you mean" offer — only now do we actually search for it.
-  const acceptSuggest = useCallback(() => {
-    if (!suggest) return;
-    if (openOcc(suggest.lookup, suggest.label, "exact")) { setActiveWord(suggest.lookup); setSearchMiss(false); }
+    // 1) Direct: resolve the query (imlāʾī-tolerant) to a corpus word, then to the key for
+    // the active mode (root/lemma/word). Handles السلام, الربا, and bare-but-attested forms.
+    const resolvedWord = QS.map((k) => searchAlias[k]).find(Boolean) || null;
+    const direct = searchMode === "exact" ? (resolvedWord || q) : groupKey(resolvedWord || q, searchMode);
+    if (idx[direct]) { setSuggest(null); setSearchMiss(false); setActiveWord(direct); openOcc(direct, label, searchMode); return; }
+
+    // 2) Forgiving fallback: corpus words the query is a prefix of (then merely contained
+    // in), mapped to the target key for the active mode and collapsed to DISTINCT targets.
+    // So "مسلم" in Root mode resolves to سلم even though the bare form is never a surface
+    // word — exactly what a user expects. One match opens directly; several offer a chooser.
+    const collect = (test) => {
+      const out = new Map();
+      for (const k of Object.keys(searchAlias)) {
+        if (!test(k)) continue;
+        const word = searchAlias[k];
+        const target = searchMode === "exact" ? word : groupKey(word, searchMode);
+        const arr = idx[target];
+        if (!arr || !arr.length || out.has(target)) continue;
+        out.set(target, { lookup: target, label: target, mode: searchMode, count: arr.length });
+      }
+      return [...out.values()].sort((a, b) => b.count - a.count);
+    };
+    let list = collect((k) => QS.some((x) => k.startsWith(x)));
+    if (!list.length) list = collect((k) => QS.some((x) => k.includes(x)));
+    list = list.slice(0, 12);
+    if (list.length === 1) { setSuggest(null); setSearchMiss(false); setActiveWord(list[0].lookup); openOcc(list[0].lookup, list[0].label, searchMode); return; }
+    if (list.length > 1) { setSuggest({ list }); setSearchMiss(false); return; }
+    setSearchMiss(true);
+  }, [query, searchMode, w2v, r2v, l2v, searchAlias, openOcc, quranRaw, navigate]);
+
+  // Open one of the offered candidates (the chooser list).
+  const acceptSuggest = useCallback((item) => {
+    if (!item) return;
+    setActiveWord(item.lookup); setSearchMiss(false);
+    openOcc(item.lookup, item.label, item.mode || "exact");
     setSuggest(null);
-  }, [suggest, openOcc]);
+  }, [openOcc]);
 
   // ── Workspace: quick-save the current graph, and re-open any saved item ──
   // Plain function (only an onClick handler) — avoids depending on the per-render
@@ -1367,11 +1436,18 @@ export default function QuranGraph() {
           <input className="ag-input" type="search" value={query} aria-label={t("common.search.aria")} readOnly={tourLockSearch}
             placeholder={searchMode === "root" ? t("common.search.phRoot") : searchMode === "lemma" ? t("common.search.phLemma") : t("common.search.phWord")}
             onChange={(e) => { setQuery(e.target.value); if (searchMiss) setSearchMiss(false); if (suggest) setSuggest(null); }} />
-          {suggest && (
-            <button type="button" className="ag-search-suggest" onClick={acceptSuggest}
-              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "6px 10px", fontSize: "var(--text-sm)", cursor: "pointer", whiteSpace: "nowrap", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))" }}>
-              {t("common.search.didYouMean1")}<span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)" }}>{suggest.label}</span>{t("common.search.didYouMean2")}
-            </button>
+          {suggest?.list?.length > 0 && (
+            <div role="listbox" aria-label={t("common.search.didYouMean1")}
+              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 300, overflowY: "auto", minWidth: 190 }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--text-faint)", padding: "2px 8px" }}>{t("common.search.didYouMean1")}</span>
+              {suggest.list.map((item) => (
+                <button type="button" key={item.lookup} role="option" className="ag-search-suggest" onClick={() => acceptSuggest(item)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%" }}>
+                  <span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)" }}>{item.label}</span>
+                  <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{item.count}</span>
+                </button>
+              ))}
+            </div>
           )}
         </form>
 
@@ -1477,6 +1553,8 @@ export default function QuranGraph() {
 
           <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
+          <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
+            aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
@@ -1824,6 +1902,41 @@ export default function QuranGraph() {
                       </div>
                     );
                   })()}
+                  {(() => {
+                    // Opposition (ṭibāq): this word's root and its curated Qurʾanic antonyms,
+                    // each evidenced by verses. Shown right under the morphological analysis.
+                    const sr = selNode.root || rootOf(selNode.wordNorm);
+                    const opp = sr && relations ? oppositesOf(sr, relations) : [];
+                    if (!opp.length) return null;
+                    return (
+                      <div className="ag-insp-card t-opp">
+                        <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>{t("lab.opp.title")}</div>
+                        <ul className="ag-phrase-list" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                          {opp.map((o) => {
+                            const split = o.evidence === "near" || o.evidence === "sample";
+                            const vchip = (vk) => <button type="button" className="ag-tag ag-tag-btn" key={vk} title={vk}
+                              onClick={() => setOcc({ lookup: sr, label: `${sr} ↔ ${o.other}`, mode: "root", keys: [vk] })}>{vk}</button>;
+                            return (
+                              <li key={o.other} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("lab.opp.go", { root: o.other })}
+                                  onClick={() => setLab({ root: o.other, label: o.other })}>{o.other}</button>
+                                {o.framed ? <span title={t("lab.opp.framedTitle")} style={{ color: "var(--gold-400)", fontSize: "var(--text-xs)" }}>⊶ {t("lab.opp.framed")}</span>
+                                  : o.evidence && o.evidence !== "same" ? <span style={{ fontSize: "var(--text-xs)", fontStyle: "italic", color: "var(--text-faint)" }}>{t(`lab.opp.ev.${o.evidence}`)}</span> : null}
+                                {split ? (
+                                  <span style={{ flexBasis: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
+                                    <span style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontFamily: "var(--font-quran)" }}>{sr}</b>{(o.versesSelf || []).slice(0, 5).map(vchip)}</span>
+                                    <span style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}><b style={{ fontFamily: "var(--font-quran)" }}>{o.other}</b>{(o.versesOther || []).slice(0, 5).map(vchip)}</span>
+                                  </span>
+                                ) : (o.verses?.length > 0 && (
+                                  <span style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{o.verses.slice(0, 6).map(vchip)}</span>
+                                ))}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                   {(() => { const pid = parentMap[selNode.id], parent = pid ? nmap[pid] : null; if (parent?.text) return (
                     <div className="ag-insp-card">
                       <div className="ag-insp-card-lab" style={{ marginBottom: 6 }}>{t("common.insp.from")} {parent.label}</div>
@@ -1930,31 +2043,36 @@ export default function QuranGraph() {
 
       {/* Root analysis lab — derivation (ṣarf), letter kinship, semantic neighbours. */}
       {lab && (() => { const self = { t: "lab", root: lab.root, label: lab.label, back: lab.back }; return (
-        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} back={lab.back}
+        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} back={lab.back}
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
           onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
           onBack={() => reopenLab(lab.back)}
           onClose={() => setLab(null)} />); })()}
 
       {/* Verse rhyme / cadence (fāṣila) — sūrah rhyme scheme + verses sharing the ending. */}
-      {rhyme && <RhymeModal rhyme={rhyme} verseData={verseData}
+      {rhyme && <RhymeModal rhyme={rhyme} verseData={verseData} theme={theme}
         onRetarget={(vk) => setRhyme({ centerKey: vk, back: { t: "rhyme", centerKey: rhyme.centerKey, back: rhyme.back } })}
         onBack={() => reopenLab(rhyme.back)}
         onNavigate={(s, a) => { setRhyme(null); navigate(s, a); }} onClose={() => setRhyme(null)} />}
 
       {/* Āya analysis lab — verse fingerprint + lexically similar verses (read inline). */}
-      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph}
+      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph} relations={relations}
         onBack={() => reopenLab(aya.back)}
         onNavigate={(s, a) => { setAya(null); navigate(s, a); }}
         onRoot={(r) => { setAya(null); openOcc(r, r, "root", { t: "aya", centerKey: aya.centerKey, back: aya.back }); }}
         onClose={() => setAya(null)} />}
 
       {/* Sūra analysis lab — keyness · cohesion · structure · lexical bonds (al-awāṣir). */}
-      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} back={surahLab.back}
+      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} meta={surahMeta} morph={morph} back={surahLab.back}
         onNavigate={(s, a) => { setSurahLab(null); navigate(s, a); }}
         onRoot={(r) => { setSurahLab(null); openOcc(r, r, "root", { t: "surah", surahId: surahLab.surahId, back: surahLab.back }); }}
         onBack={() => reopenLab(surahLab.back)}
         onClose={() => setSurahLab(null)} />}
+
+      {/* Corpus explorer — root frequency, hapax legomena, and the grammar catalogue. */}
+      {corpusOpen && <CorpusLabModal open={corpusOpen} verseData={verseData} r2v={r2v} w2v={w2v} precision={precision} morph={morph} relations={relations} theme={theme}
+        onNavigate={(s, a) => { setCorpusOpen(false); navigate(s, a); }}
+        onClose={() => setCorpusOpen(false)} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 
