@@ -25,6 +25,9 @@ GitHub corpora  ──download──▶  data/source/*          (tracked in git)
 npm run data:transform     # Tanzil XML → quran-hafs.json
 npm run data:roots         # morphology → roots.json, lemmas.json, morphology.json
 npm run data:lexicons      # dictionaries → lexicons/*.json (+ index.json)
+npm run data:semantic      # distributional neighbours → semantic-neighbours.json
+npm run data:relations     # antithesis + affinity → relations.json
+npm run data:meta          # revelation place/order, juzʾ, sajda → surah-meta.json
 npm run data:manifest      # record source revisions + checksums → sources.json
 
 # Re-fetch the upstream corpora first, then build everything:
@@ -100,6 +103,25 @@ Coverage (roots matched, Qurʾān-scoped): Maqāyīs ≈92 %, Lisān ≈91 %, �
 Mufradāt ≈83 %, al-ʿAyn ≈79 %, Muḥkam ≈44 %. al-Muḥkam is low because its phonetic
 (تقاليب) ordering only spells some roots out reliably — see `parseMuhkam`.
 
+### `build-semantic.js` → `semantic-neighbours.json`
+Distributional meaning by context: per-verse content-root bags → PPMI vectors → cosine
+kNN → `{ root: [[neighbour, sim], …] }` (top 12). Firth's hypothesis over the Qurʾān's own
+text — no external data. Conservative thresholds (MIN_DF 3, MAX_DF 25 %, MIN_SIM 0.08); the
+UI frames the result as suggestive (small corpus).
+
+### `build-antithesis.js` → `relations.json`
+The lexical-relations pair scorer. Fuses (a) **relatedness** — the same PPMI cosine as above,
+for any pair; (b) **polarity** — antithesis-frame mining across all verses (negation لا/ما set
+against an adversative بل/لكن, position-aligned, within or across consecutive āyāt — the
+فَلَا صَدَّقَ … وَلَٰكِن كَذَّبَ pattern) plus a curated seed of lexically-certain antonym roots.
+Output: `{ byRoot, catalogue }` where each opposite pair carries its evidence verses; affinity =
+distributionally close but un-contrasted (near-synonym). `seed:true` tags the curated pairs.
+
+### `build-meta.js` → `surah-meta.json`
+Curated structural reference (inlined, tracked): revelation place (مكية/مدنية) + nuzūl order
+(Cairo standard), the 30 juzʾ starts, the 15 sajdas. Integrity-asserted (114 sūras, 86/28 split,
+order is a 1..114 permutation). Chronology is offered as a tradition-based lens, not a datum.
+
 ### `build-sources-manifest.js` → `sources.json`
 Records, for each file in `data/source/`, the repo/ref/path it came from plus its
 byte count and SHA-256, with a `builtAt` timestamp (honours `SOURCE_DATE_EPOCH`
@@ -127,4 +149,6 @@ domain root and under a sub-path (e.g. GitHub Pages):
 
 - eager: `loadHafsData`, `loadRoots`.
 - lazy: `loadLemmas`, `loadMorphology`, `loadLexiconManifest`, `loadLexicon(id)`,
-  `loadLexiconFullShard(id, shard)`.
+  `loadLexiconFullShard(id, shard)`, `loadSemanticNeighbors`, `loadRelations`,
+  `loadSurahMeta`. The last three are optional — they resolve to `null`/`{}` if the build
+  didn't emit them, so the lens hides its section rather than erroring.

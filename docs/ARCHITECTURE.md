@@ -58,10 +58,14 @@ and refines as deferred assets arrive:
 
 - **lemmas** — on first use of lemma mode.
 - **morphology** (~2.4 MB) — when the morphology filter is active, a node is
-  selected, or root/lemma mode is on. It upgrades grouping from majority-voted to
-  position-correct per occurrence (splitting homographs).
+  selected, root/lemma mode is on, or an āya/sūra/corpus lab is open (their POS and
+  iltifāt lenses need it). It upgrades grouping from majority-voted to position-correct
+  per occurrence (splitting homographs).
 - **lexicons** — the manifest, then the active lexicon's concise glosses, then
   individual full-article **shards** on "show more".
+- **semantic-neighbours / relations / surah-meta** — loaded on first open of the lens
+  that needs them (root/āya labs, corpus explorer, sūra lab). All best-effort: a missing
+  file degrades to an empty/hidden section, never an error.
 
 ---
 
@@ -160,15 +164,33 @@ Because export serialises the DOM, the component briefly renders the *full* grap
 
 ## Analytics (`src/analytics/`)
 
-Pure functions over the inverted indices, all unit-tested:
+Pure functions over the inverted indices and per-occurrence morphology, all unit-tested.
+Each is the engine behind one lens; the heavier ones defer to idle in their modal.
 
 - `stats.js` — `distributionBySura` (true token frequency), `association`
   (PMI + Dunning's signed log-likelihood), `collocations` (whole-verse window by
   default; narrower windows null out the significance scores), `directNeighbors`
-  (position-aware ±1 adjacency / bigram counts, before + after per word),
-  `mergeCollocations` (shared / only-A / only-B for compare).
-- `phrases.js` — `buildSeedIndex` (corpus trigram index, built lazily once) and
-  `findSharedPhrases` (maximal contiguous shared runs, longest-first, left-maximal).
+  (position-aware ±1 adjacency / bigram counts, before + after; `opts.crossVerse`
+  spans the āya boundary within a sūra), `mergeCollocations` (compare split).
+- `phrases.js` — `buildSeedIndex` (corpus seed index, built lazily once) and
+  `findSharedPhrases` (المتشابهات: maximal contiguous shared runs, sub-phrase-suppressed).
+- `rhyme.js` — the fāṣila: a PAUSAL skeleton (no ى→ي fold; ة→ه), `rhymeKey` (strict
+  ending) + `rawiyKey` (loose الروي), `suraRhymeScheme`, `rhymeMates`.
+- `surah.js` — sūra altitude: `surahKeyness` (G² over the whole corpus or a revelation-class
+  `population`), `surahCohesion` + `surahSelfSimilarity` (idf-weighted root overlap →
+  topic boundaries / ring composition), `surahBonds` (الأواصر), `surahProfile`.
+- `verse.js` — `verseProfile` (fingerprint) and `similarVerses` (idf-weighted shared-root cosine).
+- `derivation.js` — `derivationFamily` (الصرف: a root's derived lemmas by Form/POS).
+- `kinship.js` — `radicalKin` (الاشتقاق الأكبر: anagram / shared-radical roots).
+- `iltifat.js` — `versePerson` + `suraIltifat` (الالتفات: grammatical person/number-shift
+  contour + turns, off the morphology person tags).
+- `diff.js` — `alignWords` (LCS) + `verseDiff` (minimal-pair word diff of near-identical verses).
+- `letters.js` — `MUQATTAAT` (the 29 disjoined-letter openings) + `surahLetterProfile`
+  (opening-letter over-representation vs the corpus).
+- `corpus.js` — `rootFrequency`, `hapaxRoots`, `browseByMorph` (corpus-wide catalogues).
+- `relations.js` — runtime readers over the precomputed lexical-relations map: `oppositesOf` /
+  `affinityOf` / `verseAntithesis` / `oppositesCatalogue` (الطباق + affinity).
+- `names.js` — `divineNames` (a conservative أسماء الله index, keyed by attested surface form).
 
 ---
 
@@ -229,13 +251,15 @@ src/
     nodeAria.js            shared screen-reader node labels
     OccurrencesModal · ContextModal · DistributionModal · CompareModal
     PhraseModal · DefinitionModal · HelpModal              analysis/reading modals
+    RhymeModal · RootLabModal · AyaLabModal · SurahLabModal · CorpusLabModal   the labs
     MorphologyFilter · StopWordEditor                      tool panels
     WorkspaceDrawer · StickyNotes                          the notebook UI
     ErrorBoundary.jsx
   hooks/   usePersistedState · useUrlState · useExplorationHistory
            useWorkspace · useModalFocus · useVirtualRows
-  analytics/  stats.js · phrases.js
-  i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/ws
+  analytics/  stats · phrases · rhyme · surah · verse · derivation · kinship ·
+              iltifat · diff · letters · corpus · relations · names
+  i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/ws/lab/tour
 scripts/   data pipeline (see DATA.md)
 ```
 

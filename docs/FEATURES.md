@@ -184,6 +184,40 @@ full article, citation, and BibTeX/RIS export.
 
 ---
 
+## The analysis labs
+
+Deeper, evidenced lenses — each surfaces **candidates** (every claim links to its verses);
+the reader judges. Reached from a word/verse/sūra or the toolbar.
+
+### Rhyme (الفاصلة)
+A verse's ending sound, the sūrah's rhyme scheme strip, and the verses sharing it — matched
+by the **full ending** or, more loosely, by the **rawiy** (الروي) consonant alone.
+
+### Root lab
+Four lenses on one root: **derivation** (الصرف — derived words by Form/POS), **letter kinship**
+(الاشتقاق الأكبر — anagram / shared-radical roots), **opposites** (الطباق — roots the Qurʾān sets
+in antithesis, each evidenced by its verses, plus distributional near-synonyms), and **semantic
+neighbours** (shared-context meaning, with a small-corpus confidence cue).
+
+### Āya lab
+A verse fingerprint (length, roots, POS mix, Forms, rhyme, rarest roots), the **most similar
+verses** by shared-root cosine — with a **diff** toggle that shows exactly what a near-identical
+verse changes — and the **antithesis** attested at the verse (e.g. صدّق ↔ كذّب across 75:31–32).
+
+### Sūra lab
+Sūra altitude: profile (with **Meccan/Medinan**, revelation order, juzʾ span, sajda, and the
+disjoined-letter **muqaṭṭaʿāt** over-representation); **keyness** (distinctive roots, vs the whole
+Qurʾān or its own revelation class); **cohesion** (topic boundaries); **structure** (verse×verse
+self-similarity heatmap + echoes); **iltifāt** (the person/number-shift contour and turns);
+**bonds** (الأواصر); and **compare** with another sūra.
+
+### Corpus explorer (≣)
+The bird's-eye view: every root by **frequency** + the **hapax legomena**; a **grammar** catalogue
+("every Form VIII verb", "every passive"); the **opposites** catalogue (all antithesis pairs); and
+a **divine-names** index. Everything exports.
+
+---
+
 ## Workspace (the notebook)
 
 Everything is stored locally in your browser — nothing is ever uploaded.

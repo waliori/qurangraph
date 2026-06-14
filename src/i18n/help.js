@@ -119,7 +119,7 @@ export const ar = {
   // Semantic & linguistic analysis (newer lenses)
   "help.semTitle": "التحليل الدلالي واللغوي",
   "help.rootLab": "تحليل الجذر",
-  "help.rootLabD1": "من زر «تحليل» في عقدة الكلمة، ثلاث نوافذ: ",
+  "help.rootLabD1": "من زر «تحليل» في عقدة الكلمة، خمس نوافذ: ",
   "help.rootLabDeriv": "الاشتقاق",
   "help.rootLabDerivD": " (العائلة الصرفية: كل مشتقات الجذر بصيغها وعددها)، ",
   "help.rootLabKin": "القرابة الحرفية",
@@ -133,7 +133,7 @@ export const ar = {
   "help.phrases": "المتشابهات اللفظية",
   "help.phrasesD": "العبارات التي ترد بنصّها في آياتٍ أخرى — مع عباراتها الفرعية الأوسع انتشارًا، وخيار «تجاهل حروف المعاني» لمطابقة ما اختلف بحرفٍ فقط (وما، فلا…).",
   "help.surahLab": "تحليل السورة",
-  "help.surahLabD1": "من زر «السورة» في شريط القراءة، أربع نوافذ: ",
+  "help.surahLabD1": "من زر «السورة» في شريط القراءة، عدّة نوافذ: ",
   "help.surahLabKey": "الجذور المميِّزة",
   "help.surahLabKeyD": " (معجم السورة: ما تَخصُّ به من الجذور إحصائيًّا)، و",
   "help.surahLabCoh": "التماسك",
@@ -141,7 +141,7 @@ export const ar = {
   "help.surahLabStruct": "البناء",
   "help.surahLabStructD": " (مصفوفة تشابه الآيات، تكشف البناء الحلقي والأصداء)، و",
   "help.surahLabBonds": "الأواصر",
-  "help.surahLabBondsD": " (الألفاظ والعبارات النادرة في القرآن التي تتكرّر داخل السورة في مواضع متباعدة، على منهج نظم القرآن).",
+  "help.surahLabBondsD": " (الألفاظ والعبارات النادرة في القرآن التي تتكرّر داخل السورة في مواضع متباعدة، على منهج نظم القرآن)، و",
   "help.semAria": "بناء حلقي مصغّر: القطر يمثّل الآية مع نفسها، والقطر المعاكس يمثّل الأصداء (أ-ب-ج-ب-أ).",
   "help.semIllo": "البناء الحلقي للسورة (أ-ب-ج-ب-أ)",
   "help.egDeriv": "العائلة الصرفية",
@@ -181,6 +181,52 @@ export const ar = {
   "help.lenientMatchD3": " بدقة ",
   "help.coverage": "التغطية",
   "help.coverageD": "نحو ⅔ الكلمات لها جذر (الحروف وكثير من الأعلام بلا جذر، فتظهر متقطعةً وغير مجمَّعة)؛ ومعنى الجذر يعتمد جودة رقمنة المعجم المصدر.",
+
+  // ── البحث ──
+  "help.findTitle": "البحث عن الكلمات",
+  "help.search": "البحث المرن",
+  "help.searchD1": "البحث مرنٌ دائمًا (يتجاهل وضع الدقة) ويتسامح مع الرسم العثماني:",
+  "help.searchFinds": "يجد",
+  "help.searchD2": "وإن لم يُطابق شيءٌ عُرِض اقتراح «هل تقصد؟».",
+  "help.verseRef": "الانتقال إلى آية",
+  "help.verseRefD1": "اكتب مرجعًا مثل",
+  "help.verseRefD2": "(أو ٢:٢٥٥) للانتقال إليها مباشرة.",
+
+  // ── الطباق ──
+  "help.opposites": "الطباق والتضاد",
+  "help.oppositesD1": "أزواج الأضداد القرآنية من قائمةٍ مُحكَّمة بالتحليل لا بالإحصاء، كلٌّ موثَّقٌ بآياته (⊶ = طباقٌ صريح: نفيٌ مقابل إثبات). مثاله",
+  "help.oppositesD2": "في ٧٥:٣١–٣٢؛ يظهر في لوحة الكلمة وتحليل الجذر ومستكشف المدوّنة.",
+
+  // ── مستكشف المدوّنة ──
+  "help.corpusExplorer": "مستكشف المدوّنة (≣)",
+  "help.corpusExplorerD1": "من زر «≣» في الشريط: تردُّد الجذور والنوادر (ما يَرِد مرّةً واحدة)، وفهرسٌ صرفيّ، وفهرس الطباق، وأسماء الله الحسنى مرتبطةً بجذورها (",
+  "help.corpusExplorerD2": ")، مع تبديلٍ بين تطابق الكلمة وتطابق الجذر.",
+
+  // ── عدسات تحليل الجذر الإضافية ──
+  "help.rootLabOpp": "الطباق",
+  "help.rootLabOppD": " (أضداد الجذر من قائمةٍ مُحقَّقة، موثَّقةٌ بالآيات)، و",
+  "help.rootLabLex": "المعجم والسياق",
+  "help.rootLabLexD": " (ما تقوله المعاجم الستّة مقابلَ سلوك الجذر فعليًّا في القرآن — حيث يتّفقان تزداد الثقة، وحيث يختلفان يُطرح سؤال)، و",
+
+  // ── عدسات تحليل السورة الإضافية ──
+  "help.surahLabIltifat": "الالتفات",
+  "help.surahLabIltifatD": " (تحوّلات الضمير والشخص والعدد عبر الآيات)، و",
+  "help.surahLabLetters": "الحروف المقطّعة",
+  "help.surahLabLettersD": " (الفواتح ونسبة شيوع كل حرفٍ في السورة)، و",
+  "help.surahLabCompareT": "المقارنة",
+  "help.surahLabCompareD": " (سورتان جنبًا إلى جنب: المشترك والمتمايز).",
+  "help.surahLabMeta": "بطاقة السورة",
+  "help.surahLabMetaD": "مكان النزول وترتيبه، والجزء، ومواضع السجدة (المرجع: المصحف القياسي).",
+
+  // ── المقابلة والطباق داخل الآية ──
+  "help.ayaLabD2": " وزرّ «⇄» يقابل آيةً مشابهة بالمركز (المشطوب يخصّ المركز، والملوّن يخصّ الأخرى)، مع قسمٍ للطباق داخل الآية.",
+
+  // ── المجاورة عبر الآيات ──
+  "help.distributionD2": " وقائمة المجاورة المباشرة (قبل/بعد) فيها خيار «عبر الآيات» لتجاوز حدّ الآية في تدفّق التلاوة.",
+
+  // ── مساحة العمل ──
+  "help.workspace": "مساحة العمل (★)",
+  "help.workspaceD": "زر ★ يحفظ أي عنصر (توزيع، أو قائمة آيات، أو مدخل معجم، أو جذر…) في لوحةٍ جانبية تبقى محفوظةً بين الجلسات.",
 
   // Data sources / provenance
   "help.sourcesTitle": "مصادر البيانات وإصداراتها",
@@ -312,7 +358,7 @@ export const en = {
   // Semantic & linguistic analysis (newer lenses)
   "help.semTitle": "Semantic & linguistic analysis",
   "help.rootLab": "Root analysis",
-  "help.rootLabD1": "The “Analyze” button on a word node opens three lenses: ",
+  "help.rootLabD1": "The “Analyze” button on a word node opens five lenses: ",
   "help.rootLabDeriv": "Derivation",
   "help.rootLabDerivD": " (the ṣarf family — every word derived from the root, with Form and count), ",
   "help.rootLabKin": "Letter kinship",
@@ -326,7 +372,7 @@ export const en = {
   "help.phrases": "Shared phrases",
   "help.phrasesD": "Runs of words that recur verbatim in other verses — including the more widely-shared sub-phrases, with an “ignore particles” option to match verses that differ only by a particle (wa-mā, fa-lā…).",
   "help.surahLab": "Sūra analysis",
-  "help.surahLabD1": "The “Sūra” button in the reader dock opens four lenses: ",
+  "help.surahLabD1": "The “Sūra” button in the reader dock opens several lenses: ",
   "help.surahLabKey": "Keyness",
   "help.surahLabKeyD": " (the sūra's statistically distinctive roots — its themes), ",
   "help.surahLabCoh": "Cohesion",
@@ -334,7 +380,7 @@ export const en = {
   "help.surahLabStruct": "Structure",
   "help.surahLabStructD": " (a verse×verse similarity matrix revealing ring composition and echoes), and ",
   "help.surahLabBonds": "Bonds",
-  "help.surahLabBondsD": " (rare words/phrases that recur at distant points within the sūra — the naẓm al-Qur'ān cohesion method).",
+  "help.surahLabBondsD": " (rare words/phrases that recur at distant points within the sūra — the naẓm al-Qur'ān cohesion method), ",
   "help.semAria": "Miniature ring composition: the diagonal is each verse with itself, the anti-diagonal marks echoes (A-B-C-B'-A').",
   "help.semIllo": "Ring composition of a sūra (A-B-C-B'-A')",
   "help.egDeriv": "derivation",
@@ -374,6 +420,52 @@ export const en = {
   "help.lenientMatchD3": " mode with ",
   "help.coverage": "Coverage",
   "help.coverageD": "About ⅔ of words have a root (letters and many proper nouns have none, so they appear dashed and ungrouped); a root's meaning depends on the digitization quality of the source lexicon.",
+
+  // ── Search ──
+  "help.findTitle": "Finding words",
+  "help.search": "Loose search",
+  "help.searchD1": "Search is always loose (it ignores the precision toggle) and tolerant of Uthmani spelling:",
+  "help.searchFinds": "finds",
+  "help.searchD2": "If nothing matches, a “did you mean?” suggestion appears.",
+  "help.verseRef": "Jump to a verse",
+  "help.verseRefD1": "Type a reference like",
+  "help.verseRefD2": "(or ٢:٢٥٥) to jump straight there.",
+
+  // ── Opposition (ṭibāq) ──
+  "help.opposites": "Opposition (ṭibāq)",
+  "help.oppositesD1": "Curated Qurʾanic antonym pairs (by analysis, not statistics), each evidenced by verses (⊶ = explicit ṭibāq: negation vs. affirmation). E.g.",
+  "help.oppositesD2": "in 75:31–32; shown in the word inspector, root analysis, and the corpus explorer.",
+
+  // ── Corpus explorer ──
+  "help.corpusExplorer": "Corpus explorer (≣)",
+  "help.corpusExplorerD1": "From the ≣ toolbar button: root frequencies and hapax (once-only roots), a grammar catalogue, an opposites index, and the 99 divine names linked to their roots (",
+  "help.corpusExplorerD2": "), with a word/root match toggle.",
+
+  // ── Extra root-analysis lenses ──
+  "help.rootLabOpp": "Opposition (ṭibāq)",
+  "help.rootLabOppD": " (the root's curated antonyms, each evidenced by verses), ",
+  "help.rootLabLex": "Dictionary & corpus",
+  "help.rootLabLexD": " (what the six dictionaries say vs. how the root actually behaves in the corpus — where they agree, confidence is high; where they diverge, a question opens), and ",
+
+  // ── Extra sūra-analysis lenses ──
+  "help.surahLabIltifat": "Iltifāt",
+  "help.surahLabIltifatD": " (person / number / pronoun shifts across verses), ",
+  "help.surahLabLetters": "Muqaṭṭaʿāt",
+  "help.surahLabLettersD": " (the opening letters and each letter's over/under-representation in the sūra), ",
+  "help.surahLabCompareT": "Compare",
+  "help.surahLabCompareD": " (two sūras side by side: shared vs. distinct profile).",
+  "help.surahLabMeta": "Sūra metadata",
+  "help.surahLabMetaD": "Revelation place and order, juzʾ, and sajda positions (Cairo standard reference).",
+
+  // ── Verse diff / antithesis ──
+  "help.ayaLabD2": " The ⇄ toggle diffs a similar verse against the centre (struck = centre-only, coloured = the other), with an in-verse antithesis section.",
+
+  // ── Cross-verse neighbours ──
+  "help.distributionD2": " plus a direct-neighbours list (before / after) with an “across verses” toggle that spans the āya boundary in the recited flow.",
+
+  // ── Workspace ──
+  "help.workspace": "Workspace (★)",
+  "help.workspaceD": "The ★ button saves any item (a distribution, a verse list, a lexicon entry, a root…) into a side drawer that persists across sessions.",
 
   // Footer
   // Data sources / provenance

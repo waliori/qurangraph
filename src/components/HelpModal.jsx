@@ -129,6 +129,11 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.strict"), <>{t("help.strictD1")} {ex("آية", RED)} <b style={{ color: RED }}>≠</b> {ex("اية", RED)}.</>],
           ])}
 
+          {sec(t("help.findTitle"), null, [
+            [t("help.search"), <>{t("help.searchD1")} {ex("السلام", GOLD)} {t("help.searchFinds")} {ex("ٱلسَّلَٰم", GOLD)}، {ex("الربا", GOLD)} {t("help.searchFinds")} {ex("ٱلرِّبَوٰا", GOLD)}، {ex("الصلاة", GOLD)} {t("help.searchFinds")} {ex("ٱلصَّلَوٰة", GOLD)}. {t("help.searchD2")}</>],
+            [t("help.verseRef"), <>{t("help.verseRefD1")} {ex("2:255", "var(--text-body)")} {t("help.verseRefD2")}</>],
+          ])}
+
           {sec(t("help.navTitle"), null, [
             [t("help.expandCollapse"), t("help.expandCollapseD")],
             [t("help.pan"), t("help.panD")],
@@ -157,25 +162,29 @@ export function HelpModal({ open, onClose, onStartTour }) {
           {sec(t("help.analysisTitle"), null, [
             [t("help.morphAnalysis"), t("help.morphAnalysisD")],
             [t("help.lexicons"), <>{t("help.lexiconsD1")}{ex("العين", GREEN)}، {ex("الصحاح", GREEN)}، {ex("مقاييس", GREEN)}، {ex("المحكم", GREEN)}، {ex("المفردات", GREEN)}، {ex("لسان العرب", GREEN)}{t("help.lexiconsD2")}</>],
-            [t("help.distribution"), t("help.distributionD")],
+            [t("help.distribution"), <>{t("help.distributionD")}{t("help.distributionD2")}</>],
             [t("help.compare"), t("help.compareD")],
             [t("help.allVerses"), t("help.allVersesD")],
+            [t("help.opposites"), <>{t("help.oppositesD1")} {ex("صدق", GREEN)} <span style={{ color: "var(--text-faint)" }}>↔</span> {ex("كذب", RED)} {t("help.oppositesD2")}</>],
+            [t("help.corpusExplorer"), <>{t("help.corpusExplorerD1")}{ex("الرحمن", GOLD)}، {ex("السلام", GOLD)}{t("help.corpusExplorerD2")}</>],
             [t("help.citations"), t("help.citationsD")],
           ])}
 
           {sec(t("help.semTitle"), semIllo(t), [
-            [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}
+            [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: RED }}>{t("help.rootLabOpp")}</b>{t("help.rootLabOppD")}<b style={{ color: GOLD }}>{t("help.rootLabLex")}</b>{t("help.rootLabLexD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>
                 {ex("عَلِمَ", GREEN)} ← {ex("عالِم", GREEN)} ← {ex("عِلْم", GREEN)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("بصر", BLUE)} {ex("صبر", BLUE)} {ex("برص", BLUE)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("رحم", PURPLE)} ⇢ {ex("غفر", PURPLE)}
               </span></>],
-            [t("help.ayaLab"), <>{t("help.ayaLabD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("طلق", GREEN)} {ex("عدد", GREEN)}</>],
+            [t("help.ayaLab"), <>{t("help.ayaLabD")}{t("help.ayaLabD2")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("طلق", GREEN)} {ex("عدد", GREEN)}</>],
             [t("help.rhyme"), <>{t("help.rhymeD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("مُبِين", GOLD)} {ex("الرَّحِيم", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egRhyme")}</span></>],
             [t("help.phrases"), <>{t("help.phrasesD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("فبأيّ آلاء ربكما تكذبان", GOLD)}</>],
-            [t("help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}
+            [t("help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}<b style={{ color: PURPLE }}>{t("help.surahLabIltifat")}</b>{t("help.surahLabIltifatD")}<b style={{ color: PURPLE }}>{t("help.surahLabLetters")}</b>{t("help.surahLabLettersD")}<b style={{ color: PURPLE }}>{t("help.surahLabCompareT")}</b>{t("help.surahLabCompareD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("تلك أمة قد خلت", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egBond")}</span></span></>],
+            [t("help.surahLabMeta"), t("help.surahLabMetaD")],
           ])}
 
           {sec(t("help.shareTitle"), null, [
+            [t("help.workspace"), <>{ex("★", GOLD)} {t("help.workspaceD")}</>],
             [t("help.shareLink"), <>{t("help.shareLinkD1")} {ex("⎘", "var(--text-body)")} {t("help.shareLinkD2")}</>],
             [t("help.export"), t("help.exportD")],
             [t("help.offline"), t("help.offlineD")],
