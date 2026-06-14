@@ -1,0 +1,93 @@
+{
+  "note": "Curated Qurʾanic antonym ROOT-pairs — the AUTHORITATIVE opposites for the relations feature. Compiled by semantic analysis of the Qurʾān's own vocabulary, NOT by statistics; every root is a real corpus root (QAC spelling). REVIEW / EDIT FREELY: add, remove, or correct pairs. Each pair: { a, b } roots, `cat` semantic field, `a_en`/`b_en` English glosses. The build (scripts/build-antithesis.js) reads this as the curated set and attaches the verses where each pair is juxtaposed; un-curated frame-discovered pairs are kept separate as 'candidates'.",
+  "pairs": [
+    { "a": "أمن", "b": "كفر", "cat": "belief", "a_en": "faith", "b_en": "disbelief" },
+    { "a": "هدي", "b": "ضلل", "cat": "belief", "a_en": "guidance", "b_en": "misguidance" },
+    { "a": "حقق", "b": "بطل", "cat": "belief", "a_en": "truth", "b_en": "falsehood" },
+    { "a": "صدق", "b": "كذب", "cat": "belief", "a_en": "truthfulness", "b_en": "lying" },
+    { "a": "طوع", "b": "عصي", "cat": "belief", "a_en": "obedience", "b_en": "disobedience" },
+    { "a": "شكر", "b": "كفر", "cat": "belief", "a_en": "gratitude", "b_en": "ingratitude" },
+    { "a": "ذكر", "b": "نسي", "cat": "belief", "a_en": "remembrance", "b_en": "forgetting" },
+
+    { "a": "رحم", "b": "عذب", "cat": "hereafter", "a_en": "mercy", "b_en": "punishment" },
+    { "a": "نعم", "b": "عذب", "cat": "hereafter", "a_en": "blessing", "b_en": "torment" },
+    { "a": "شقو", "b": "سعد", "cat": "hereafter", "a_en": "wretched", "b_en": "happy" },
+    { "a": "بشر", "b": "نذر", "cat": "message", "a_en": "glad tidings", "b_en": "warning" },
+
+    { "a": "خير", "b": "شرر", "cat": "moral", "a_en": "good", "b_en": "evil" },
+    { "a": "صلح", "b": "فسد", "cat": "moral", "a_en": "righteousness", "b_en": "corruption" },
+    { "a": "عدل", "b": "ظلم", "cat": "moral", "a_en": "justice", "b_en": "injustice" },
+    { "a": "برر", "b": "فجر", "cat": "moral", "a_en": "piety", "b_en": "wickedness" },
+    { "a": "طيب", "b": "خبث", "cat": "moral", "a_en": "good/pure", "b_en": "evil/impure" },
+    { "a": "حسن", "b": "سوأ", "cat": "moral", "a_en": "good deed", "b_en": "bad deed" },
+    { "a": "حمد", "b": "ذمم", "cat": "moral", "a_en": "praise", "b_en": "blame" },
+    { "a": "حلل", "b": "حرم", "cat": "law", "a_en": "lawful", "b_en": "forbidden" },
+
+    { "a": "نور", "b": "ظلم", "cat": "physical", "a_en": "light", "b_en": "darkness" },
+    { "a": "حيي", "b": "موت", "cat": "physical", "a_en": "life", "b_en": "death" },
+    { "a": "ليل", "b": "نهر", "cat": "physical", "a_en": "night", "b_en": "day" },
+    { "a": "أول", "b": "أخر", "cat": "physical", "a_en": "first", "b_en": "last" },
+    { "a": "ظهر", "b": "بطن", "cat": "physical", "a_en": "manifest", "b_en": "hidden" },
+    { "a": "قرب", "b": "بعد", "cat": "physical", "a_en": "near", "b_en": "far" },
+    { "a": "كبر", "b": "صغر", "cat": "physical", "a_en": "great", "b_en": "small" },
+    { "a": "رفع", "b": "خفض", "cat": "physical", "a_en": "raise", "b_en": "lower" },
+    { "a": "قدم", "b": "أخر", "cat": "physical", "a_en": "bring forward", "b_en": "put back" },
+    { "a": "بصر", "b": "عمي", "cat": "physical", "a_en": "sight", "b_en": "blindness" },
+    { "a": "سمع", "b": "صمم", "cat": "physical", "a_en": "hearing", "b_en": "deafness" },
+    { "a": "بيض", "b": "سود", "cat": "physical", "a_en": "white", "b_en": "black" },
+    { "a": "ظلل", "b": "حرر", "cat": "physical", "a_en": "shade", "b_en": "heat" },
+
+    { "a": "يسر", "b": "عسر", "cat": "state", "a_en": "ease", "b_en": "hardship" },
+    { "a": "وسع", "b": "ضيق", "cat": "state", "a_en": "spacious", "b_en": "constricted" },
+    { "a": "قوي", "b": "ضعف", "cat": "state", "a_en": "strong", "b_en": "weak" },
+    { "a": "عزز", "b": "ذلل", "cat": "state", "a_en": "might/honour", "b_en": "lowliness" },
+    { "a": "صبر", "b": "جزع", "cat": "state", "a_en": "patience", "b_en": "anxiety" },
+
+    { "a": "دخل", "b": "خرج", "cat": "movement", "a_en": "enter", "b_en": "exit" },
+    { "a": "ولج", "b": "خرج", "cat": "movement", "a_en": "enter", "b_en": "emerge" },
+    { "a": "قبل", "b": "دبر", "cat": "movement", "a_en": "advance/front", "b_en": "retreat/back" },
+    { "a": "نزل", "b": "صعد", "cat": "movement", "a_en": "descend", "b_en": "ascend" },
+
+    { "a": "ربح", "b": "خسر", "cat": "fortune", "a_en": "profit", "b_en": "loss" },
+    { "a": "نفع", "b": "ضرر", "cat": "fortune", "a_en": "benefit", "b_en": "harm" },
+    { "a": "غني", "b": "فقر", "cat": "fortune", "a_en": "rich", "b_en": "poor" },
+
+    { "a": "كثر", "b": "قلل", "cat": "quantity", "a_en": "many", "b_en": "few" },
+    { "a": "زيد", "b": "نقص", "cat": "quantity", "a_en": "increase", "b_en": "decrease" },
+    { "a": "جمع", "b": "فرق", "cat": "quantity", "a_en": "gather", "b_en": "separate" },
+    { "a": "شفع", "b": "وتر", "cat": "quantity", "a_en": "even", "b_en": "odd" },
+    { "a": "بسط", "b": "قبض", "cat": "action", "a_en": "extend", "b_en": "withhold" },
+
+    { "a": "يمن", "b": "شمل", "cat": "direction", "a_en": "right", "b_en": "left" },
+
+    { "a": "فرح", "b": "حزن", "cat": "emotion", "a_en": "joy", "b_en": "sorrow" },
+    { "a": "ضحك", "b": "بكي", "cat": "emotion", "a_en": "laughter", "b_en": "weeping" },
+    { "a": "خوف", "b": "أمن", "cat": "emotion", "a_en": "fear", "b_en": "security" },
+    { "a": "رضو", "b": "سخط", "cat": "emotion", "a_en": "contentment", "b_en": "wrath" },
+    { "a": "حبب", "b": "كره", "cat": "emotion", "a_en": "love", "b_en": "hatred" },
+
+    { "a": "علم", "b": "جهل", "cat": "knowledge", "a_en": "knowledge", "b_en": "ignorance" },
+    { "a": "شهد", "b": "غيب", "cat": "knowledge", "a_en": "witnessed", "b_en": "unseen" },
+    { "a": "ذكر", "b": "أنث", "cat": "gender", "a_en": "male", "b_en": "female" },
+
+    { "a": "سمو", "b": "أرض", "cat": "cosmos", "a_en": "heaven", "b_en": "earth" },
+    { "a": "بدأ", "b": "عود", "cat": "cosmos", "a_en": "originate", "b_en": "restore" },
+    { "a": "بشر", "b": "ملك", "cat": "cosmos", "a_en": "human", "b_en": "angel" },
+    { "a": "طلع", "b": "غرب", "cat": "cosmos", "a_en": "rising (of sun)", "b_en": "setting (of sun)" },
+
+    { "a": "أمر", "b": "نهي", "cat": "command", "a_en": "to command", "b_en": "to forbid" },
+    { "a": "وصل", "b": "قطع", "cat": "relation", "a_en": "to join", "b_en": "to sever" },
+    { "a": "كتم", "b": "بدو", "cat": "manifest", "a_en": "to conceal", "b_en": "to reveal" },
+    { "a": "رفع", "b": "وضع", "cat": "physical", "a_en": "to raise", "b_en": "to lay down" },
+    { "a": "رطب", "b": "يبس", "cat": "physical", "a_en": "moist", "b_en": "dry" },
+    { "a": "سمن", "b": "عجف", "cat": "physical", "a_en": "fat", "b_en": "lean" },
+    { "a": "صمت", "b": "نطق", "cat": "action", "a_en": "silence", "b_en": "speech" },
+    { "a": "رغب", "b": "رهب", "cat": "emotion", "a_en": "yearning", "b_en": "dread" },
+    { "a": "كرم", "b": "هون", "cat": "moral", "a_en": "to honour", "b_en": "to humiliate" },
+    { "a": "ربو", "b": "محق", "cat": "quantity", "a_en": "to grow/increase", "b_en": "to efface" },
+    { "a": "صدر", "b": "ورد", "cat": "movement", "a_en": "to depart (from water)", "b_en": "to come (to water)" },
+    { "a": "بكر", "b": "ثيب", "cat": "state", "a_en": "virgin", "b_en": "previously-wed" },
+    { "a": "شتو", "b": "صيف", "cat": "physical", "a_en": "winter", "b_en": "summer" },
+    { "a": "يمن", "b": "شأم", "cat": "direction", "a_en": "right (of good omen)", "b_en": "left (of ill omen)" }
+  ]
+}
