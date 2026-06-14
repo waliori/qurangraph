@@ -10,5 +10,10 @@ npm-debug.log*
 # Built data artifacts — regenerated from data/source/ during the image build.
 public/data/quran-hafs.json
 public/data/roots.json
-public/data/root-meanings.json
-public/data/root-meanings-full.json
+public/data/lemmas.json
+public/data/morphology.json
+public/data/lexicons/
+public/data/semantic-neighbours.json
+public/data/relations.json
+public/data/surah-meta.json
+public/data/sources.json
