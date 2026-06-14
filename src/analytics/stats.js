@@ -123,17 +123,29 @@ export function collocations(lookup, mode, index, verseData, stopSet, window = 9
  * Self-adjacency (neighbour key === the term) is skipped. Counts are token-level:
  * each adjacency instance counts once, so a verse with the term twice contributes
  * up to two neighbours per side.
+ *
+ * `opts.crossVerse` extends adjacency ACROSS the āya boundary within a sūra: when the
+ * term is the first word of a verse its "before" neighbour is the LAST word of the
+ * previous verse (same sūra), and when it is the last word its "after" neighbour is the
+ * FIRST word of the next verse — because the recited flow doesn't stop at the verse end.
+ * Off by default (each āya is treated as a closed window).
  * Returns [{ key, label, before, after, total }] sorted by total desc (the caller
  * re-sorts/filters per side). */
-export function directNeighbors(lookup, mode, index, verseData) {
+export function directNeighbors(lookup, mode, index, verseData, opts = {}) {
   const before = {}, after = {}, labels = {};
+  const cross = !!opts.crossVerse;
   const tally = (bag, w, k) => { bag[k] = (bag[k] || 0) + 1; if (!labels[k]) labels[k] = w.orig; };
   for (const vk of index[lookup] || []) {
-    const words = verseData[vk]?.words || [];
+    const v = verseData[vk];
+    const words = v?.words || [];
+    const prevWords = cross && v ? verseData[`${v.s}:${v.a - 1}`]?.words : null;
+    const nextWords = cross && v ? verseData[`${v.s}:${v.a + 1}`]?.words : null;
     words.forEach((w, i) => {
       if (keyOf(w, mode) !== lookup) return;
       if (i > 0) { const p = words[i - 1], k = keyOf(p, mode); if (k !== lookup) tally(before, p, k); }
+      else if (prevWords?.length) { const p = prevWords[prevWords.length - 1], k = keyOf(p, mode); if (k !== lookup) tally(before, p, k); }
       if (i < words.length - 1) { const nx = words[i + 1], k = keyOf(nx, mode); if (k !== lookup) tally(after, nx, k); }
+      else if (nextWords?.length) { const nx = nextWords[0], k = keyOf(nx, mode); if (k !== lookup) tally(after, nx, k); }
     });
   }
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);

@@ -26,6 +26,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   const ws = useWorkspace();
   const [collocSort, setCollocSort] = useState("ll");
   const [nbrSide, setNbrSide] = useState("both");
+  const [nbrCross, setNbrCross] = useState(false); // span the āya boundary (recited flow)
   const data = useMemo(() => {
     if (!dist) return null;
     const distribution = distributionBySura(dist.lookup, index, verseData, surahList, dist.mode).filter((d) => d.count > 0);
@@ -36,7 +37,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   }, [dist, index, verseData, surahList, stopSet, collocSort]);
   // Adjacency is position-aware but side-independent to compute, so build the full
   // before/after table once and re-rank per side without rescanning the corpus.
-  const nbrAll = useMemo(() => (dist ? directNeighbors(dist.lookup, dist.mode, index, verseData) : []), [dist, index, verseData]);
+  const nbrAll = useMemo(() => (dist ? directNeighbors(dist.lookup, dist.mode, index, verseData, { crossVerse: nbrCross }) : []), [dist, index, verseData, nbrCross]);
   const neighbors = useMemo(() => {
     const metric = nbrSide === "before" ? (n) => n.before : nbrSide === "after" ? (n) => n.after : (n) => n.total;
     return nbrAll.filter((n) => metric(n) > 0).sort((x, y) => metric(y) - metric(x) || x.key.localeCompare(y.key)).slice(0, 60);
@@ -141,11 +142,17 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
               <button type="button" data-export className="ag-btn" title={t("nbr.exportCsv")}
                 onClick={() => exportCsvFile([[t("nbr.colWord"), t("nbr.colBefore"), t("nbr.colAfter"), t("nbr.colTotal")], ...neighbors.map((n) => [n.label, n.before, n.after, n.total])], t("nbr.file", { label: dist.label }))}>⤓ CSV</button>
             </div>
-            <div className="ag-seg ag-seg-sm" role="group" aria-label={t("nbr.title")} style={{ marginBlockEnd: "var(--space-2)" }}>
-              {NBR_SIDE_IDS.map((id) => (
-                <button type="button" key={id} className={nbrSide === id ? "is-on" : ""} title={t(`nbr.side.${id}.title`)}
-                  aria-pressed={nbrSide === id} onClick={() => setNbrSide(id)}>{t(`nbr.side.${id}.label`)}</button>
-              ))}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center", marginBlockEnd: "var(--space-2)" }}>
+              <div className="ag-seg ag-seg-sm" role="group" aria-label={t("nbr.title")}>
+                {NBR_SIDE_IDS.map((id) => (
+                  <button type="button" key={id} className={nbrSide === id ? "is-on" : ""} title={t(`nbr.side.${id}.title`)}
+                    aria-pressed={nbrSide === id} onClick={() => setNbrSide(id)}>{t(`nbr.side.${id}.label`)}</button>
+                ))}
+              </div>
+              <div className="ag-seg ag-seg-sm" role="group" aria-label={t("nbr.cross.label")}>
+                <button type="button" className={nbrCross ? "" : "is-on"} aria-pressed={!nbrCross} onClick={() => setNbrCross(false)} title={t("nbr.cross.withinTitle")}>{t("nbr.cross.within")}</button>
+                <button type="button" className={nbrCross ? "is-on" : ""} aria-pressed={nbrCross} onClick={() => setNbrCross(true)} title={t("nbr.cross.title")}>{t("nbr.cross.label")}</button>
+              </div>
             </div>
             <p className="ag-hint">{t("nbr.hint", { label: dist.label })}</p>
             <div className="ag-dist-tags">

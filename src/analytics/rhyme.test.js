@@ -1,16 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { rhymeKey, finalWord, suraRhymeScheme, rhymeMates } from "./rhyme.js";
+import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates } from "./rhyme.js";
 
 describe("rhymeKey / finalWord", () => {
-  it("takes the last two skeleton letters of the final word", () => {
+  it("captures ridf + rawiy for a consonant close", () => {
     expect(rhymeKey("ذلك الكتاب لا ريب فيه هدى للمتقين")).toBe("ين"); // للمتقين → …ين
     expect(rhymeKey("الحمد لله رب العالمين")).toBe("ين");
+    expect(rhymeKey("بسم الله الرحمن الرحيم")).toBe("يم"); // الرحيم → يم (distinct rawiy م)
+  });
+  it("reads the alif-maqsura as a long-ā rhyme, not a يـ rhyme (pausal, no ى→ي fold)", () => {
+    expect(rhymeKey("والنجم اذا هوى")).toBe("ا");   // هوى → ā
+    expect(rhymeKey("وما ينطق عن الهوى")).toBe("ا"); // الهوى → ā
+    expect(rhymeKey("علمه شديد القوى")).toBe("ا");   // القوى → ā — all three rhyme
+  });
+  it("keeps a consonant+ā suffix (ـها) distinct from a bare ā", () => {
+    expect(rhymeKey("والشمس وضحاها")).toBe("ها"); // ضحاها → ـها (rawiy ه)
+    expect(rhymeKey("والقمر اذا تلاها")).toBe("ها");
   });
   it("returns the original final word for display", () => {
     expect(finalWord("الحمد لله رب العالمين")).toBe("العالمين");
   });
   it("returns null on empty input", () => {
     expect(rhymeKey("")).toBeNull();
+  });
+});
+
+describe("rawiyKey (loose, classical الروي)", () => {
+  it("groups by the rhyme consonant across differing ridf vowels", () => {
+    // قل هو الله احد · الله الصمد · لم يلد ولم يولد — all rawiy د though endings differ.
+    expect(rawiyKey("قل هو الله احد")).toBe("د");
+    expect(rawiyKey("الله الصمد")).toBe("د");
+    expect(rawiyKey("لم يلد ولم يولد")).toBe("د");
+  });
+  it("exposes the rawiy under a ـها suffix and collapses ـى to the ā class", () => {
+    expect(rawiyKey("والشمس وضحاها")).toBe("ه"); // strip wasl ا → rawiy ه
+    expect(rawiyKey("والنجم اذا هوى")).toBe("ا");  // ā class
   });
 });
 

@@ -51,6 +51,10 @@ export const ar = {
 
   "nbr.title": "الجارّ المباشر (الكلمة الملاصقة)",
   "nbr.hint": "الكلمات الملاصقة لـ«{label}» مباشرةً عبر القرآن كلِّه: قبلها أو بعدها. عدٌّ بالمرّات لا بالآيات، وتشمل الحروف (فالجار المباشر — حرف الجر أو العطف — هو المقصود هنا). اضغط كلمة لعرض آياتها.",
+  "nbr.cross.within": "داخل الآية",
+  "nbr.cross.withinTitle": "عُدَّ الجوارَ داخل الآية فقط (كلُّ آية نافذة مغلقة).",
+  "nbr.cross.label": "عبر الآيات",
+  "nbr.cross.title": "تجاوز حدّ الآية: إن كان الطرف أوّلَ الآية أو آخرَها، يُؤخذ جارُه من الآية المجاورة في السورة (سياق التلاوة المتّصل).",
   "nbr.side.before.label": "قبل",
   "nbr.side.before.title": "الكلمات التي تسبق المصطلح مباشرةً",
   "nbr.side.after.label": "بعد",
@@ -119,6 +123,10 @@ export const en = {
 
   "nbr.title": "Direct neighbours (adjacent word)",
   "nbr.hint": "Words sitting directly next to «{label}» across the whole Qur'an — immediately before or after. Counted by occurrence, not by verse, and particles are kept (the immediate neighbour — a preposition or conjunction — is the point here). Click a word to view its verses.",
+  "nbr.cross.within": "Within verse",
+  "nbr.cross.withinTitle": "Count adjacency inside each āya only (every verse a closed window).",
+  "nbr.cross.label": "Across verses",
+  "nbr.cross.title": "Span the āya boundary: when the term is first/last in its verse, take its neighbour from the adjacent verse in the sūra (the continuous recited flow).",
   "nbr.side.before.label": "Before",
   "nbr.side.before.title": "Words immediately preceding the term",
   "nbr.side.after.label": "After",

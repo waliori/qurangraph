@@ -120,6 +120,24 @@ describe("directNeighbors", () => {
     expect(by["ارض"].after).toBe(1);     // follows the 2nd نور
     expect(by["نور"]).toBeUndefined();   // self-adjacency skipped
   });
+
+  it("crossVerse spans the āya boundary within a sūra", () => {
+    // نور is verse-final in both 4:1 and 4:2. With crossVerse its "after" reaches the
+    // FIRST word of the next verse: عظيم (head of 4:2) and عليم (head of 4:3).
+    const vd3 = {
+      "4:1": { s: 4, sn: "س4", a: 1, words: [w("حكيم"), w("نور")] },
+      "4:2": { s: 4, sn: "س4", a: 2, words: [w("عظيم"), w("نور")] },
+      "4:3": { s: 4, sn: "س4", a: 3, words: [w("عليم"), w("غفور")] },
+    };
+    const idx3 = { نور: ["4:1", "4:2"] };
+    const off = Object.fromEntries(directNeighbors("نور", "exact", idx3, vd3).map((x) => [x.key, x]));
+    expect(off["عليم"]).toBeUndefined();           // no cross-boundary neighbour without the flag
+    expect(off["عظيم"].after).toBe(0);             // عظيم only seen as a before-neighbour in 4:2
+    const on = Object.fromEntries(directNeighbors("نور", "exact", idx3, vd3, { crossVerse: true }).map((x) => [x.key, x]));
+    expect(on["عظيم"].after).toBe(1);              // first word of 4:2 (4:1's نور is verse-final)
+    expect(on["عليم"].after).toBe(1);              // first word of 4:3 (4:2's نور is verse-final)
+    expect(on["حكيم"].before).toBe(1);             // 4:1 in-verse before
+  });
 });
 
 describe("mergeCollocations", () => {

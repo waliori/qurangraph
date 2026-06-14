@@ -87,8 +87,11 @@ for (const sura of hafs) {
       const m = precise ? corpus[i] : (surface[n] || null);
       if (m) {
         if (m.root) { vote(rootTally, n, m.root); rootedTokens++; }
+        // Vote the DIACRITIZED lemma (guarded by the bare skeleton's length) so the map
+        // keeps عَلِمَ / عِلْم distinct instead of bare-merging them to علم — matching the
+        // per-occurrence plemma (verseGroupingKeys), which is diacritized for the same reason.
         const bareLemma = norm(m.lemma || "");
-        if (bareLemma.length >= 2) { vote(lemmaTally, n, bareLemma); lemmatizedTokens++; }
+        if (bareLemma.length >= 2) { vote(lemmaTally, n, m.lemma); lemmatizedTokens++; }
         tuples.push(tupleOf(m, !!precise));
       } else {
         tuples.push(tupleOf({}, false)); // no data

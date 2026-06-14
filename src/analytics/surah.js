@@ -39,11 +39,30 @@ function verseRoots(words) {
   for (const w of words || []) { const r = w.proot || rootOf(w.norm); if (r) set.add(r); }
   return set;
 }
-// Cosine-like overlap of two root sets: |A∩B| / sqrt(|A|·|B|).
-function overlap(a, b) {
+
+/* An idf weighter over the corpus root inventory: log(N / df(root)), so a root
+ * shared by two verses counts for MUCH more when it is rare than when it is one of
+ * the handful that occur everywhere (كون، قول، امن، عمل…). Without this, the raw
+ * |A∩B| overlap below over-lights on ubiquitous roots and reports spurious echoes /
+ * ring-composition. `r2v` is root→verses; pass it from the app. Returns a function
+ * root→weight; falls back to a flat weight of 1 (the old unweighted behaviour) when
+ * r2v is absent, so callers/tests that don't supply it still work. */
+function makeIdf(verseData, r2v) {
+  if (!r2v) return null;
+  const N = Object.keys(verseData).length || 1;
+  return (root) => Math.log(N / Math.max(1, (r2v[root] || []).length)) || 1e-9;
+}
+
+/* Cosine overlap of two root sets, optionally idf-weighted. With `wt` it is an
+ * idf-weighted cosine over binary presence vectors: Σ wt²(shared) / √(Σwt²(A)·Σwt²(B));
+ * without `wt` it reduces to the plain |A∩B| / √(|A|·|B|). Range (0,1]. */
+function overlap(a, b, wt) {
   if (!a.size || !b.size) return 0;
-  let inter = 0; for (const r of a) if (b.has(r)) inter++;
-  return inter / Math.sqrt(a.size * b.size);
+  if (!wt) { let inter = 0; for (const r of a) if (b.has(r)) inter++; return inter / Math.sqrt(a.size * b.size); }
+  let ma = 0, mb = 0, inter = 0;
+  for (const r of a) { const x = wt(r); ma += x * x; }
+  for (const r of b) { const x = wt(r); mb += x * x; if (a.has(r)) inter += x * x; }
+  return ma && mb ? inter / Math.sqrt(ma * mb) : 0;
 }
 /* The roots two verses share (for the matrix/echo pair readout). */
 export function sharedRoots(vkA, vkB, verseData) {
@@ -78,39 +97,47 @@ export function surahProfile(surahId, verseData) {
   return { surahId, name: verseData[keys[0]].sn, verseCount: keys.length, wordCount, rootCount: allRoots.size, dominantRhyme: scheme.dominant, refrains };
 }
 
-/* Roots over-represented in the sūra vs the rest of the corpus, by signed log-likelihood.
+/* Roots over-represented in the sūra vs a comparison corpus, by signed log-likelihood.
  * Returns [{ root, inSura, total, keyness }] (keyness > 0 = over-represented), strongest
- * first, for roots occurring in ≥ minVerses sūra verses. Reuses the same G² as collocations. */
+ * first, for roots occurring in ≥ minVerses sūra verses. Reuses the same G² as collocations.
+ *
+ * `opts.population` (a Set of verse keys) scopes the comparison corpus: pass the Meccan
+ * (or Medinan) verses to ask "what is distinctive about THIS sūra among sūras of its own
+ * revelation class" rather than against the whole Qurʾān. The sūra's own verses must be a
+ * subset of the population (they are, when population = same class). Defaults to the whole
+ * corpus. `total` is then the root's verse count WITHIN the population. */
 export function surahKeyness(surahId, verseData, r2v, opts = {}) {
   const minVerses = opts.minVerses || 2;
+  const pop = opts.population instanceof Set ? opts.population : null;
   const keys = suraVerseKeys(surahId, verseData);
-  const N = Object.keys(verseData).length || 1;
+  const N = pop ? pop.size || 1 : Object.keys(verseData).length || 1;
   const suraN = keys.length;
   const inSura = new Map(); // root → # sūra verses containing it
-  const suraSet = new Set(keys);
   for (const vk of keys) for (const r of verseRoots(verseData[vk].words)) inSura.set(r, (inSura.get(r) || 0) + 1);
   const stop = stopRoots();
   const out = [];
   for (const [root, a] of inSura) {
     if (a < minVerses || stop.has(root)) continue;
-    const total = (r2v[root] || []).length;
+    const all = r2v[root] || [];
+    const total = pop ? all.reduce((c, vk) => c + (pop.has(vk) ? 1 : 0), 0) : all.length;
     const { ll } = association(a, suraN, total, N); // a = both, suraN = term verses, total = neighbour verses
     if (ll > 0) out.push({ root, inSura: a, total, keyness: ll });
   }
-  // Keep `suraSet` referenced so the unused-var lint stays quiet while documenting intent.
-  void suraSet;
   return out.sort((x, y) => y.keyness - x.keyness);
 }
 
 /* Adjacent-verse cohesion: shared-root overlap between each consecutive pair.
+ * `r2v` (root→verses) enables idf weighting so a rare shared root marks real cohesion
+ * while a ubiquitous one barely moves the score; omit it for the old unweighted overlap.
  * Returns { seq:[{ a, b, shared:[root…], score }], mean } — low scores mark topic shifts. */
-export function surahCohesion(surahId, verseData) {
+export function surahCohesion(surahId, verseData, r2v) {
   const keys = suraVerseKeys(surahId, verseData);
   const roots = keys.map((vk) => verseRoots(verseData[vk].words));
+  const wt = makeIdf(verseData, r2v);
   const seq = [];
   for (let i = 0; i + 1 < keys.length; i++) {
     const shared = [...roots[i]].filter((r) => roots[i + 1].has(r));
-    seq.push({ a: verseData[keys[i]].a, b: verseData[keys[i + 1]].a, shared, score: overlap(roots[i], roots[i + 1]) });
+    seq.push({ a: verseData[keys[i]].a, b: verseData[keys[i + 1]].a, shared, score: overlap(roots[i], roots[i + 1], wt) });
   }
   const mean = seq.length ? seq.reduce((s, x) => s + x.score, 0) / seq.length : 0;
   return { seq, mean };
@@ -120,16 +147,17 @@ export function surahCohesion(surahId, verseData) {
  *   { ayat:[a…], size, matrix:number[][], echoes:[{ i, j, ai, aj, score, shared }] }
  * `matrix` drives the heatmap; `echoes` are the strongest OFF-diagonal pairs (|i−j| ≥ 2)
  * — the sūra's internal resonances (ring/panel structure). */
-export function surahSelfSimilarity(surahId, verseData, opts = {}) {
+export function surahSelfSimilarity(surahId, verseData, r2v, opts = {}) {
   const keys = suraVerseKeys(surahId, verseData);
   const n = keys.length;
   const roots = keys.map((vk) => verseRoots(verseData[vk].words));
+  const wt = makeIdf(verseData, r2v);
   const matrix = Array.from({ length: n }, () => new Array(n).fill(0));
   const echoes = [];
   for (let i = 0; i < n; i++) {
     matrix[i][i] = 1;
     for (let j = i + 1; j < n; j++) {
-      const s = overlap(roots[i], roots[j]);
+      const s = overlap(roots[i], roots[j], wt);
       matrix[i][j] = matrix[j][i] = s;
       if (j - i >= 2 && s > 0) echoes.push({ i, j, ai: verseData[keys[i]].a, aj: verseData[keys[j]].a, score: s, shared: [...roots[i]].filter((r) => roots[j].has(r)) });
     }
