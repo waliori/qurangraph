@@ -215,6 +215,8 @@ export const ar = {
   "help.surahLabLettersD": " (الفواتح ونسبة شيوع كل حرفٍ في السورة)، و",
   "help.surahLabCompareT": "المقارنة",
   "help.surahLabCompareD": " (سورتان جنبًا إلى جنب: المشترك والمتمايز).",
+  "help.expr": "كشّاف التعابير",
+  "help.exprD": "التراكيب لا الكلمات المفردة: تعدية الفعل/الاسم بحروف الجر (وتباين الدلالة)، والإضافة، والتعابير الثابتة.",
 
   // ── المقابلة والطباق داخل الآية ──
   "help.ayaLabD2": " وزرّ «⇄» يقابل آيةً مشابهة بالمركز (المشطوب يخصّ المركز، والملوّن يخصّ الأخرى)، مع قسمٍ للطباق داخل الآية.",
@@ -452,6 +454,8 @@ export const en = {
   "help.surahLabLettersD": " (the opening letters and each letter's over/under-representation in the sūra), ",
   "help.surahLabCompareT": "Compare",
   "help.surahLabCompareD": " (two sūras side by side: shared vs. distinct profile).",
+  "help.expr": "Expressions explorer",
+  "help.exprD": "Multi-word units, not single words: verbs/nouns and the prepositions they govern (and how sense shifts), iḍāfa constructs, and fixed idioms.",
 
   // ── Verse diff / antithesis ──
   "help.ayaLabD2": " The ⇄ toggle diffs a similar verse against the centre (struck = centre-only, coloured = the other), with an in-verse antithesis section.",

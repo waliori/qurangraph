@@ -180,6 +180,7 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.phrases"), <>{t("help.phrasesD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("فبأيّ آلاء ربكما تكذبان", GOLD)}</>],
             [t("help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}<b style={{ color: PURPLE }}>{t("help.surahLabIltifat")}</b>{t("help.surahLabIltifatD")}<b style={{ color: PURPLE }}>{t("help.surahLabLetters")}</b>{t("help.surahLabLettersD")}<b style={{ color: PURPLE }}>{t("help.surahLabCompareT")}</b>{t("help.surahLabCompareD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("تلك أمة قد خلت", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egBond")}</span></span></>],
+            [t("help.expr"), <>{t("help.exprD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("آمَنَ بـ", GOLD)} {ex("سبيل الله", GOLD)}</>],
           ])}
 
           {sec(t("help.shareTitle"), null, [

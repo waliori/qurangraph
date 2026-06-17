@@ -1,0 +1,189 @@
+import { useEffect, useMemo, useState } from "react";
+import { indexExpressions, headRows, expressionsForRoot, occVerses, FRAME_SPAN, COMPOUND_SPAN, idiomSpan } from "../analytics/expressions.js";
+import { exportJsonFile } from "../graph/exportGraph.js";
+import { ModalShell } from "./ModalShell.jsx";
+import { HighlightedAyah } from "./HighlightedAyah.jsx";
+import { useI18n } from "../i18n/index.js";
+
+/* ═══ Expressions explorer (كشّاف التعابير) ═══
+ *
+ * Multi-word units the parts don't predict, mined offline (build-expressions.js):
+ *   Frames    — a head + the ḥarf jarr it governs (آمَنَ بـ "believe IN"). The row IS the
+ *               CONTRAST: every preposition the head takes, with the bare residual, so the
+ *               sense-shift by government is visible at a glance; click a حرف for its āyāt.
+ *   Compounds — إضافة (سبيل الله, يوم القيامة), ranked by log-likelihood.
+ *   Idioms    — curated non-compositional expressions (+ their verses).
+ *
+ * Interaction stays INSIDE the modal like the corpus lab: click a term → its āyāt as an inline
+ * list (highlighting the expression's own words); click an āya → the sticky foot preview; only
+ * the preview's ⌖ jumps the graph. `focusRoot` opens scoped to one root (root-lab cross-link).
+ */
+const TABS = ["frames", "compounds", "idioms"];
+const CAP = 200;
+const POS_BADGE = { verb: "t-verse", noun: "t-root", pn: "t-root", actpcpl: "t-root", passpcpl: "t-root" };
+
+export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNavigate, onRoot, onClose }) {
+  const { t, fmtNum } = useI18n();
+  const [tab, setTab] = useState("frames");
+  const [query, setQuery] = useState("");
+  const [focus, setFocus] = useState(focusRoot || null); // root-scoped view
+  const [detail, setDetail] = useState(null); // { label, sub, verses:[{vk,hi}] }
+  const [preview, setPreview] = useState(null); // vk in the sticky foot
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => { setFocus(focusRoot || null); setDetail(null); setPreview(null); }, [focusRoot]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const idx = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
+  const heads = useMemo(() => (idx && tab === "frames" && !focus ? headRows(expr, idx) : null), [idx, expr, tab, focus]);
+  const rootView = useMemo(() => (idx && focus ? expressionsForRoot(expr, idx, focus) : null), [idx, expr, focus]);
+  const q = query.trim();
+  const matchHead = (h) => !q || h.head.includes(q) || h.root?.includes(q);
+  const matchComp = (c) => !q || c.a.includes(q) || c.b.includes(q);
+  const matchIdiom = (i) => !q || i.display.includes(q) || (i.en || "").toLowerCase().includes(q.toLowerCase());
+
+  if (!open) return null;
+  if (!expr) return (
+    <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
+      title={<><span className="ag-badge t-verse">{t("expr.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("expr.title")}</h2></>}>
+      <div className="ag-dist-body"><p className="ag-dist-name">{t("expr.unavailable")}</p></div>
+    </ModalShell>
+  );
+
+  const showOcc = (label, sub, occ, span) => { setDetail({ label, sub, verses: occVerses(occ, verseData, span) }); setPreview(null); };
+  const pv = preview ? verseData[preview] : null;
+  const pvHi = pv && detail ? detail.verses.find((v) => v.vk === preview)?.hi : null;
+
+  // A head's preposition contrast as a row of clickable chips + the bare residual.
+  const contrastRow = (h) => (
+    <div className="ag-dist-row" key={`${h.pos}|${h.head}`} style={{ alignItems: "baseline" }}>
+      <span className="ag-dist-name" style={{ display: "flex", gap: 5, alignItems: "baseline" }}>
+        <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} disabled={!h.root}
+          title={h.root ? t("expr.openRoot", { root: h.root }) : undefined} onClick={() => h.root && onRoot?.(h.root)}>{h.head}</button>
+        <span className={`ag-badge ${POS_BADGE[h.pos] || "t-root"}`} style={{ fontSize: "var(--text-xs)" }}>{t(`expr.pos.${h.pos}`)}</span>
+      </span>
+      <span style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1 }}>
+        {h.preps.map((p) => (
+          <button type="button" className="ag-tag ag-tag-btn" key={p.prep} style={{ fontFamily: "var(--font-quran)" }}
+            title={p.gloss ? `${p.gloss.en} · ${t("expr.occN", { n: p.count })}` : t("expr.occN", { n: p.count })}
+            onClick={() => showOcc(`${h.head} ${p.gloss?.ar || p.prep}`, p.gloss?.en, p.occ, FRAME_SPAN)}>
+            {p.gloss?.ar || p.prep} <b style={{ color: "var(--gold-400)" }}>{fmtNum(p.count)}</b>
+          </button>
+        ))}
+        {h.bare > 0 && <span className="ag-tag" title={t("expr.bareHint")} style={{ opacity: 0.7 }}>{t("expr.bare")} {fmtNum(h.bare)}</span>}
+      </span>
+    </div>
+  );
+
+  return (
+    <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
+      title={<>
+        {(detail || focus) && <button type="button" className="ag-btn" title={t("expr.back")} onClick={() => (detail ? setDetail(null) : setFocus(null))} style={{ marginInlineEnd: 4 }}>←</button>}
+        <span className="ag-badge t-verse">{t("expr.badge")}</span>
+        <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{detail ? detail.label : focus ? t("expr.ofRoot", { root: focus }) : t("expr.title")}</h2>
+        {detail ? <span className="ag-modal-count">{fmtNum(detail.verses.length)} {t("expr.ayat")}</span>
+          : !focus && <span className="ag-modal-count">{fmtNum((expr.frames || []).length + (expr.compounds || []).length + (expr.idioms || []).length)}</span>}
+      </>}
+      actions={!detail && !focus && <button type="button" className="ag-btn" onClick={() => exportJsonFile({ frames: expr.frames, compounds: expr.compounds, idioms: expr.idioms }, "expressions.json")}>⤓ JSON</button>}>
+      <div className="ag-dist-body">
+        {detail ? (
+          <div className="ag-dist-sec">
+            {detail.sub && <p className="ag-hint">{detail.sub}</p>}
+            <p className="ag-hint">{t("expr.listHint")}</p>
+            {detail.verses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
+              <ul className="ag-phrase-list">
+                {detail.verses.slice(0, CAP).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
+                  <li key={vk}><button type="button" className={"ag-modal-row" + (preview === vk ? " is-on" : "")} style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline" }} onClick={() => setPreview(vk)} aria-pressed={preview === vk}>
+                    <span className="ag-ayah-ref" style={{ flexShrink: 0 }}><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{fmtNum(v.a)}</span></span>
+                    <span className="ag-modal-text" style={{ fontFamily: "var(--font-quran)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                      <HighlightedAyah text={v.text} highlightIndices={new Set(hi)} theme={theme} />
+                    </span>
+                  </button></li>
+                ); })}
+                {detail.verses.length > CAP && <li><span className="ag-hint">{t("expr.more", { n: detail.verses.length - CAP })}</span></li>}
+              </ul>
+            )}
+          </div>
+        ) : focus ? (
+          <div className="ag-dist-sec">
+            <p className="ag-hint">{t("expr.ofRootHint")}</p>
+            {rootView.heads.length === 0 && rootView.compounds.length === 0 && <span className="ag-dist-name">{t("expr.none")}</span>}
+            {rootView.heads.length > 0 && <>
+              <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
+              <div className="ag-dist-bars">{rootView.heads.map(contrastRow)}</div>
+            </>}
+            {rootView.compounds.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.compounds")}</span></div>
+              <div className="ag-dist-tags">
+                {rootView.compounds.map((c, i) => (
+                  <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(`${c.a} ${c.b}`, null, c.occ, COMPOUND_SPAN)}>
+                    {c.a} {c.b} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                  </button>
+                ))}
+              </div>
+            </>}
+          </div>
+        ) : (<>
+          <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("expr.title")} style={{ marginBlockEnd: "var(--space-2)" }}>
+            {TABS.map((id) => <button type="button" key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>{t(`expr.tab.${id}`)}</button>)}
+          </div>
+          <input className="ag-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("expr.searchPh")} aria-label={t("expr.searchPh")} style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} />
+
+          {tab === "frames" && (
+            <div className="ag-dist-sec">
+              <p className="ag-hint">{t("expr.framesHint")}</p>
+              <div className="ag-dist-bars">{heads.filter(matchHead).slice(0, CAP).map(contrastRow)}</div>
+              {heads.filter(matchHead).length > CAP && <p className="ag-hint">{t("expr.more", { n: heads.filter(matchHead).length - CAP })}</p>}
+            </div>
+          )}
+
+          {tab === "compounds" && (
+            <div className="ag-dist-sec">
+              <p className="ag-hint">{t("expr.compoundsHint")}</p>
+              <div className="ag-dist-tags">
+                {(expr.compounds || []).filter(matchComp).slice(0, CAP).map((c, i) => (
+                  <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                    title={t("expr.compoundChip", { count: c.count, ll: c.ll })} onClick={() => showOcc(`${c.a} ${c.b}`, null, c.occ, COMPOUND_SPAN)}>
+                    {c.a} {c.b} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === "idioms" && (
+            <div className="ag-dist-sec">
+              <p className="ag-hint">{t("expr.idiomsHint")}</p>
+              <ul className="ag-phrase-list">
+                {(expr.idioms || []).filter(matchIdiom).slice(0, CAP).map((it, i) => (
+                  <li key={i}><span className="ag-modal-row" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <button type="button" className="ag-tag ag-tag-btn" disabled={it.count === 0} style={{ fontFamily: "var(--font-quran)", fontSize: "1.05em" }}
+                      onClick={() => showOcc(it.display, it.en, it.occ, idiomSpan(it.skeleton.split(" ").length))}>{it.display}</button>
+                    {it.en && <span className="ag-dist-name" style={{ flex: 1 }}>{it.en}</span>}
+                    <span className="ag-dist-num" style={{ color: "var(--gold-400)" }}>{fmtNum(it.count)}</span>
+                  </span></li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>)}
+
+        {pv && (
+          <div style={{ position: "sticky", bottom: 0, zIndex: 2, marginBlockStart: "var(--space-3)", padding: "var(--space-2) var(--space-3)",
+            background: "var(--ink-800)", borderBlockStart: "2px solid var(--gold-500)", borderRadius: "var(--radius-sm)", boxShadow: "0 -10px 22px -10px rgba(0,0,0,.5)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span className="ag-ayah-ref"><span className="ag-ayah-surah">{pv.sn}</span><span className="ag-ayah-num">{fmtNum(pv.a)}</span></span>
+              <span style={{ display: "flex", gap: 4 }}>
+                {onNavigate && <button type="button" className="ag-btn is-gold" title={t("aya.goTo")} onClick={() => { const [s, a] = preview.split(":").map(Number); onNavigate(s, a); }}>⌖ {t("aya.goTo")}</button>}
+                <button type="button" className="ag-iconbtn" title={t("common.close")} aria-label={t("common.close")} style={{ width: 26, height: 26 }} onClick={() => setPreview(null)}>✕</button>
+              </span>
+            </div>
+            <div className="ag-modal-text" style={{ fontFamily: "var(--font-quran)", marginBlockStart: 4, lineHeight: 1.9 }}>
+              <HighlightedAyah text={pv.text} highlightIndices={pvHi ? new Set(pvHi) : undefined} theme={theme} />
+            </div>
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  );
+}

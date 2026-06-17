@@ -1,0 +1,17 @@
+{
+  "note": "Curated multi-word expressions (مركّبات / تعابير) whose meaning is not the sum of their parts. Authoritative, reviewable seed — the build attaches the verses where each occurs. English is a standard, conservative rendering, not a tafsīr; the reader judges sense from the occurrences.",
+  "entries": [
+    { "ar": "حبل الله", "en": "the rope of God (His covenant / the Qurʾān)" },
+    { "ar": "حبل الوريد", "en": "the jugular vein (figurative nearness)" },
+    { "ar": "سبيل الله", "en": "the way of God" },
+    { "ar": "وجه الله", "en": "the Face of God" },
+    { "ar": "يوم الدين", "en": "the Day of Judgment" },
+    { "ar": "أم الكتاب", "en": "the Mother of the Book (the foundational scripture / clear verses)" },
+    { "ar": "الصراط المستقيم", "en": "the straight path" },
+    { "ar": "أصحاب اليمين", "en": "the companions of the right (the blessed)" },
+    { "ar": "أصحاب الشمال", "en": "the companions of the left (the damned)" },
+    { "ar": "ذات الصدور", "en": "what the breasts conceal (innermost thoughts)" },
+    { "ar": "بأس الله", "en": "the might / punishment of God" },
+    { "ar": "روح القدس", "en": "the Holy Spirit (Gabriel)" }
+  ]
+}

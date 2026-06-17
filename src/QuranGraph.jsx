@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { norm, normStrict, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
@@ -35,6 +35,7 @@ const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "Rhyme
 const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
 const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
 const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
+const ExpressionsModal = lazyNamed(() => import("./components/ExpressionsModal.jsx"), "ExpressionsModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
@@ -169,6 +170,9 @@ export default function QuranGraph() {
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
   const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
+  const [expr, setExpr] = useState(null); // multi-word expression inventory (lazy, on first explorer open)
+  const [exprOpen, setExprOpen] = useState(false); // expressions explorer { } | false
+  const [exprFocus, setExprFocus] = useState(null); // root the explorer opened scoped to (cross-link)
   const [relations, setRelations] = useState(null); // lexical opposition (طباق) + affinity map (lazy)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
@@ -369,6 +373,12 @@ export default function QuranGraph() {
   useEffect(() => {
     if ((lab || aya || corpusOpen || selected) && relations == null) loadRelations().then((r) => setRelations(r || {})).catch(() => setRelations({}));
   }, [lab, aya, corpusOpen, selected, relations]);
+
+  // Lazy-load the multi-word expression inventory the first time the explorer opens (from the
+  // toolbar or a root-lab cross-link). Best-effort: stays {} so the modal shows "unavailable".
+  useEffect(() => {
+    if (exprOpen && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
+  }, [exprOpen, expr]);
 
   // Load all six concise lexicons when the root lab opens — the dictionary↔corpus tab
   // juxtaposes what every dictionary says against the corpus behaviour. Best-effort.
@@ -1548,6 +1558,8 @@ export default function QuranGraph() {
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
+          <button type="button" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
+            aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprOpen((o) => !o); }}>⛓</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
@@ -1796,6 +1808,12 @@ export default function QuranGraph() {
                           ⚛ {t("common.insp.analyze")}
                         </button>
                       )}
+                      {(selNode.root || rootOf(selNode.wordNorm)) && (
+                        <button type="button" className="ag-btn" title={t("expr.open")}
+                          onClick={() => { setExprFocus(selNode.root || rootOf(selNode.wordNorm)); setExprOpen(true); }}>
+                          ⛓ {t("lab.expressions")}
+                        </button>
+                      )}
                       <button type="button" data-tour="saveWordBtn" className="ag-btn" title={t("ws.saveTitle")}
                         onClick={() => { ws.saveItem({ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }); ws.toast(t("ws.saved")); }}>
                         ★ {t("ws.save")}
@@ -2039,6 +2057,7 @@ export default function QuranGraph() {
         <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} back={lab.back}
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
           onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
+          onExpressions={(r) => { setLab(null); setExprFocus(r); setExprOpen(true); }}
           onBack={() => reopenLab(lab.back)}
           onClose={() => setLab(null)} />); })()}
 
@@ -2066,6 +2085,11 @@ export default function QuranGraph() {
       {corpusOpen && <CorpusLabModal open={corpusOpen} verseData={verseData} r2v={r2v} w2v={w2v} precision={precision} morph={morph} relations={relations} theme={theme}
         onNavigate={(s, a) => { setCorpusOpen(false); navigate(s, a); }}
         onClose={() => setCorpusOpen(false)} />}
+
+      {exprOpen && <ExpressionsModal open={exprOpen} verseData={verseData} expr={expr} theme={theme} focusRoot={exprFocus}
+        onNavigate={(s, a) => { setExprOpen(false); navigate(s, a); }}
+        onRoot={(r) => { setExprOpen(false); setLab({ root: r, label: r }); }}
+        onClose={() => setExprOpen(false)} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 

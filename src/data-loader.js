@@ -57,6 +57,12 @@ export function loadRelations() {
   return fetchJSON("data/relations.json").catch(() => null);
 }
 
+// Multi-word expressions { note, prepGloss, frames, headTotals, compounds, idioms } — government
+// frames + إضافة + idioms mined offline. Optional: resolves to null if the build didn't emit it.
+export function loadExpressions() {
+  return fetchJSON("data/expressions.json").catch(() => null);
+}
+
 // Lexicon manifest: [{ id, label, license, hasFull, fullShards, coverage }] — the swappable
 // Arabic dictionaries (Maqāyīs / Mufradāt / Lisān …). Tiny; load to build the switcher.
 export function loadLexiconManifest() {

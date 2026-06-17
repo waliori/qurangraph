@@ -20,7 +20,7 @@ import { useI18n } from "../i18n/index.js";
  */
 const TABS = ["deriv", "kin", "opp", "lex", "sem"];
 
-export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, back, onRetarget, onVerses, onBack, onClose }) {
+export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, back, onRetarget, onVerses, onExpressions, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
   const root = lab?.root;
@@ -78,7 +78,10 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
         <h2 className="ag-modal-word">{lab.label}</h2>
         <span className="ag-modal-count">{t("lab.root")} {root}</span>
       </>}
-      actions={<button type="button" className="ag-btn" onClick={exportCurrent}>⤓ {tab === "deriv" ? "CSV" : "JSON"}</button>}>
+      actions={<>
+        {onExpressions && <button type="button" className="ag-btn" title={t("lab.expressions")} onClick={() => onExpressions(root)}>⛓ {t("lab.expressions")}</button>}
+        <button type="button" className="ag-btn" onClick={exportCurrent}>⤓ {tab === "deriv" ? "CSV" : "JSON"}</button>
+      </>}>
       <div className="ag-dist-body">
         <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("lab.title", { label: lab.label })} style={{ marginBlockEnd: "var(--space-3)" }}>
           {TABS.map((id) => (
