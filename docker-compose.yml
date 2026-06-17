@@ -7,11 +7,42 @@ services:
     container_name: qurangraph
     restart: unless-stopped
     # No `ports:` — the container is reached only through Nginx Proxy Manager
-    # over the shared proxy_network, not published on the host.
+    # over the shared proxy_network, not published on the host. Its own nginx
+    # reverse-proxies /api/ to the ai-proxy container over the internal network.
     networks:
       - proxy_network
+      - internal
+    depends_on:
+      - ai-proxy
+
+  # Free-tier assistant proxy: holds the shared Gemini key (never shipped to the browser),
+  # rate-limits per client IP, and streams the model's SSE response back. Reached only by the
+  # qurangraph nginx over the internal network — never published or exposed to NPM directly.
+  # Users who bring their own key bypass this entirely (the browser calls the provider direct).
+  ai-proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    image: qurangraph-ai-proxy:latest
+    container_name: qurangraph-ai-proxy
+    restart: unless-stopped
+    environment:
+      # Required — get one at https://aistudio.google.com/apikey, put it in .env (see .env.example).
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in .env (or comment out the ai-proxy service to run BYOK-only)}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      # Per-IP daily budget in TOKENS (prompt+completion); the real ceiling is Gemini's own quota.
+      TOKEN_BUDGET_PER_DAY: ${TOKEN_BUDGET_PER_DAY:-100000}
+      # Gemini "thinking" is off by default (wastes tokens here); "low"/"medium"/"high" re-enables.
+      REASONING_EFFORT: ${REASONING_EFFORT:-none}
+      # Optional secret that enables GET /api/stats?token=… (owner-only usage). Unset → disabled.
+      STATS_TOKEN: ${STATS_TOKEN:-}
+    networks:
+      - internal
 
 networks:
   # Created and owned by the Nginx Proxy Manager stack; we just join it.
   proxy_network:
     external: true
+  # Private bridge so the qurangraph nginx can reach ai-proxy by service name.
+  internal:
+    driver: bridge

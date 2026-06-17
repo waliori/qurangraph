@@ -17,7 +17,13 @@ import zlib from 'node:zlib'
 // policy tight — if you ever edit that stub in index.html, recompute the hash.
 const PLAUSIBLE = "https://plausible.walidlahnine.com"
 const PLAUSIBLE_STUB_HASH = "'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='"
-const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH}; connect-src 'self' ${PLAUSIBLE}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
+// Cloud-LLM endpoints the assistant calls DIRECTLY when the user brings their own key (BYOK).
+// The free shared tier instead goes through our same-origin /api proxy, covered by connect-src
+// 'self'. Add a provider's API host here if you add it to src/ai/cloudModels.js. (No in-browser
+// model any more — both the LLM and the dense-embedding model now live off-device, so the WASM/
+// blob:/HuggingFace/jsDelivr allowances are gone and the policy is back to tight.)
+const LLM_APIS = "https://generativelanguage.googleapis.com https://openrouter.ai https://api.groq.com"
+const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH}; connect-src 'self' ${PLAUSIBLE} ${LLM_APIS}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
 
 function cspPlugin() {
   return {
@@ -91,6 +97,16 @@ function compressPlugin() {
 export default defineConfig({
   base: './',
   plugins: [react(), cspPlugin(), swVersionPlugin(), compressPlugin()],
+  // Dev only (ignored by `vite build`). In production the qurangraph nginx reverse-proxies
+  // /api/ to the ai-proxy container; here Vite stands in so `npm run dev` can reach the
+  // assistant's free tier. Run the proxy alongside the dev server:
+  //   GEMINI_API_KEY=… node proxy/proxy.mjs        (listens on :8080)
+  // BYOK needs none of this — the browser calls the provider directly.
+  server: {
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

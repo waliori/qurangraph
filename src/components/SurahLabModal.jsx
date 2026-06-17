@@ -133,6 +133,10 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
   return (
     <ModalShell open={!!surah} onClose={onClose} closeLabel={t("surah.close")}
       ariaLabel={t("surah.title", { name: profile.name })}
+      aiContext={() => [{ id: "surah:" + sid, kind: "note", title: `${t("surah.badge")} ${profile.name}`,
+        payload: { title: `${t("surah.title", { name: profile.name })} — ${profile.verseCount} ${t("surah.verses")}${sm ? `, ${t("surah.place." + sm.place)}` : ""}`, data: {
+          surah: sid, name: profile.name, profile, keyness, cohesion, iltifat, bonds, echoes: sim?.echoes,
+        } } }]}
       title={<>
         {back && <button type="button" className="ag-btn" title={t("surah.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("surah.badge")}</span>

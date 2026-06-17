@@ -5,14 +5,17 @@ import QuranGraph from './QuranGraph.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 import { I18nProvider } from './i18n/index.js'
 import { WorkspaceProvider } from './hooks/useWorkspace.js'
+import { AssistantProvider } from './ai/AssistantContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <I18nProvider>
       <WorkspaceProvider>
-        <ErrorBoundary>
-          <QuranGraph />
-        </ErrorBoundary>
+        <AssistantProvider>
+          <ErrorBoundary>
+            <QuranGraph />
+          </ErrorBoundary>
+        </AssistantProvider>
       </WorkspaceProvider>
     </I18nProvider>
   </StrictMode>,

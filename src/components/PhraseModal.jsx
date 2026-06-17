@@ -87,6 +87,11 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
   return (
     <ModalShell open={!!phrase} onClose={onClose} closeLabel={t("phrase.close")}
       ariaLabel={t("phrase.ariaLabel", { surah: cv?.sn, ayah: cv?.a })}
+      aiContext={cv ? () => [
+        { id: "phrase:" + centerKey, kind: "verse", title: t("ai.attach.verse", { v: `${cv.s}:${cv.a}` }), payload: { ref: centerKey, surahName: cv.sn, text: cv.text } },
+        { id: "phrase-an:" + centerKey, kind: "note", title: t("phrase.badge"),
+          payload: { title: t("phrase.ariaLabel", { surah: cv.sn, ayah: cv.a }), data: { sharedPhrases: phrases } } },
+      ] : undefined}
       title={<>
         <span className="ag-badge t-verse">{t("phrase.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{cv?.sn} {cv?.a}</h2>

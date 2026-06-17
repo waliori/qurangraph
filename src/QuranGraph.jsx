@@ -37,10 +37,12 @@ const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), 
 const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
+const AssistantPanel = lazyNamed(() => import("./components/AssistantPanel.jsx"), "AssistantPanel");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
 import { useI18n } from "./i18n/index.js";
+import { useAssistantControl } from "./ai/AssistantContext.jsx";
 
 // Fixed virtual canvas the graph is laid out in. Decoupling layout from the
 // live viewport size means a window resize never rebuilds the graph or shifts
@@ -83,7 +85,13 @@ function sanitizeMorphFilter(v) {
 export default function QuranGraph() {
   const { t, lang, setLang, numerals, setNumerals } = useI18n();
   const ws = useWorkspace();
+  const aiControl = useAssistantControl();
   const [wsOpen, setWsOpen] = useState(false); // workspace drawer
+  const [aiOpen, setAiOpen] = useState(false); // local AI assistant drawer
+  // A modal / the verse multi-select called analyze() → open the panel. We subscribe to the
+  // STABLE control surface (not the chat state), so streaming tokens never re-render this heavy
+  // component — the cause of the earlier multi-GB memory blowup.
+  useEffect(() => aiControl?.onOpenRequest?.(() => { setAiOpen(true); setWsOpen(false); }), [aiControl]);
   const [quranRaw, setQuranRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -976,6 +984,55 @@ export default function QuranGraph() {
     return true;
   }, [w2v, r2v, l2v, currentKey, verseData, morph, morphFilter]);
 
+  // Resolve a free-text term (from search OR an assistant action) to a grouping key that
+  // actually exists in the chosen index, trying its forgiving variants — so "all verses for
+  // «نفق» (root)" lands on a real lookup. Null when nothing matches.
+  const resolveLookup = useCallback((term, mode) => {
+    if (!term) return null;
+    const idx = mode === "root" ? r2v : mode === "lemma" ? (l2v || {}) : w2v;
+    const cands = mode === "root" ? [term, norm(term), rootOf(term)]
+      : mode === "lemma" ? [term, wordGroupKey(term, "lemma")]
+      : [...looseKeys(term), wordGroupKey(term, "exact")];
+    for (const c of cands) {
+      if (c && idx[c]?.length) return c;
+      const a = searchAlias[c];
+      if (a && idx[a]?.length) return a;
+    }
+    return null;
+  }, [w2v, r2v, l2v, searchAlias]);
+
+  // Execute an action the assistant proposed (and the user confirmed via a button), mapping
+  // it to the same operations the UI already uses. Returns { ok, reason } so the panel can
+  // report a miss rather than silently doing nothing.
+  const onAssistantAction = useCallback((action) => {
+    const a = action || {};
+    const mode = a.mode === "root" || a.mode === "lemma" ? a.mode : "exact";
+    switch (a.tool) {
+      case "verses": {
+        const lookup = resolveLookup(a.term, mode);
+        return lookup ? { ok: openOcc(lookup, a.term, mode) !== false } : { ok: false, reason: "notfound" };
+      }
+      case "distribution": {
+        const lookup = resolveLookup(a.term, mode);
+        if (!lookup) return { ok: false, reason: "notfound" };
+        setDist({ lookup, label: a.term, mode });
+        return { ok: true };
+      }
+      case "goto": {
+        const [s, ay] = String(a.ref || "").split(":").map(Number);
+        if (s >= 1 && s <= 114 && ay >= 1) { navigate(s, ay); return { ok: true }; }
+        return { ok: false, reason: "notfound" };
+      }
+      case "compare": {
+        const la = resolveLookup(a.a, mode), lb = resolveLookup(a.b, mode);
+        if (!la || !lb) return { ok: false, reason: "notfound" };
+        setCmp({ A: { lookup: la, label: a.a, mode }, B: { lookup: lb, label: a.b, mode } });
+        return { ok: true };
+      }
+      default: return { ok: false, reason: "unknown" };
+    }
+  }, [resolveLookup, openOcc, navigate]);
+
   // ═══ Cross-dialog back-stack ═══
   // The analysis dialogs (root/āya/sūra/rhyme labs, occurrences) link to one another. To
   // avoid "jump away and lose the thread", a click OPENS the next dialog carrying a `back`
@@ -1154,7 +1211,7 @@ export default function QuranGraph() {
 
   const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
   const tourReset = useCallback(() => {
-    setToolsOpen(false); setWsOpen(false); setSheetOpen(false); setShowHelp(false);
+    setToolsOpen(false); setWsOpen(false); setAiOpen(false); setSheetOpen(false); setShowHelp(false);
     setSelected(null); setActiveWord(null);
     setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
   }, []);
@@ -1552,9 +1609,11 @@ export default function QuranGraph() {
           </div>
 
           <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
-            aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
+            aria-pressed={wsOpen} onClick={() => { setWsOpen((o) => !o); setAiOpen(false); }}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
+          <button type="button" className={"ag-iconbtn" + (aiOpen ? " is-active" : "")} title={t("ai.open")} aria-label={t("ai.open")}
+            aria-pressed={aiOpen} onClick={() => { setAiOpen((o) => !o); setWsOpen(false); }}>✦</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
@@ -2081,6 +2140,13 @@ export default function QuranGraph() {
         theme={theme} onToggleTheme={() => setTheme((th) => (th === "dark" ? "light" : "dark"))} />}
 
       {wsOpen && <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />}
+
+      {/* Local AI assistant — a lexical research aid grounded only on attached app data. */}
+      {aiOpen && <AssistantPanel open={aiOpen} onClose={() => setAiOpen(false)} app={{
+        selNode, currentKey, currentVerse, searchMode, graphNodes, omitted,
+        selRoot, meanings, lexLabel: lexicons?.find((L) => L.id === activeLexicon)?.label || activeLexicon,
+        morph, verseData, onAction: onAssistantAction,
+      }} />}
       </Suspense>
 
       {/* One-click-save confirmation toast */}

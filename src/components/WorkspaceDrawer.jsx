@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 import { useI18n } from "../i18n/index.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
+import { useAssistantControl } from "../ai/AssistantContext.jsx";
 import { exportJsonFile } from "../graph/exportGraph.js";
 
 /* ═══ Workspace drawer ═══
@@ -20,6 +21,7 @@ const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "wo
 export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
   const { t } = useI18n();
   const ws = useWorkspace();
+  const ai = useAssistantControl();
   const [tab, setTab] = useState("saved");
   const [editing, setEditing] = useState(null); // item id being renamed
   const [query, setQuery] = useState("");
@@ -36,6 +38,13 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
     (!q || (it.title || "").toLowerCase().includes(q) || (it.note || "").toLowerCase().includes(q)));
   // Only offer type chips that actually have items, so the filter row stays relevant.
   const presentTypes = FILTER_TYPES.filter((ty) => items.some((it) => it.type === ty));
+
+  // Hand the entire saved workspace to the assistant in one go.
+  const analyzeAll = () => {
+    if (!ai || !items.length) return;
+    ai.analyze(items.map((it) => ({ id: "ws:" + it.id, kind: "ws", title: t("ai.attach.saved", { type: t("ws.type." + it.type), name: it.title || "" }), payload: it })));
+    onClose();
+  };
 
   const onImportFile = (e) => {
     const f = e.target.files?.[0];
@@ -121,6 +130,9 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
         </div>
 
         <div className="ag-ws-foot">
+          {ai && items.length > 0 && (
+            <button type="button" className="ag-btn is-gold" title={t("ai.analyzeWorkspace")} onClick={analyzeAll}>✦ {t("ai.analyzeWorkspace")}</button>
+          )}
           <button type="button" className="ag-btn" title={t("ws.exportTitle")} onClick={() => exportJsonFile(JSON.parse(ws.exportJSON()), "qurangraph-workspace.json")}>⤓ {t("ws.export")}</button>
           <button type="button" className="ag-btn" title={t("ws.importTitle")} onClick={() => fileRef.current?.click()}>⤒ {t("ws.import")}</button>
           <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={onImportFile} />

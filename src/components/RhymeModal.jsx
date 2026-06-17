@@ -56,6 +56,11 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
   return (
     <ModalShell open={!!rhyme} onClose={onClose} closeLabel={t("rhyme.close")}
       ariaLabel={t("rhyme.title", { ref })}
+      aiContext={() => [
+        { id: "rhyme:" + ref, kind: "verse", title: t("ai.attach.verse", { v: ref }), payload: { ref, surahName: v.sn, text: v.text } },
+        { id: "rhyme-an:" + ref, kind: "note", title: t("rhyme.title", { ref }),
+          payload: { title: t("rhyme.title", { ref }), data: { ending, scheme: scheme?.seq, mates } } },
+      ]}
       title={<>
         {rhyme.back && <button type="button" className="ag-btn" title={t("rhyme.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{ref}</span>

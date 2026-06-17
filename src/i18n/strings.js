@@ -12,8 +12,9 @@ import { ar as stopAr, en as stopEn } from "./stop.js";
 import { ar as wsAr, en as wsEn } from "./ws.js";
 import { ar as tourAr, en as tourEn } from "./tour.js";
 import { ar as labAr, en as labEn } from "./lab.js";
+import { ar as aiAr, en as aiEn } from "./ai.js";
 
 export const STRINGS = {
-  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr, ...tourAr, ...labAr },
-  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn, ...tourEn, ...labEn },
+  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr, ...tourAr, ...labAr, ...aiAr },
+  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn, ...tourEn, ...labEn, ...aiEn },
 };

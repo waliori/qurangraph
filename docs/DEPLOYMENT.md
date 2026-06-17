@@ -1,8 +1,10 @@
 # Deployment & operations
 
-The app is a static, fully client-side bundle. Build it, serve `dist/` from any
-static host — there is no server-side runtime. Below: the PWA, the Docker image,
-the nginx config, the CSP, and CI.
+The app itself is a static, fully client-side bundle — build it and serve `dist/`
+from any static host. The **only** server-side piece is an optional tiny proxy that
+backs the AI assistant's free shared tier (see *Assistant* below); the app, and the
+assistant's bring-your-own-key path, work with no server at all. Below: the PWA, the
+Docker image, the nginx config, the CSP, the assistant proxy, and CI.
 
 ---
 
@@ -69,15 +71,50 @@ gzip is on for the JSON/JS/CSS/SVG/manifest payloads (the data files are large).
 
 ---
 
+## Assistant (cloud LLM) — `docker-compose.yml`, `proxy/`
+
+The assistant talks to a hosted model over an OpenAI-compatible endpoint. Two paths:
+
+- **Free shared tier** — the browser POSTs to the same-origin `/api/chat`, which the
+  qurangraph nginx reverse-proxies to the **`ai-proxy`** container (`proxy/proxy.mjs`,
+  zero dependencies). The proxy injects the project's Gemini key, **rate-limits per
+  client IP** (default 20/day, in-memory), and streams the SSE response back. The key
+  lives only on the server, never in the bundle.
+- **Bring your own key (BYOK)** — the browser calls the provider (Gemini / OpenRouter /
+  Groq) **directly** with the user's key; nothing transits our server. Providers and
+  their endpoints live in `src/ai/cloudModels.js`.
+
+Deploy with Compose (the static app + the proxy together):
+
+```bash
+cp .env.example .env          # set GEMINI_API_KEY (from https://aistudio.google.com/apikey)
+docker compose up -d --build
+```
+
+`.env` knobs: `GEMINI_API_KEY` (required for the free tier), `GEMINI_MODEL`
+(default `gemini-2.5-flash`), `TOKEN_BUDGET_PER_DAY` (default 100000 — per-IP daily
+**token** budget; the real ceiling is Gemini's own free-tier quota), and optional
+`STATS_TOKEN` (enables the owner-only usage endpoint). To run **BYOK-only** with no
+free tier, comment out the `ai-proxy` service — `/api/*` then 502s and the app falls
+back to BYOK. The proxy is never published; it's reachable only by nginx over the
+compose-internal network. Endpoints: `GET /api/health`, `GET /api/quota` (tokens
+left today), `POST /api/chat`, and `GET /api/stats?token=…` (unique IPs / requests /
+tokens today; 404 unless `STATS_TOKEN` is set and matches).
+
+---
+
 ## Content Security Policy
 
 Injected into the **built** `index.html` by a Vite plugin (`cspPlugin` in
 `vite.config.js`) — not in the source HTML, so the dev server's HMR (inline
 scripts + websocket) still works. The policy is strict: `script-src 'self'`,
-`connect-src 'self'` (only same-origin JSON), `worker-src 'self'` (the sim
-worker), `object-src 'none'`. `style-src`/`font-src` additionally allow Google
-Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`) for the Arabic/Qurʾān faces;
-`img-src` allows `data:` (the PNG export pipeline).
+`worker-src 'self'`, `object-src 'none'`. `connect-src` allows same-origin (the JSON
+data + the `/api` free-tier proxy) plus the BYOK provider hosts
+(`generativelanguage.googleapis.com`, `openrouter.ai`, `api.groq.com`) so the browser
+can call them directly. The **optional** deep-semantic embeddings (Transformers.js)
+add `huggingface.co`/`cdn.jsdelivr.net` and `blob:`/`wasm-unsafe-eval` for their
+onnxruntime worker. `style-src`/`font-src` allow Google Fonts for the Arabic/Qurʾān
+faces; `img-src` allows `data:` (the PNG export pipeline).
 
 ---
 

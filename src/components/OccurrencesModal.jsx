@@ -44,6 +44,11 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
     <ModalShell open={!!occ} onClose={onClose} closeLabel={t("occ.close")}
       onEscape={() => (occ?.back && onBack ? onBack() : onClose())}
       ariaLabel={t("occ.title", { label: occ.label })}
+      aiContext={() => [
+        { id: "occ:" + occ.lookup + ":" + occ.mode, kind: "word", title: t("ai.attach.word", { w: occ.label }), payload: { label: occ.label, lookup: occ.lookup, mode: occ.mode, count: occ.keys?.length } },
+        { id: "occ-an:" + occ.lookup, kind: "note", title: t("occ.title", { label: occ.label }),
+          payload: { title: t("occ.title", { label: occ.label }), data: { totalVerses: occ.keys?.length, occurrences: (occ.keys || []).slice(0, 15).map((k) => ({ ref: k, text: verseData[k]?.text })) } } },
+      ]}
       title={<>
         {occ.back && onBack && <button type="button" className="ag-iconbtn" title={t("occ.backToDistribution")} aria-label={t("occ.back")} onClick={onBack}>→</button>}
         <span className={"ag-badge " + (occ.mode === "root" ? "t-root" : occ.mode === "lemma" ? "t-lemma" : "t-word")}>{occ.mode === "root" ? t("occ.badge.root") : occ.mode === "lemma" ? t("occ.badge.lemma") : t("occ.badge.word")}</span>

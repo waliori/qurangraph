@@ -50,6 +50,11 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, onBack, onN
   return (
     <ModalShell open={!!aya} onClose={onClose} closeLabel={t("aya.close")}
       ariaLabel={t("aya.title", { ref })}
+      aiContext={() => [
+        { id: "aya:" + ref, kind: "verse", title: t("ai.attach.verse", { v: ref }), payload: { ref, surahName: v.sn, text: v.text } },
+        { id: "aya-an:" + ref, kind: "note", title: t("aya.title", { ref }),
+          payload: { title: t("aya.title", { ref }), data: { profile, antithesis, similar: (sim || []).map((s) => ({ verse: s.vk, score: +(+s.score).toFixed(3), shared: [...new Set(s.shared || [])] })) } } },
+      ]}
       title={<>
         {aya.back && <button type="button" className="ag-btn" title={t("aya.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{ref}</span>

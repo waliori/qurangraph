@@ -54,6 +54,11 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   return (
     <ModalShell open={!!dist} onClose={onClose} closeLabel={t("dist.close")}
       ariaLabel={t("dist.title", { label: dist.label })}
+      aiContext={() => [
+        { id: "dist:" + dist.lookup + ":" + dist.mode, kind: "word", title: t("ai.attach.word", { w: dist.label }), payload: { label: dist.label, lookup: dist.lookup, mode: dist.mode } },
+        { id: "dist-an:" + dist.lookup, kind: "note", title: t("dist.title", { label: dist.label }),
+          payload: { title: t("dist.title", { label: dist.label }), data: { total, surahs: distribution.length, distribution, collocations: colloc, neighbours: neighbors } } },
+      ]}
       title={<>
         <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{t("dist.badge." + dist.mode)}</span>
         <h2 className="ag-modal-word">{dist.label}</h2>

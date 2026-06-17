@@ -53,6 +53,8 @@ export function DefinitionModal({ def, onClose }) {
   return (
     <ModalShell open={!!def} onClose={onClose} closeLabel={t("ws.close")}
       ariaLabel={`${t("ws.type.lexicon")} ${def.root}`}
+      aiContext={() => [{ id: "def:" + def.lexicon + ":" + def.root, kind: "lexicon", title: t("ai.attach.lexicon", { r: def.root }),
+        payload: { root: def.root, lexLabel: lex?.label || def.lexicon, concise: entry?.c, full: entry?.f, cite } }]}
       title={<>
         <span className="ag-badge t-root">{t("ws.type.lexicon")}</span>
         <h2 className="ag-modal-word">{def.root}</h2>

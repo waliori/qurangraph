@@ -1,0 +1,11 @@
+{
+  "name": "qurangraph-ai-proxy",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Free-tier LLM proxy for the QuranGraph assistant (holds the shared key, rate-limits per IP, streams SSE). Zero runtime dependencies.",
+  "main": "proxy.mjs",
+  "scripts": {
+    "start": "node proxy.mjs"
+  }
+}

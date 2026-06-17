@@ -72,6 +72,11 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
   return (
     <ModalShell open={!!lab} onClose={onClose} closeLabel={t("lab.close")}
       ariaLabel={t("lab.title", { label: lab.label })}
+      aiContext={() => [{ id: "lab:" + root, kind: "note", title: t("lab.title", { label: lab.label }),
+        payload: { title: `${t("lab.title", { label: lab.label })} — ${t("lab.root")} ${root}`, data: {
+          root, occurrences: (r2v[root] || []).length,
+          derivations: deriv, letterKinship: kin, semanticNeighbours: sem, opposites: opp, dictionaries: lex,
+        } } }]}
       title={<>
         {back && <button type="button" className="ag-btn" title={t("lab.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-root">{t("common.graphMode.root")}</span>

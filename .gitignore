@@ -2,6 +2,14 @@
 node_modules
 dist
 
+# Local secrets for the assistant free-tier proxy (GEMINI_API_KEY, …). See .env.example.
+.env
+.env.*
+!.env.example
+
+# Local Compose override (publishes a host port for local runs). See the .example.
+docker-compose.override.yml
+
 # Built data artifacts — reconstructed from the tracked corpora in data/source/
 # via `npm run data:transform && npm run data:roots` (and inside the Dockerfile).
 # data/source/ itself IS tracked: it holds the necessary, non-reconstructable

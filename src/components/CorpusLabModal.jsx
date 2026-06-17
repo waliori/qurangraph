@@ -50,6 +50,11 @@ export function CorpusLabModal({ open, verseData, r2v, w2v, precision, morph, re
 
   return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("corpus.title")}
+      aiContext={detail ? () => [
+        { id: "corpus:" + detail.label, kind: "word", title: t("ai.attach.word", { w: detail.label }), payload: { label: detail.label, lookup: detail.label, mode: detail.match?.mode || "root", count: detail.keys.length } },
+        { id: "corpus-an:" + detail.label, kind: "note", title: detail.label,
+          payload: { title: detail.label, data: { total: detail.keys.length, verses: detail.keys.slice(0, 15).map((k) => ({ ref: k, text: verseData[k]?.text })) } } },
+      ] : undefined}
       title={<>
         {detail && <button type="button" className="ag-btn" title={t("corpus.back")} onClick={() => { setDetail(null); setPreview(null); }} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("corpus.badge")}</span>

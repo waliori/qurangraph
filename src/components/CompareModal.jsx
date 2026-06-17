@@ -130,6 +130,12 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
 
   return (
     <ModalShell open={!!cmp} onClose={onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
+      aiContext={ready ? () => [{ id: "cmp:" + A.lookup + ":" + B.lookup, kind: "note", title: t("cmp.title"),
+        payload: { title: `${t("cmp.title")}: «${A.label}» ↔ «${B.label}»`, data: {
+          a: { term: A.label, mode: A.mode, total: data.totalA, surahs: data.surasA },
+          b: { term: B.label, mode: B.mode, total: data.totalB, surahs: data.surasB },
+          sharedCollocations: data.merged,
+        } } }] : undefined}
       title={<>
         <h2 className="ag-modal-word">{t("cmp.title")}</h2>
         {ready && <span className="ag-modal-count"><b style={{ color: A_COLOR }}>{data.totalA}</b> · <b style={{ color: B_COLOR }}>{data.totalB}</b></span>}
