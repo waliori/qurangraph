@@ -215,8 +215,6 @@ export const ar = {
   "help.surahLabLettersD": " (الفواتح ونسبة شيوع كل حرفٍ في السورة)، و",
   "help.surahLabCompareT": "المقارنة",
   "help.surahLabCompareD": " (سورتان جنبًا إلى جنب: المشترك والمتمايز).",
-  "help.surahLabMeta": "بطاقة السورة",
-  "help.surahLabMetaD": "مكان النزول وترتيبه، والجزء، ومواضع السجدة (المرجع: المصحف القياسي).",
 
   // ── المقابلة والطباق داخل الآية ──
   "help.ayaLabD2": " وزرّ «⇄» يقابل آيةً مشابهة بالمركز (المشطوب يخصّ المركز، والملوّن يخصّ الأخرى)، مع قسمٍ للطباق داخل الآية.",
@@ -454,8 +452,6 @@ export const en = {
   "help.surahLabLettersD": " (the opening letters and each letter's over/under-representation in the sūra), ",
   "help.surahLabCompareT": "Compare",
   "help.surahLabCompareD": " (two sūras side by side: shared vs. distinct profile).",
-  "help.surahLabMeta": "Sūra metadata",
-  "help.surahLabMetaD": "Revelation place and order, juzʾ, and sajda positions (Cairo standard reference).",
 
   // ── Verse diff / antithesis ──
   "help.ayaLabD2": " The ⇄ toggle diffs a similar verse against the centre (struck = centre-only, coloured = the other), with an in-verse antithesis section.",

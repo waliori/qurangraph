@@ -19,37 +19,18 @@ const TABS = ["overview", "cohesion", "structure", "iltifat", "bonds", "compare"
 // Person → colour for the iltifāt contour: 1st (speaker), 2nd (addressee), 3rd (absent).
 const PERSON_COLOR = { 1: "hsl(265 55% 56%)", 2: "hsl(43 72% 44%)", 3: "hsl(205 55% 48%)" };
 
-export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, meta, morph, back, onNavigate, onRoot, onBack, onClose }) {
+export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, morph, back, onNavigate, onRoot, onBack, onClose }) {
   const { t, fmtNum } = useI18n();
   const [tab, setTab] = useState("overview");
   const [preview, setPreview] = useState(null); // array of ayah numbers shown in the inline preview
   const [hover, setHover] = useState(null); // { ai, aj, score } under the cursor on the heatmap
-  const [keyScope, setKeyScope] = useState("all"); // keyness comparison corpus: "all" | "class" (same revelation class)
   const sid = surah?.surahId;
   const canvasRef = useRef(null);
   const pxRef = useRef(1); // heatmap cell size in px, for hit-testing clicks/hovers
 
-  // Metadata-derived facts (null until the lazy meta file arrives).
-  const sm = meta?.surahs?.[sid] || null;
-  const sajdaAyat = useMemo(() => (sm && meta?.sajda ? meta.sajda.filter(([s]) => s === sid).map(([, a]) => a) : []), [sm, meta, sid]);
-  const juzSpan = useMemo(() => {
-    if (!sm || !meta?.juz) return null;
-    const last = verseData[`${sid}:1`] ? (() => { let m = 1; for (const vk in verseData) if (verseData[vk].s === sid) m = Math.max(m, verseData[vk].a); return m; })() : 1;
-    const juzOf = (s, a) => { let k = 1; meta.juz.forEach(([js, ja], i) => { if (s > js || (s === js && a >= ja)) k = i + 1; }); return k; };
-    const lo = juzOf(sid, 1), hi = juzOf(sid, last);
-    return lo === hi ? `${lo}` : `${lo}–${hi}`;
-  }, [sm, meta, sid, verseData]);
-  // Same-revelation-class comparison corpus for "class"-scoped keyness.
-  const classPop = useMemo(() => {
-    if (keyScope !== "class" || !sm || !meta?.surahs) return null;
-    const set = new Set();
-    for (const vk in verseData) { const m = meta.surahs[verseData[vk].s]; if (m && m.place === sm.place) set.add(vk); }
-    return set;
-  }, [keyScope, sm, meta, verseData]);
-
   // Light lenses — synchronous.
   const profile = useMemo(() => (sid ? surahProfile(sid, verseData) : null), [sid, verseData]);
-  const keyness = useMemo(() => (sid ? surahKeyness(sid, verseData, r2v, classPop ? { population: classPop } : {}).slice(0, 24) : []), [sid, verseData, r2v, classPop]);
+  const keyness = useMemo(() => (sid ? surahKeyness(sid, verseData, r2v).slice(0, 24) : []), [sid, verseData, r2v]);
   const cohesion = useMemo(() => (sid ? surahCohesion(sid, verseData, r2v) : null), [sid, verseData, r2v]);
   const iltifat = useMemo(() => (sid && morph ? suraIltifat(sid, verseData, morph) : null), [sid, verseData, morph]);
   const letters = useMemo(() => (sid ? surahLetterProfile(sid, verseData) : null), [sid, verseData]);
@@ -139,7 +120,7 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{profile.name}</h2>
         <span className="ag-modal-count">{fmtNum(sid)} · {fmtNum(profile.verseCount)} {t("surah.verses")}</span>
       </>}
-      actions={<button type="button" className="ag-btn" onClick={() => exportJsonFile({ surah: sid, name: profile.name, meta: sm, profile, letters, keyness, cohesion, echoes: sim?.echoes, iltifat, bonds }, `surah-${sid}.json`)}>⤓ JSON</button>}>
+      actions={<button type="button" className="ag-btn" onClick={() => exportJsonFile({ surah: sid, name: profile.name, profile, letters, keyness, cohesion, echoes: sim?.echoes, iltifat, bonds }, `surah-${sid}.json`)}>⤓ JSON</button>}>
       <div className="ag-dist-body">
         <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("surah.title", { name: profile.name })} style={{ marginBlockEnd: "var(--space-3)" }}>
           {TABS.map((id) => <button type="button" key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>{t(`surah.tab.${id}`)}</button>)}
@@ -148,14 +129,10 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
         {tab === "overview" && (
           <div className="ag-dist-sec">
             <div className="ag-dist-bars">
-              {sm && <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.place")}</span><span className="ag-dist-num">{t(`surah.place.${sm.place}`)}</span><span /></div>}
-              {sm && <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.order")}</span><span className="ag-dist-num">{fmtNum(sm.order)}</span><span /></div>}
-              {juzSpan && <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.juz")}</span><span className="ag-dist-num">{juzSpan}</span><span /></div>}
               <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.verses")}</span><span className="ag-dist-num">{fmtNum(profile.verseCount)}</span><span /></div>
               <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.words")}</span><span className="ag-dist-num">{fmtNum(profile.wordCount)}</span><span /></div>
               <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.roots")}</span><span className="ag-dist-num">{fmtNum(profile.rootCount)}</span><span /></div>
               {profile.dominantRhyme && <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.dominantRhyme")}</span><span className="ag-dist-num" style={{ fontFamily: "var(--font-quran)" }}>{profile.dominantRhyme}</span><span /></div>}
-              {sajdaAyat.length > 0 && <div className="ag-dist-row"><span className="ag-dist-name">{t("surah.sajda")}</span><span style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{sajdaAyat.map((a) => <button type="button" className="ag-tag ag-tag-btn" key={a} onClick={() => nav(a)} title={t("surah.sajdaAt", { a })}>۩ {fmtNum(a)}</button>)}</span></div>}
             </div>
             {letters?.isMuqattaat && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("surah.muqattaat")}</span></div>
@@ -171,12 +148,6 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
             </>}
             <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("surah.keyness")}</span></div>
             <p className="ag-hint">{t("surah.keynessHint")}</p>
-            {sm && (
-              <div className="ag-seg ag-seg-sm" role="group" aria-label={t("surah.keynessScope")} style={{ marginBlockEnd: "var(--space-2)" }}>
-                <button type="button" className={keyScope === "all" ? "is-on" : ""} aria-pressed={keyScope === "all"} onClick={() => setKeyScope("all")}>{t("surah.scopeAll")}</button>
-                <button type="button" className={keyScope === "class" ? "is-on" : ""} aria-pressed={keyScope === "class"} onClick={() => setKeyScope("class")}>{t(`surah.scopeClass.${sm.place}`)}</button>
-              </div>
-            )}
             <div className="ag-dist-tags">
               {keyness.length === 0 ? <span className="ag-dist-name">{t("surah.none")}</span> : keyness.map((k) => (
                 <button type="button" className="ag-tag ag-tag-btn" key={k.root} onClick={() => onRoot?.(k.root)} title={t("surah.keyChip", { inSura: k.inSura, total: k.total })}>

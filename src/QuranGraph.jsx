@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { norm, normStrict, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadSurahMeta, loadRelations } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
@@ -168,7 +168,6 @@ export default function QuranGraph() {
   const [aya, setAya] = useState(null); // āya analysis lab: { centerKey, back }
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
-  const [surahMeta, setSurahMeta] = useState(null); // revelation place/order + juzʾ/sajda (lazy, on first sūra lab)
   const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
   const [relations, setRelations] = useState(null); // lexical opposition (طباق) + affinity map (lazy)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
@@ -364,12 +363,6 @@ export default function QuranGraph() {
   useEffect(() => {
     if (lab && !semantic) loadSemanticNeighbors().then(setSemantic).catch(() => setSemantic({}));
   }, [lab, semantic]);
-
-  // Lazy-load surah metadata (revelation place/order, juzʾ, sajda) the first time the
-  // sūra lab opens. Best-effort: stays null on failure so the lab simply hides the section.
-  useEffect(() => {
-    if (surahLab && surahMeta == null) loadSurahMeta().then((m) => setSurahMeta(m || {})).catch(() => setSurahMeta({}));
-  }, [surahLab, surahMeta]);
 
   // Lazy-load the lexical-relations map (opposites/affinity) when the root/āya labs or the
   // corpus explorer open — all surface it. Best-effort: stays {} on failure.
@@ -2063,7 +2056,7 @@ export default function QuranGraph() {
         onClose={() => setAya(null)} />}
 
       {/* Sūra analysis lab — keyness · cohesion · structure · lexical bonds (al-awāṣir). */}
-      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} meta={surahMeta} morph={morph} back={surahLab.back}
+      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} morph={morph} back={surahLab.back}
         onNavigate={(s, a) => { setSurahLab(null); navigate(s, a); }}
         onRoot={(r) => { setSurahLab(null); openOcc(r, r, "root", { t: "surah", surahId: surahLab.surahId, back: surahLab.back }); }}
         onBack={() => reopenLab(surahLab.back)}
