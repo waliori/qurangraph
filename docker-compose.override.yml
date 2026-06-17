@@ -1,0 +1,15 @@
+# ── LOCAL-ONLY Compose override ──
+# Copy to `docker-compose.override.yml` (which `docker compose` auto-merges on top of
+# docker-compose.yml) to run the full stack on your machine, where there's no Nginx Proxy
+# Manager in front. It just publishes a host port so you can reach the app at
+# http://localhost:8080. Keep it OUT of the server checkout — it's gitignored so production
+# stays port-less behind NPM. Still set GEMINI_API_KEY in .env for the free tier.
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker network create proxy_network    # only if it doesn't already exist locally
+#   docker compose up -d --build
+#   open http://localhost:8080
+services:
+  qurangraph:
+    ports:
+      - "8088:80"
