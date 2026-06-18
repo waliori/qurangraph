@@ -5,7 +5,10 @@ import { verseAntithesis } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { useI18n } from "../i18n/index.js";
+
+const EXPR_TYPE = { frame: "expr.tab.frames", colloc: "expr.tab.collocations", compound: "expr.tab.compounds", idiom: "expr.tab.idioms" };
 
 /* ═══ Āya analysis lab ═══
  *
@@ -17,13 +20,15 @@ import { useI18n } from "../i18n/index.js";
  */
 const TABS = ["overview", "similar"];
 
-export function AyaLabModal({ aya, verseData, r2v, morph, relations, onBack, onNavigate, onRoot, onClose }) {
+export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse, theme, onBack, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
   const [tab, setTab] = useState("overview");
   const [preview, setPreview] = useState(null); // verse key shown in the inline preview
   const [showDiff, setShowDiff] = useState(false); // diff the preview against the centre verse
+  const [exprHi, setExprHi] = useState(null); // word indices of the expression highlighted in the verse
   const centerKey = aya?.centerKey;
   const v = centerKey ? verseData[centerKey] : null;
+  const exprHere = useMemo(() => (centerKey && exprByVerse ? exprByVerse.get(centerKey) || [] : []), [centerKey, exprByVerse]);
   // Word-level diff of the previewed verse against the centre (only when they differ).
   const diff = useMemo(() => (preview && preview !== centerKey ? verseDiff(centerKey, preview, verseData) : null), [preview, centerKey, verseData]);
 
@@ -31,7 +36,7 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, onBack, onN
   const antithesis = useMemo(() => (centerKey && relations ? verseAntithesis(centerKey, relations) : []), [centerKey, relations]);
   const [sim, setSim] = useState(null);
   /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => { setPreview(centerKey || null); }, [centerKey]); // preview follows the centre verse
+  useEffect(() => { setPreview(centerKey || null); setExprHi(null); }, [centerKey]); // preview follows the centre verse
   useEffect(() => {
     if (!centerKey) { setSim([]); return undefined; }
     setSim(null);
@@ -70,6 +75,22 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, onBack, onN
               <div className="ag-dist-row"><span className="ag-dist-name">{t("aya.roots")}</span><span className="ag-dist-num">{fmtNum(profile.rootCount)}</span><span /></div>
               {profile.rhyme && <div className="ag-dist-row"><span className="ag-dist-name">{t("aya.rhyme")}</span><span className="ag-dist-num" style={{ fontFamily: "var(--font-quran)" }}>{profile.rhyme}</span><span /></div>}
             </div>
+            {exprHere.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("aya.expressions")} ({fmtNum(exprHere.length)})</span></div>
+              <p className="ag-hint">{t("aya.expressionsHint")}</p>
+              <div className="ag-modal-text" dir="rtl" style={{ fontFamily: "var(--font-quran)", lineHeight: 1.9, marginBlockEnd: "var(--space-2)" }}>
+                <HighlightedAyah text={v.text} highlightIndices={exprHi ? new Set(exprHi) : undefined} theme={theme} />
+              </div>
+              <div className="ag-dist-tags">
+                {exprHere.map((e, i) => (
+                  <button type="button" key={i} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)", borderColor: exprHi === e.span ? "var(--gold-500)" : undefined }}
+                    title={`${t(EXPR_TYPE[e.type])} · ${t("aya.exprTotal", { n: e.count })}`}
+                    onClick={() => setExprHi(exprHi === e.span ? null : e.span)}>
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+            </>}
             {profile.posBreakdown.length > 0 && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("aya.pos")}</span></div>
               <div className="ag-dist-tags">

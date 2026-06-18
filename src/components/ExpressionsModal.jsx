@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { indexExpressions, headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
+import { indexExpressions, headRows, expressionsForRoot, occVerses, distBySura, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
@@ -28,6 +28,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const [focus, setFocus] = useState(focusRoot || null); // root-scoped view
   const [detail, setDetail] = useState(null); // { label, verses:[{vk,hi}] }
   const [preview, setPreview] = useState(null); // vk in the sticky foot
+  const [distSura, setDistSura] = useState(null); // distribution bar clicked → filter list to this sūra
+  const [distHover, setDistHover] = useState(null); // sūra under the cursor on the distribution
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { setFocus(focusRoot || null); setDetail(null); setPreview(null); }, [focusRoot]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -66,9 +68,23 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
     </ModalShell>
   );
 
-  const showOcc = (label, occ, span) => { setDetail({ label, verses: occVerses(occ, verseData, span) }); setPreview(null); };
+  const showOcc = (label, occ, span, extra) => { setDetail({ label, verses: occVerses(occ, verseData, span), components: extra?.components || null, related: extra?.related || null }); setPreview(null); setDistSura(null); setDistHover(null); };
+  // A collocation's rich leaf: its verses, component roots, and the BIDIRECTIONAL contrast —
+  // the other verbs that take the same noun (idx.colByRoot is keyed by both roots).
+  const openColloc = (c) => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN, {
+    components: [{ label: c.verb, root: c.verbRoot }, { label: c.noun, root: c.nounRoot }],
+    related: {
+      label: t("expr.verbsTaking", { noun: c.noun }),
+      items: (idx.colByRoot.get(c.nounRoot) || []).filter((x) => x.nounRoot === c.nounRoot && x.verb !== c.verb).sort((a, b) => b.count - a.count).slice(0, 16),
+    },
+  });
+  const openCompound = (c) => showOcc(c.words.join(" "), c.occ, spanRun(c.len), { components: c.words.map((w, i) => ({ label: w, root: c.roots?.[i] })) });
   const pv = preview ? verseData[preview] : null;
   const pvHi = pv && detail ? detail.verses.find((v) => v.vk === preview)?.hi : null;
+  // Interactive distribution: bars per sūra, hover → readout, click → filter the verse list.
+  const distData = detail ? distBySura(detail.verses.map((v) => v.vk)) : [];
+  const suraNameOf = (s) => { const f = detail?.verses.find((v) => +v.vk.split(":")[0] === s); return f ? verseData[f.vk]?.sn : s; };
+  const shownVerses = detail ? (distSura ? detail.verses.filter((v) => +v.vk.split(":")[0] === distSura) : detail.verses) : [];
 
   // The government CONTRAST as a matrix: rows = heads, fixed columns = the ḥurūf al-jarr (+ a
   // bare column), cells shaded by how often that head takes that preposition. A column scan shows
@@ -99,7 +115,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                   {PREP_COLS.map((pk) => {
                     const p = by.get(pk); const c = p ? p.count : 0; const pct = c ? shade(c) : 0;
                     return (
-                      <td key={pk} onClick={c ? () => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN) : undefined}
+                      <td key={pk} onClick={c ? () => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN, { components: [{ label: h.head, root: h.root }] }) : undefined}
                         title={c ? `${h.head} ${p.disp} · ${t("expr.occN", { n: c })}` : undefined}
                         style={{ textAlign: "center", minWidth: 30, height: 26, padding: 0, cursor: c ? "pointer" : "default",
                           background: c ? `color-mix(in oklab, var(--gold-500) ${pct}%, transparent)` : "transparent",
@@ -129,10 +145,45 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
       <div className="ag-dist-body">
         {detail ? (
           <div className="ag-dist-sec">
+            {detail.components?.length > 0 && (
+              <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
+                {detail.components.map((cp, i) => cp.root ? (
+                  <button type="button" key={i} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.openRoot", { root: cp.root })} onClick={() => onRoot?.(cp.root)}>⚛ {cp.label}</button>
+                ) : null)}
+              </div>
+            )}
+            {distData.length >= 2 && (() => {
+              const mx = Math.max(...distData.map((x) => x.count));
+              const active = distHover ?? distSura;
+              return (<>
+                <p className="ag-hint" style={{ minHeight: "1.4em", marginBlockEnd: 3 }}>
+                  {active != null
+                    ? <><b style={{ color: "var(--gold-400)", fontFamily: "var(--font-quran)" }}>{suraNameOf(active)}</b> · {t("expr.occN", { n: distData.find((x) => x.s === active)?.count || 0 })}{distSura != null && <span style={{ color: "var(--text-faint)" }}> — {t("expr.distClear")}</span>}</>
+                    : t("expr.distribution")}
+                </p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 38, marginBlockEnd: "var(--space-2)" }} onMouseLeave={() => setDistHover(null)}>
+                  {distData.map((x) => { const on = distSura === x.s, dim = distSura != null && !on; return (
+                    <button type="button" key={x.s} aria-label={`${suraNameOf(x.s)}: ${x.count}`}
+                      onMouseEnter={() => setDistHover(x.s)} onFocus={() => setDistHover(x.s)} onBlur={() => setDistHover(null)}
+                      onClick={() => setDistSura(on ? null : x.s)}
+                      style={{ flex: 1, minWidth: 3, height: `${Math.max(8, (x.count / mx) * 100)}%`, padding: 0, border: "none", cursor: "pointer", borderRadius: 1,
+                        background: on ? "var(--gold-300)" : "var(--gold-500)", opacity: dim ? 0.3 : (distHover === x.s ? 1 : 0.72), transition: "opacity .1s" }} />
+                  ); })}
+                </div>
+              </>);
+            })()}
+            {detail.related?.items?.length > 0 && (<>
+              <div className="ag-dist-sec-h"><span>{detail.related.label}</span></div>
+              <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
+                {detail.related.items.map((c, i) => (
+                  <button type="button" key={i} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} onClick={() => openColloc(c)}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b></button>
+                ))}
+              </div>
+            </>)}
             <p className="ag-hint">{t("expr.listHint")}</p>
-            {detail.verses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
+            {shownVerses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
               <ul className="ag-phrase-list">
-                {detail.verses.slice(0, CAP).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
+                {shownVerses.slice(0, CAP).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
                   <li key={vk}><button type="button" className={"ag-modal-row" + (preview === vk ? " is-on" : "")} style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline" }} onClick={() => setPreview(vk)} aria-pressed={preview === vk}>
                     <span className="ag-ayah-ref" style={{ flexShrink: 0 }}><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{fmtNum(v.a)}</span></span>
                     <span className="ag-modal-text" style={{ fontFamily: "var(--font-quran)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
@@ -140,7 +191,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                     </span>
                   </button></li>
                 ); })}
-                {detail.verses.length > CAP && <li><span className="ag-hint">{t("expr.more", { n: detail.verses.length - CAP })}</span></li>}
+                {shownVerses.length > CAP && <li><span className="ag-hint">{t("expr.more", { n: shownVerses.length - CAP })}</span></li>}
               </ul>
             )}
           </div>
@@ -157,7 +208,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <div className="ag-dist-tags">
                 {rootView.collocations.map((c, i) => (
                   <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>
+                    title={t("expr.occN", { n: c.count })} onClick={() => openColloc(c)}>
                     {c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                   </button>
                 ))}
@@ -168,7 +219,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <div className="ag-dist-tags">
                 {rootView.compounds.map((c, i) => (
                   <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
+                    title={t("expr.occN", { n: c.count })} onClick={() => openCompound(c)}>
                     {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                   </button>
                 ))}
@@ -199,7 +250,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                     <div className="ag-dist-tags">
                       {g.items.map((c, i) => (
                         <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                          title={`${c.verb} ${c.noun} · ${t("expr.occN", { n: c.count })}`} onClick={() => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>
+                          title={`${c.verb} ${c.noun} · ${t("expr.occN", { n: c.count })}`} onClick={() => openColloc(c)}>
                           {c.noun} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                         </button>
                       ))}
@@ -221,7 +272,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                     <div className="ag-dist-tags">
                       {g.items.map((c, i) => (
                         <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                          title={`${c.words.join(" ")} · ${t("expr.occN", { n: c.count })}`} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
+                          title={`${c.words.join(" ")} · ${t("expr.occN", { n: c.count })}`} onClick={() => openCompound(c)}>
                           {c.words.slice(1).join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                         </button>
                       ))}

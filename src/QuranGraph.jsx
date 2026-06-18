@@ -19,6 +19,7 @@ import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
+import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
 // Modals + the onboarding tour are split into their own chunks (React.lazy) and mounted
 // only when opened — not on the critical path, and react-joyride (the Tour) is heavy and
 // never loads for returning users who dismissed it. Named exports, so map to a default
@@ -374,11 +375,12 @@ export default function QuranGraph() {
     if ((lab || aya || corpusOpen || selected) && relations == null) loadRelations().then((r) => setRelations(r || {})).catch(() => setRelations({}));
   }, [lab, aya, corpusOpen, selected, relations]);
 
-  // Lazy-load the multi-word expression inventory the first time the explorer opens (from the
-  // toolbar or a root-lab cross-link). Best-effort: stays {} so the modal shows "unavailable".
+  // Lazy-load the multi-word expression inventory the first time it's needed — the explorer,
+  // a selected word (inline inspector section), or the root/āya labs all surface it now.
+  // Best-effort: stays {} on failure so those surfaces just show nothing.
   useEffect(() => {
-    if (exprOpen && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
-  }, [exprOpen, expr]);
+    if ((exprOpen || selected != null || lab || aya) && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
+  }, [exprOpen, selected, lab, aya, expr]);
 
   // Load all six concise lexicons when the root lab opens — the dictionary↔corpus tab
   // juxtaposes what every dictionary says against the corpus behaviour. Best-effort.
@@ -1114,6 +1116,11 @@ export default function QuranGraph() {
   // shards the active lexicon's full articles are split into (0 = no full text).
   const selRoot = selNode?.type === "word" ? (selNode.root || rootOf(selNode.wordNorm)) : null;
   const activeShards = lexicons?.find((L) => L.id === activeLexicon)?.fullShards || 0;
+  // Multi-word expression indices (built once the inventory loads) + the selected word's
+  // own expressions, for the inline inspector section and the labs.
+  const exprIndex = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
+  const exprByVerse = useMemo(() => (expr ? indexByVerse(expr) : null), [expr]);
+  const selExpr = useMemo(() => (expr && exprIndex && selRoot ? expressionsForRoot(expr, exprIndex, selRoot) : null), [expr, exprIndex, selRoot]);
 
   // Lazy-load just the ONE shard the selected root falls in, the first time "show
   // more" is hit for it. A shard is a small slice of the lexicon's full articles,
@@ -1808,16 +1815,35 @@ export default function QuranGraph() {
                           ⚛ {t("common.insp.analyze")}
                         </button>
                       )}
-                      {(selNode.root || rootOf(selNode.wordNorm)) && (
-                        <button type="button" className="ag-btn" title={t("expr.open")}
-                          onClick={() => { setExprFocus(selNode.root || rootOf(selNode.wordNorm)); setExprOpen(true); }}>
-                          ⛓ {t("lab.expressions")}
-                        </button>
-                      )}
                       <button type="button" data-tour="saveWordBtn" className="ag-btn" title={t("ws.saveTitle")}
                         onClick={() => { ws.saveItem({ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }); ws.toast(t("ws.saved")); }}>
                         ★ {t("ws.save")}
                       </button>
+                    </div>
+                  )}
+                  {selExpr && (selExpr.heads.length || selExpr.collocations.length || selExpr.compounds.length) > 0 && (
+                    <div className="ag-insp-card">
+                      <div className="ag-insp-card-h" style={{ marginBottom: 6 }}>
+                        <span className="ag-insp-card-lab">{t("lab.expressions")}</span>
+                        <button type="button" className="ag-btn" title={t("expr.open")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>⛓ {t("expr.seeAll")}</button>
+                      </div>
+                      <div className="ag-dist-tags">
+                        {selExpr.collocations.slice(0, 4).map((c, i) => (
+                          <button type="button" key={`c${i}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.collocations")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
+                          </button>
+                        ))}
+                        {selExpr.heads.flatMap((h) => h.preps.map((p) => ({ head: h.head, disp: expr.prepDisp?.[p.prep] || p.prep, count: p.count, k: h.head + p.prep }))).slice(0, 4).map((x) => (
+                          <button type="button" key={`h${x.k}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.frames")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {x.head} {x.disp} <b style={{ color: "var(--gold-400)" }}>{x.count}</b>
+                          </button>
+                        ))}
+                        {selExpr.compounds.slice(0, 4).map((c, i) => (
+                          <button type="button" key={`k${i}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.compounds")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {(() => {
@@ -2054,7 +2080,7 @@ export default function QuranGraph() {
 
       {/* Root analysis lab — derivation (ṣarf), letter kinship, semantic neighbours. */}
       {lab && (() => { const self = { t: "lab", root: lab.root, label: lab.label, back: lab.back }; return (
-        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} back={lab.back}
+        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} expr={expr} exprIndex={exprIndex} back={lab.back}
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
           onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
           onExpressions={(r) => { setLab(null); setExprFocus(r); setExprOpen(true); }}
@@ -2068,7 +2094,7 @@ export default function QuranGraph() {
         onNavigate={(s, a) => { setRhyme(null); navigate(s, a); }} onClose={() => setRhyme(null)} />}
 
       {/* Āya analysis lab — verse fingerprint + lexically similar verses (read inline). */}
-      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph} relations={relations}
+      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph} relations={relations} exprByVerse={exprByVerse} theme={theme}
         onBack={() => reopenLab(aya.back)}
         onNavigate={(s, a) => { setAya(null); navigate(s, a); }}
         onRoot={(r) => { setAya(null); openOcc(r, r, "root", { t: "aya", centerKey: aya.centerKey, back: aya.back }); }}

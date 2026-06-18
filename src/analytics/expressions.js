@@ -89,3 +89,26 @@ export function occVerses(occ, verseData, span) {
  * mark a contiguous run of `len` words from the start index. */
 export const FRAME_SPAN = (o) => [o[1], o[2]];
 export const spanRun = (len) => (o) => Array.from({ length: len }, (_, j) => o[1] + j);
+
+/* Reverse index verse → the expressions occurring in it, each with the word indices to
+ * highlight — for the "expressions in this verse" lens. Built once. Items are
+ *   { type:"frame"|"colloc"|"compound"|"idiom", label, disp?, span:[wordIdx…], count, root? } */
+export function indexByVerse(expr) {
+  const m = new Map();
+  const push = (vk, item) => { if (!m.has(vk)) m.set(vk, []); m.get(vk).push(item); };
+  for (const f of expr?.frames || []) {
+    const disp = expr.prepDisp?.[f.prep] || f.prep;
+    for (const o of f.occ) push(o[0], { type: "frame", label: `${f.head} ${disp}`, span: [o[1], o[2]], count: f.count, root: f.root });
+  }
+  for (const c of expr?.collocations || []) for (const o of c.occ) push(o[0], { type: "colloc", label: `${c.verb} ${c.noun}`, span: [o[1], o[2]], count: c.count, root: c.verbRoot });
+  for (const c of expr?.compounds || []) for (const o of c.occ) push(o[0], { type: "compound", label: c.words.join(" "), span: spanRun(c.len)(o), count: c.count, root: c.roots?.[0] });
+  for (const it of expr?.idioms || []) for (const o of it.occ) push(o[0], { type: "idiom", label: it.display, span: spanRun(it.len || it.skeleton.split(" ").length)(o), count: it.count });
+  return m;
+}
+
+/* Distribution of a verse-key list across sūras → [{ s, count }] in sūra order. */
+export function distBySura(verseKeys) {
+  const m = new Map();
+  for (const vk of verseKeys || []) { const s = +vk.split(":")[0]; m.set(s, (m.get(s) || 0) + 1); }
+  return [...m.entries()].map(([s, count]) => ({ s, count })).sort((a, b) => a.s - b.s);
+}
