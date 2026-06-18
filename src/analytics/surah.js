@@ -97,20 +97,14 @@ export function surahProfile(surahId, verseData) {
   return { surahId, name: verseData[keys[0]].sn, verseCount: keys.length, wordCount, rootCount: allRoots.size, dominantRhyme: scheme.dominant, refrains };
 }
 
-/* Roots over-represented in the sūra vs a comparison corpus, by signed log-likelihood.
+/* Roots over-represented in the sūra vs the whole Qurʾān, by signed log-likelihood.
  * Returns [{ root, inSura, total, keyness }] (keyness > 0 = over-represented), strongest
  * first, for roots occurring in ≥ minVerses sūra verses. Reuses the same G² as collocations.
- *
- * `opts.population` (a Set of verse keys) scopes the comparison corpus: pass the Meccan
- * (or Medinan) verses to ask "what is distinctive about THIS sūra among sūras of its own
- * revelation class" rather than against the whole Qurʾān. The sūra's own verses must be a
- * subset of the population (they are, when population = same class). Defaults to the whole
- * corpus. `total` is then the root's verse count WITHIN the population. */
+ * `total` is the root's corpus-wide verse count. */
 export function surahKeyness(surahId, verseData, r2v, opts = {}) {
   const minVerses = opts.minVerses || 2;
-  const pop = opts.population instanceof Set ? opts.population : null;
   const keys = suraVerseKeys(surahId, verseData);
-  const N = pop ? pop.size || 1 : Object.keys(verseData).length || 1;
+  const N = Object.keys(verseData).length || 1;
   const suraN = keys.length;
   const inSura = new Map(); // root → # sūra verses containing it
   for (const vk of keys) for (const r of verseRoots(verseData[vk].words)) inSura.set(r, (inSura.get(r) || 0) + 1);
@@ -118,8 +112,7 @@ export function surahKeyness(surahId, verseData, r2v, opts = {}) {
   const out = [];
   for (const [root, a] of inSura) {
     if (a < minVerses || stop.has(root)) continue;
-    const all = r2v[root] || [];
-    const total = pop ? all.reduce((c, vk) => c + (pop.has(vk) ? 1 : 0), 0) : all.length;
+    const total = (r2v[root] || []).length;
     const { ll } = association(a, suraN, total, N); // a = both, suraN = term verses, total = neighbour verses
     if (ll > 0) out.push({ root, inSura: a, total, keyness: ll });
   }

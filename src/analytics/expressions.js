@@ -1,0 +1,114 @@
+/* ═══ Multi-word expressions (التعابير) — in-browser analysis ═══
+ *
+ * The heavy mining is done offline (scripts/build-expressions.js → public/data/expressions.json):
+ * government frames (head + governed ḥarf jarr), إضافة compounds, and curated/statistical idioms.
+ * These helpers index that inventory and shape the views the UI draws — all pure, so testable:
+ *   - indexExpressions : reverse indices (head→frames, root→frames/compounds) built once.
+ *   - frameContrast    : a head's preposition CONTRAST (آمَنَ→بـ vs … vs bare) — the signature lens.
+ *   - expressionsForRoot: every frame/compound a root takes part in (for the root lab cross-link).
+ *   - occVerses        : group an occurrence list into verses + the word indices to highlight.
+ *
+ * Occurrence tuples store word INDICES (corpus word order = the app's space-split words):
+ *   frame    [vk, headIdx, prepIdx]   compound [vk, wordIdx]   idiom [vk, startIdx]
+ */
+
+const headKeyOf = (f) => `${f.pos}|${f.head}`;
+
+/* Build the reverse indices once from the loaded expressions object. */
+export function indexExpressions(expr) {
+  const byHead = new Map();     // "pos|lemma" → [frame…]
+  const headByRoot = new Map(); // root → Set("pos|lemma")
+  const compByRoot = new Map(); // root → [compound…]
+  const colByRoot = new Map();  // root → [collocation…]
+  for (const f of expr?.frames || []) {
+    const k = headKeyOf(f);
+    if (!byHead.has(k)) byHead.set(k, []);
+    byHead.get(k).push(f);
+    if (f.root) { if (!headByRoot.has(f.root)) headByRoot.set(f.root, new Set()); headByRoot.get(f.root).add(k); }
+  }
+  for (const c of expr?.compounds || []) {
+    for (const r of new Set(c.roots || [])) { if (!r) continue; if (!compByRoot.has(r)) compByRoot.set(r, []); compByRoot.get(r).push(c); }
+  }
+  for (const c of expr?.collocations || []) {
+    for (const r of new Set([c.verbRoot, c.nounRoot])) { if (!r) continue; if (!colByRoot.has(r)) colByRoot.set(r, []); colByRoot.get(r).push(c); }
+  }
+  return { byHead, headByRoot, compByRoot, colByRoot };
+}
+
+/* One head's governed-preposition contrast, strongest first, with the bare (un-governed)
+ * residual so the reader sees how often the head takes each ḥarf vs none. Returns
+ * { head, pos, root, total, governed, bare, preps:[{ prep, gloss, count, occ }] } or null. */
+export function frameContrast(expr, idx, headKey) {
+  const list = idx.byHead.get(headKey);
+  if (!list || !list.length) return null;
+  const total = expr.headTotals?.[headKey] || 0;
+  const governed = list.reduce((s, f) => s + f.count, 0);
+  const preps = list.map((f) => ({ prep: f.prep, disp: expr.prepDisp?.[f.prep] || f.prep, count: f.count, occ: f.occ }))
+    .sort((a, b) => b.count - a.count);
+  const [pos, head] = headKey.split("|");
+  return { head, pos, root: list[0].root, total, governed, bare: Math.max(0, total - governed), preps };
+}
+
+/* The head rows for the explorer: every governing head with its preposition breakdown,
+ * by total governed count. */
+export function headRows(expr, idx) {
+  return [...idx.byHead.keys()]
+    .map((k) => frameContrast(expr, idx, k))
+    .filter(Boolean)
+    .sort((a, b) => b.governed - a.governed);
+}
+
+/* Every expression a root participates in — for the root lab's "Expressions" cross-link.
+ * Returns { heads:[frameContrast…], collocations:[…], compounds:[compound…] }. */
+export function expressionsForRoot(expr, idx, root) {
+  if (!root) return { heads: [], collocations: [], compounds: [] };
+  const heads = [...(idx.headByRoot.get(root) || [])].map((k) => frameContrast(expr, idx, k)).filter(Boolean).sort((a, b) => b.governed - a.governed);
+  const collocations = (idx.colByRoot.get(root) || []).slice().sort((a, b) => b.ll - a.ll);
+  const compounds = (idx.compByRoot.get(root) || []).slice().sort((a, b) => b.count - a.count);
+  return { heads, collocations, compounds };
+}
+
+const sortVk = (x, y) => { const [sa, aa] = x.split(":").map(Number), [sb, ab] = y.split(":").map(Number); return sa - sb || aa - ab; };
+
+/* Group an occurrence list into verses with the word indices to highlight. `span` maps one
+ * occurrence tuple → the array of word indices to mark (default: every index after the verse
+ * key). Returns [{ vk, hi:[wordIdx…] }] in muṣḥaf order. */
+export function occVerses(occ, verseData, span) {
+  const m = new Map();
+  for (const o of occ || []) {
+    const vk = o[0];
+    if (verseData && !verseData[vk]) continue;
+    const idxs = span ? span(o) : o.slice(1);
+    if (!m.has(vk)) m.set(vk, new Set());
+    for (const i of idxs) m.get(vk).add(i);
+  }
+  return [...m.entries()].map(([vk, set]) => ({ vk, hi: [...set] })).sort((a, b) => sortVk(a.vk, b.vk));
+}
+
+/* Span helpers. Frames mark two non-adjacent words (head + preposition); compounds and idioms
+ * mark a contiguous run of `len` words from the start index. */
+export const FRAME_SPAN = (o) => [o[1], o[2]];
+export const spanRun = (len) => (o) => Array.from({ length: len }, (_, j) => o[1] + j);
+
+/* Reverse index verse → the expressions occurring in it, each with the word indices to
+ * highlight — for the "expressions in this verse" lens. Built once. Items are
+ *   { type:"frame"|"colloc"|"compound"|"idiom", label, disp?, span:[wordIdx…], count, root? } */
+export function indexByVerse(expr) {
+  const m = new Map();
+  const push = (vk, item) => { if (!m.has(vk)) m.set(vk, []); m.get(vk).push(item); };
+  for (const f of expr?.frames || []) {
+    const disp = expr.prepDisp?.[f.prep] || f.prep;
+    for (const o of f.occ) push(o[0], { type: "frame", label: `${f.head} ${disp}`, span: [o[1], o[2]], count: f.count, root: f.root });
+  }
+  for (const c of expr?.collocations || []) for (const o of c.occ) push(o[0], { type: "colloc", label: `${c.verb} ${c.noun}`, span: [o[1], o[2]], count: c.count, root: c.verbRoot });
+  for (const c of expr?.compounds || []) for (const o of c.occ) push(o[0], { type: "compound", label: c.words.join(" "), span: spanRun(c.len)(o), count: c.count, root: c.roots?.[0] });
+  for (const it of expr?.idioms || []) for (const o of it.occ) push(o[0], { type: "idiom", label: it.display, span: spanRun(it.len || it.skeleton.split(" ").length)(o), count: it.count });
+  return m;
+}
+
+/* Distribution of a verse-key list across sūras → [{ s, count }] in sūra order. */
+export function distBySura(verseKeys) {
+  const m = new Map();
+  for (const vk of verseKeys || []) { const s = +vk.split(":")[0]; m.set(s, (m.get(s) || 0) + 1); }
+  return [...m.entries()].map(([s, count]) => ({ s, count })).sort((a, b) => a.s - b.s);
+}

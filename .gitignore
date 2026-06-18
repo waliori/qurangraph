@@ -2,6 +2,11 @@
 node_modules
 dist
 
+# Local secrets / environment — NEVER commit. .env.example IS tracked (template).
+/.env
+/.env.*
+!/.env.example
+
 # Built data artifacts — reconstructed from the tracked corpora in data/source/
 # via `npm run data:transform && npm run data:roots` (and inside the Dockerfile).
 # data/source/ itself IS tracked: it holds the necessary, non-reconstructable
@@ -13,7 +18,7 @@ dist
 /public/data/lexicons/
 /public/data/semantic-neighbours.json
 /public/data/relations.json
-/public/data/surah-meta.json
+/public/data/expressions.json
 /public/data/sources.json
 
 # Resolved commit SHAs written by `npm run data:download` (provenance input, not a source)

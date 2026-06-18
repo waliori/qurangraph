@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
 import { norm, normStrict, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadSurahMeta, loadRelations } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
@@ -19,6 +19,7 @@ import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
+import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
 // Modals + the onboarding tour are split into their own chunks (React.lazy) and mounted
 // only when opened — not on the critical path, and react-joyride (the Tour) is heavy and
 // never loads for returning users who dismissed it. Named exports, so map to a default
@@ -35,6 +36,7 @@ const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "Rhyme
 const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
 const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
 const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
+const ExpressionsModal = lazyNamed(() => import("./components/ExpressionsModal.jsx"), "ExpressionsModal");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
@@ -168,8 +170,10 @@ export default function QuranGraph() {
   const [aya, setAya] = useState(null); // āya analysis lab: { centerKey, back }
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
-  const [surahMeta, setSurahMeta] = useState(null); // revelation place/order + juzʾ/sajda (lazy, on first sūra lab)
   const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
+  const [expr, setExpr] = useState(null); // multi-word expression inventory (lazy, on first explorer open)
+  const [exprOpen, setExprOpen] = useState(false); // expressions explorer { } | false
+  const [exprFocus, setExprFocus] = useState(null); // root the explorer opened scoped to (cross-link)
   const [relations, setRelations] = useState(null); // lexical opposition (طباق) + affinity map (lazy)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
@@ -365,17 +369,18 @@ export default function QuranGraph() {
     if (lab && !semantic) loadSemanticNeighbors().then(setSemantic).catch(() => setSemantic({}));
   }, [lab, semantic]);
 
-  // Lazy-load surah metadata (revelation place/order, juzʾ, sajda) the first time the
-  // sūra lab opens. Best-effort: stays null on failure so the lab simply hides the section.
-  useEffect(() => {
-    if (surahLab && surahMeta == null) loadSurahMeta().then((m) => setSurahMeta(m || {})).catch(() => setSurahMeta({}));
-  }, [surahLab, surahMeta]);
-
   // Lazy-load the lexical-relations map (opposites/affinity) when the root/āya labs or the
   // corpus explorer open — all surface it. Best-effort: stays {} on failure.
   useEffect(() => {
     if ((lab || aya || corpusOpen || selected) && relations == null) loadRelations().then((r) => setRelations(r || {})).catch(() => setRelations({}));
   }, [lab, aya, corpusOpen, selected, relations]);
+
+  // Lazy-load the multi-word expression inventory the first time it's needed — the explorer,
+  // a selected word (inline inspector section), or the root/āya labs all surface it now.
+  // Best-effort: stays {} on failure so those surfaces just show nothing.
+  useEffect(() => {
+    if ((exprOpen || selected != null || lab || aya) && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
+  }, [exprOpen, selected, lab, aya, expr]);
 
   // Load all six concise lexicons when the root lab opens — the dictionary↔corpus tab
   // juxtaposes what every dictionary says against the corpus behaviour. Best-effort.
@@ -1111,6 +1116,11 @@ export default function QuranGraph() {
   // shards the active lexicon's full articles are split into (0 = no full text).
   const selRoot = selNode?.type === "word" ? (selNode.root || rootOf(selNode.wordNorm)) : null;
   const activeShards = lexicons?.find((L) => L.id === activeLexicon)?.fullShards || 0;
+  // Multi-word expression indices (built once the inventory loads) + the selected word's
+  // own expressions, for the inline inspector section and the labs.
+  const exprIndex = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
+  const exprByVerse = useMemo(() => (expr ? indexByVerse(expr) : null), [expr]);
+  const selExpr = useMemo(() => (expr && exprIndex && selRoot ? expressionsForRoot(expr, exprIndex, selRoot) : null), [expr, exprIndex, selRoot]);
 
   // Lazy-load just the ONE shard the selected root falls in, the first time "show
   // more" is hit for it. A shard is a small slice of the lexicon's full articles,
@@ -1244,6 +1254,7 @@ export default function QuranGraph() {
       action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 16 root mode
       action('[data-tour="echoesBtn"]', "echoes", {}, "modal:phrase", "auto", lit),                   // 16 echoes
       action('[data-tour="contextBtn"]', "context", {}, "modal:ctx", "auto", lit),                    // 17 context
+      action('[data-tour="exprBtn"]', "expr", {}, "modal:expr", "bottom", lit),                        // expressions explorer
       action('[data-tour="tools"]', "toolsOpen", {}, "tools", "bottom"),                              // 18 open tools
       action('[data-tour="toolspop"]', "toolsTry", { tools: true }, "tool-toggle", "left"),           // 19 try a toggle
       action('[data-tour="saveViewBtn"]', "saveView", {}, "save", "left"),                            // 20 save the view
@@ -1289,12 +1300,12 @@ export default function QuranGraph() {
     else if (gate === "ws") done = wsOpen;
     else if (gate === "theme") done = theme !== B.theme || lang !== B.lang;
     else if (gate.startsWith("modal:")) {
-      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : gate === "modal:help" ? showHelp : false;
+      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : gate === "modal:expr" ? exprOpen : gate === "modal:help" ? showHelp : false;
       if (open) B.armed = true; // user opened it
       done = B.armed && !open; // …then closed it
     }
     if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
-  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, showHelp]);
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, exprOpen, showHelp]);
 
   // Suppress text selection while the tour runs (so dragging the graph or the
   // tour card never selects page text).
@@ -1555,6 +1566,8 @@ export default function QuranGraph() {
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
+          <button type="button" data-tour="exprBtn" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
+            aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprOpen((o) => !o); }}>⛓</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
@@ -1809,6 +1822,31 @@ export default function QuranGraph() {
                       </button>
                     </div>
                   )}
+                  {selExpr && (selExpr.heads.length || selExpr.collocations.length || selExpr.compounds.length) > 0 && (
+                    <div className="ag-insp-card">
+                      <div className="ag-insp-card-h" style={{ marginBottom: 6 }}>
+                        <span className="ag-insp-card-lab">{t("lab.expressions")}</span>
+                        <button type="button" className="ag-btn" title={t("expr.open")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>⛓ {t("expr.seeAll")}</button>
+                      </div>
+                      <div className="ag-dist-tags">
+                        {selExpr.collocations.slice(0, 4).map((c, i) => (
+                          <button type="button" key={`c${i}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.collocations")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
+                          </button>
+                        ))}
+                        {selExpr.heads.flatMap((h) => h.preps.map((p) => ({ head: h.head, disp: expr.prepDisp?.[p.prep] || p.prep, count: p.count, k: h.head + p.prep }))).slice(0, 4).map((x) => (
+                          <button type="button" key={`h${x.k}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.frames")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {x.head} {x.disp} <b style={{ color: "var(--gold-400)" }}>{x.count}</b>
+                          </button>
+                        ))}
+                        {selExpr.compounds.slice(0, 4).map((c, i) => (
+                          <button type="button" key={`k${i}`} className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} title={t("expr.tab.compounds")} onClick={() => { setExprFocus(selRoot); setExprOpen(true); }}>
+                            {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {(() => {
                     const sr = selNode.root || rootOf(selNode.wordNorm); // derive root in exact mode too
                     if (!sr) return null; // no root at all → nothing lexical to show
@@ -2043,9 +2081,10 @@ export default function QuranGraph() {
 
       {/* Root analysis lab — derivation (ṣarf), letter kinship, semantic neighbours. */}
       {lab && (() => { const self = { t: "lab", root: lab.root, label: lab.label, back: lab.back }; return (
-        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} back={lab.back}
+        <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} expr={expr} exprIndex={exprIndex} back={lab.back}
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
           onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
+          onExpressions={(r) => { setLab(null); setExprFocus(r); setExprOpen(true); }}
           onBack={() => reopenLab(lab.back)}
           onClose={() => setLab(null)} />); })()}
 
@@ -2056,14 +2095,14 @@ export default function QuranGraph() {
         onNavigate={(s, a) => { setRhyme(null); navigate(s, a); }} onClose={() => setRhyme(null)} />}
 
       {/* Āya analysis lab — verse fingerprint + lexically similar verses (read inline). */}
-      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph} relations={relations}
+      {aya && <AyaLabModal aya={aya} verseData={verseData} r2v={r2v} morph={morph} relations={relations} exprByVerse={exprByVerse} theme={theme}
         onBack={() => reopenLab(aya.back)}
         onNavigate={(s, a) => { setAya(null); navigate(s, a); }}
         onRoot={(r) => { setAya(null); openOcc(r, r, "root", { t: "aya", centerKey: aya.centerKey, back: aya.back }); }}
         onClose={() => setAya(null)} />}
 
       {/* Sūra analysis lab — keyness · cohesion · structure · lexical bonds (al-awāṣir). */}
-      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} meta={surahMeta} morph={morph} back={surahLab.back}
+      {surahLab && <SurahLabModal surah={surahLab} verseData={verseData} r2v={r2v} w2v={w2v} seedIndex={seedIndex} stopSet={stopSet} morph={morph} back={surahLab.back}
         onNavigate={(s, a) => { setSurahLab(null); navigate(s, a); }}
         onRoot={(r) => { setSurahLab(null); openOcc(r, r, "root", { t: "surah", surahId: surahLab.surahId, back: surahLab.back }); }}
         onBack={() => reopenLab(surahLab.back)}
@@ -2073,6 +2112,11 @@ export default function QuranGraph() {
       {corpusOpen && <CorpusLabModal open={corpusOpen} verseData={verseData} r2v={r2v} w2v={w2v} precision={precision} morph={morph} relations={relations} theme={theme}
         onNavigate={(s, a) => { setCorpusOpen(false); navigate(s, a); }}
         onClose={() => setCorpusOpen(false)} />}
+
+      {exprOpen && <ExpressionsModal open={exprOpen} verseData={verseData} expr={expr} theme={theme} focusRoot={exprFocus}
+        onNavigate={(s, a) => { setExprOpen(false); navigate(s, a); }}
+        onRoot={(r) => { setExprOpen(false); setLab({ root: r, label: r }); }}
+        onClose={() => setExprOpen(false)} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 

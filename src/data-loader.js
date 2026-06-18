@@ -57,11 +57,10 @@ export function loadRelations() {
   return fetchJSON("data/relations.json").catch(() => null);
 }
 
-// Surah / structural metadata { note, surahs:{id:{place,order}}, juz:[[s,a]…], sajda:[[s,a]…] }.
-// Standard reference data (revelation place + nuzūl order + juzʾ + sajdas). Optional:
-// resolves to null if the build didn't emit it, so the UI hides the section rather than error.
-export function loadSurahMeta() {
-  return fetchJSON("data/surah-meta.json").catch(() => null);
+// Multi-word expressions { note, prepGloss, frames, headTotals, compounds, idioms } — government
+// frames + إضافة + idioms mined offline. Optional: resolves to null if the build didn't emit it.
+export function loadExpressions() {
+  return fetchJSON("data/expressions.json").catch(() => null);
 }
 
 // Lexicon manifest: [{ id, label, license, hasFull, fullShards, coverage }] — the swappable

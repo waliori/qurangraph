@@ -110,6 +110,8 @@ export const ar = {
   // 16 — Context
   "tour.contextTitle": "السياق",
   "tour.contextBody": "افتح «السياق» (☰) لتقرأ الآية داخل سورة البقرة كاملة، مع إمكانية التمرير. أغلقها لنُكمل.",
+  "tour.exprTitle": "كشّاف التعابير",
+  "tour.exprBody": "افتح كشّاف التعابير (⛓): التراكيب لا الكلمات المفردة — تعدية الأفعال بحروف الجر (مصفوفة)، والمصاحبات، والإضافات، والتعابير الثابتة. وتظهر أيضًا في بطاقة الكلمة ومختبر الجذر والآية. أغلقها لنُكمل.",
 
   // 17 — Open tools
   "tour.toolsOpenTitle": "افتح قائمة الأدوات",
@@ -260,6 +262,8 @@ export const en = {
   // 16 — Context
   "tour.contextTitle": "Context",
   "tour.contextBody": "Open «Context» (☰) to read the verse within the full sūrat al-Baqara, scrollable. Close it to continue.",
+  "tour.exprTitle": "Expressions explorer",
+  "tour.exprBody": "Open the Expressions explorer (⛓): multi-word units, not single words — verbs' governed prepositions (as a matrix), collocations, iḍāfa constructs, and idioms. They also appear inline in the word card, the root lab, and the āya lab. Close it to continue.",
 
   // 17 — Open tools
   "tour.toolsOpenTitle": "Open the Tools menu",

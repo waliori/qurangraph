@@ -33,21 +33,6 @@ describe("surahKeyness", () => {
     expect(roots).toContain("خير"); // only in this sūra → over-represented
     expect(roots).not.toContain("ضوأ"); // also occurs in sūra 2 → not distinctive
   });
-  it("scopes keyness to a comparison population (same revelation class)", () => {
-    // قرطس fills sūra 1 (2 verses) AND sūra 2; corpus-wide it occurs in 4 verses, but among
-    // the "Meccan" population {1:1,1:2,7:1} only the 2 sūra-1 verses count → far more distinctive there.
-    const vd = {
-      "1:1": verse(1, 1, ["قرطاس", "خير"]), "1:2": verse(1, 2, ["قرطاس", "نور"]),
-      "2:1": verse(2, 1, ["قرطاس", "ضوء"]), "2:2": verse(2, 2, ["قرطاس", "ابقى"]),
-      "7:1": verse(7, 1, ["نور", "ضوء"]),
-    };
-    const r2vL = { قرطس: ["1:1", "1:2", "2:1", "2:2"], خير: ["1:1"], نور: ["1:2", "7:1"], ضوأ: ["2:1", "7:1"], بقي: ["2:2"] };
-    const all = surahKeyness(1, vd, r2vL).find((k) => k.root === "قرطس");
-    const cls = surahKeyness(1, vd, r2vL, { population: new Set(["1:1", "1:2", "7:1"]) }).find((k) => k.root === "قرطس");
-    expect(all.total).toBe(4);                          // corpus-wide verse count
-    expect(cls.total).toBe(2);                          // counted only within the Meccan population
-    expect(cls.keyness).toBeGreaterThan(all.keyness);   // more distinctive among its own class
-  });
 });
 
 describe("surahCohesion", () => {

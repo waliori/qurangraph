@@ -4,6 +4,7 @@ import { radicalKin } from "../analytics/kinship.js";
 import { oppositesOf, candidatesOf } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
+import { expressionsForRoot } from "../analytics/expressions.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 
@@ -18,12 +19,14 @@ import { useI18n } from "../i18n/index.js";
  * an explicit verse list), turning each lens into a jump-off point. `semantic` is the
  * precomputed neighbour map (null while it's still loading).
  */
-const TABS = ["deriv", "kin", "opp", "lex", "sem"];
+const TABS = ["deriv", "kin", "opp", "lex", "sem", "expr"];
+const vks = (occ) => [...new Set((occ || []).map((o) => o[0]))];
 
-export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, back, onRetarget, onVerses, onBack, onClose }) {
+export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, expr, exprIndex, back, onRetarget, onVerses, onExpressions, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
   const root = lab?.root;
+  const exprData = useMemo(() => (expr && exprIndex && root ? expressionsForRoot(expr, exprIndex, root) : null), [expr, exprIndex, root]);
 
   const deriv = useMemo(() => (root ? derivationFamily(root, r2v, verseData, morph) : []), [root, r2v, verseData, morph]);
   const kin = useMemo(() => (root ? radicalKin(root, Object.keys(r2v), (r) => (r2v[r] || []).length) : { anagrams: [], shared: [] }), [root, r2v]);
@@ -64,6 +67,8 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
       exportJsonFile({ root, opposites: opp || [], candidates: cand || [] }, `relations-${root}.json`);
     } else if (tab === "lex") {
       exportJsonFile({ root, frequency: lex?.freq || 0, dictionaries: (lex?.entries || []).map((e) => ({ source: e.label, entry: e.c })), contrastAxes: lex?.axes || {}, neighbours: (lex?.neighbours || []).map(([r]) => r) }, `dict-corpus-${root}.json`);
+    } else if (tab === "expr") {
+      exportJsonFile({ root, expressions: exprData }, `expressions-${root}.json`);
     } else {
       exportJsonFile({ root, neighbours: (sem || []).map(([r, s]) => ({ root: r, similarity: s })) }, `semantic-${root}.json`);
     }
@@ -78,7 +83,10 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
         <h2 className="ag-modal-word">{lab.label}</h2>
         <span className="ag-modal-count">{t("lab.root")} {root}</span>
       </>}
-      actions={<button type="button" className="ag-btn" onClick={exportCurrent}>⤓ {tab === "deriv" ? "CSV" : "JSON"}</button>}>
+      actions={<>
+        {onExpressions && <button type="button" className="ag-btn" title={t("lab.expressions")} onClick={() => onExpressions(root)}>⛓ {t("lab.expressions")}</button>}
+        <button type="button" className="ag-btn" onClick={exportCurrent}>⤓ {tab === "deriv" ? "CSV" : "JSON"}</button>
+      </>}>
       <div className="ag-dist-body">
         <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("lab.title", { label: lab.label })} style={{ marginBlockEnd: "var(--space-3)" }}>
           {TABS.map((id) => (
@@ -264,6 +272,49 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
                     );
                   })}
                 </div>
+              </>)}
+          </div>
+        )}
+
+        {tab === "expr" && (
+          <div className="ag-dist-sec">
+            <p className="ag-hint">{t("lab.expr.hint")}</p>
+            {!exprData ? <span className="ag-dist-name">{t("lab.sem.loading")}</span>
+              : (exprData.heads.length + exprData.collocations.length + exprData.compounds.length === 0) ? <span className="ag-dist-name">{t("expr.none")}</span> : (<>
+                {exprData.heads.length > 0 && <>
+                  <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
+                  <div className="ag-dist-bars">
+                    {exprData.heads.map((h) => (
+                      <div className="ag-dist-row" key={h.head} style={{ alignItems: "baseline" }}>
+                        <span className="ag-dist-name" style={{ fontFamily: "var(--font-quran)" }}>{h.head}</span>
+                        <span style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1 }}>
+                          {h.preps.map((p) => { const disp = expr.prepDisp?.[p.prep] || p.prep; return (
+                            <button type="button" className="ag-tag ag-tag-btn" key={p.prep} style={{ fontFamily: "var(--font-quran)" }}
+                              onClick={() => onVerses?.(`${h.head} ${disp}`, vks(p.occ))}>{disp} <b style={{ color: "var(--gold-400)" }}>{p.count}</b></button>
+                          ); })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>}
+                {exprData.collocations.length > 0 && <>
+                  <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.collocations")}</span></div>
+                  <div className="ag-dist-tags">
+                    {exprData.collocations.map((c, i) => (
+                      <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                        onClick={() => onVerses?.(`${c.verb} ${c.noun}`, vks(c.occ))}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                    ))}
+                  </div>
+                </>}
+                {exprData.compounds.length > 0 && <>
+                  <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.compounds")}</span></div>
+                  <div className="ag-dist-tags">
+                    {exprData.compounds.map((c, i) => (
+                      <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                        onClick={() => onVerses?.(c.words.join(" "), vks(c.occ))}>{c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                    ))}
+                  </div>
+                </>}
               </>)}
           </div>
         )}

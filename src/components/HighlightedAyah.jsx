@@ -10,20 +10,25 @@ import { THEMES } from "../theme.js";
  * pre-grouped key) so the handler can resolve it to the position-correct lookup
  * against the actual verse (disambiguating homographs); highlight matching here
  * stays on the voted key, which is display-only. */
-export function HighlightedAyah({ text, primaryWord, sharedWords = [], interactive, onWordClick, activeGraphWord, searchMode, precision = "loose", theme = "dark" }) {
+export function HighlightedAyah({ text, primaryWord, sharedWords = [], highlightIndices, interactive, onWordClick, activeGraphWord, searchMode, precision = "loose", theme = "dark" }) {
   if (!text) return null;
   const T = THEMES[theme];
   const keyOf = (raw) => searchMode === "exact" ? (precision === "strict" ? normStrict(raw) : norm(raw)) : groupKey(norm(raw), searchMode);
   const matchFn = (k) => (primaryWord && k === primaryWord) || (activeGraphWord && k === activeGraphWord);
   const sharedFn = (raw, k) => sharedWords.some((w) => keyOf(w) === k || norm(w) === norm(raw));
+  // Position-based highlight (expressions mark specific words, not a matching key). The split
+  // interleaves whitespace, so count real words separately to map back to a word index.
+  const byIndex = highlightIndices instanceof Set ? highlightIndices : null;
+  let wordIdx = -1;
 
   return (
     // Qur'anic text is always RTL, regardless of the UI language direction.
     <span dir="rtl">{text.split(/(\s+)/).map((p, i) => {
       if (/^\s+$/.test(p)) return <span key={i}> </span>;
+      wordIdx++;
       const n = norm(p);
       const k = keyOf(p);
-      const isPri = matchFn(k);
+      const isPri = matchFn(k) || (byIndex != null && byIndex.has(wordIdx));
       const isShared = !isPri && sharedFn(p, k);
       const click = interactive && n.length >= 2;
       let bg = "transparent", color = T.text, fw = "normal", bd = "none";
