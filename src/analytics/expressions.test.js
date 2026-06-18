@@ -14,6 +14,10 @@ const expr = {
     { words: ["سَبِيل", "اللَّه"], roots: ["سبل", "أله"], len: 2, count: 4, occ: [["2:154", 3]] },
     { words: ["مالِك", "يَوْم", "دِين"], roots: ["ملك", "يوم", "دين"], len: 3, count: 6, occ: [["1:4", 0]] },
   ],
+  collocations: [
+    { verb: "أَقامَ", verbRoot: "قوم", noun: "صَلاة", nounRoot: "صلو", count: 39, ll: 391, occ: [["2:3", 1, 2]] },
+    { verb: "آتَى", verbRoot: "اتي", noun: "زَكاة", nounRoot: "زكو", count: 23, ll: 175, occ: [["2:43", 0, 1]] },
+  ],
   idioms: [
     { display: "حبل الله", skeleton: "حبل الله", len: 2, type: "curated", count: 1, occ: [["3:103", 2]] },
   ],
@@ -51,8 +55,12 @@ describe("expressionsForRoot", () => {
     // a 3-word chain is indexed under each member root
     expect(expressionsForRoot(expr, idx, "يوم").compounds[0].len).toBe(3);
   });
+  it("finds collocations a root participates in (as verb or noun)", () => {
+    expect(expressionsForRoot(expr, idx, "قوم").collocations.map((c) => c.noun)).toEqual(["صَلاة"]);
+    expect(expressionsForRoot(expr, idx, "زكو").collocations[0].verb).toBe("آتَى");
+  });
   it("is empty for a root with no expressions", () => {
-    expect(expressionsForRoot(expr, idx, "زززز")).toEqual({ heads: [], compounds: [] });
+    expect(expressionsForRoot(expr, idx, "زززز")).toEqual({ heads: [], collocations: [], compounds: [] });
   });
 });
 

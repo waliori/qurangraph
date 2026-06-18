@@ -18,7 +18,7 @@ import { useI18n } from "../i18n/index.js";
  * list (highlighting the expression's own words); click an āya → the sticky foot preview; only
  * the preview's ⌖ jumps the graph. `focusRoot` opens scoped to one root (root-lab cross-link).
  */
-const TABS = ["frames", "compounds", "idioms"];
+const TABS = ["frames", "collocations", "compounds", "idioms"];
 const CAP = 200;
 
 export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNavigate, onRoot, onClose }) {
@@ -44,9 +44,18 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
     for (const g of m.values()) g.items.sort((a, b) => b.count - a.count);
     return [...m.values()].sort((a, b) => b.items.length - a.items.length || b.total - a.total);
   }, [expr, tab, focus]);
+  // Collocations grouped by their verb (أقام → الصلاة / الوزن …), richest clusters first.
+  const colGroups = useMemo(() => {
+    if (!expr || tab !== "collocations" || focus) return null;
+    const m = new Map();
+    for (const c of expr.collocations || []) { if (!m.has(c.verb)) m.set(c.verb, { verb: c.verb, items: [], top: 0 }); const g = m.get(c.verb); g.items.push(c); g.top = Math.max(g.top, c.ll); }
+    for (const g of m.values()) g.items.sort((a, b) => b.ll - a.ll);
+    return [...m.values()].sort((a, b) => b.top - a.top);
+  }, [expr, tab, focus]);
   const q = query.trim();
   const matchHead = (h) => !q || h.head.includes(q) || h.root?.includes(q);
   const matchComp = (c) => !q || c.words.some((w) => w.includes(q));
+  const matchColloc = (c) => !q || c.verb.includes(q) || c.noun.includes(q);
   const matchIdiom = (i) => !q || i.display.includes(q);
 
   if (!open) return null;
@@ -143,6 +152,17 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
               {renderMatrix(rootView.heads)}
             </>}
+            {rootView.collocations.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.collocations")}</span></div>
+              <div className="ag-dist-tags">
+                {rootView.collocations.map((c, i) => (
+                  <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>
+                    {c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                  </button>
+                ))}
+              </div>
+            </>}
             {rootView.compounds.length > 0 && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.compounds")}</span></div>
               <div className="ag-dist-tags">
@@ -164,10 +184,31 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
           {tab === "frames" && (() => { const hs = heads.filter(matchHead); return (
             <div className="ag-dist-sec">
               <p className="ag-hint">{t("expr.framesHint")}</p>
-              {renderMatrix(hs.slice(0, CAP))}
-              {hs.length > CAP && <p className="ag-hint">{t("expr.more", { n: hs.length - CAP })}</p>}
+              {renderMatrix(hs)}
             </div>
           ); })()}
+
+          {tab === "collocations" && (() => {
+            const groups = colGroups.map((g) => ({ ...g, items: g.items.filter(matchColloc) })).filter((g) => g.items.length);
+            return (
+              <div className="ag-dist-sec">
+                <p className="ag-hint">{t("expr.collocationsHint")}</p>
+                {groups.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : groups.map((g) => (
+                  <div key={g.verb} style={{ marginBlockEnd: "var(--space-2)" }}>
+                    <div className="ag-dist-sec-h"><span style={{ fontFamily: "var(--font-quran)" }}>{g.verb}</span></div>
+                    <div className="ag-dist-tags">
+                      {g.items.map((c, i) => (
+                        <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                          title={`${c.verb} ${c.noun} · ${t("expr.occN", { n: c.count })}`} onClick={() => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>
+                          {c.noun} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {tab === "compounds" && (() => {
             const groups = compGroups.map((g) => ({ ...g, items: g.items.filter(matchComp) })).filter((g) => g.items.length).slice(0, CAP);

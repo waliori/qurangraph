@@ -66,6 +66,9 @@ for (const ln of readFileSync(MORPH, "utf8").trim().split("\n")) {
 const frames = new Map();      // "pos|lemma|prep" → { head, root, pos, prep, count, occ:[[vk,h,p]] }
 const headTotals = new Map();  // "pos|lemma" → total content occurrences (for bare = total − governed)
 const compounds = new Map();   // "lemma lemma…" → { words, roots, len, count, occ:[[vk,start]] }
+const colloc = new Map();      // "verb|noun" → { verb, verbRoot, noun, nounRoot, count, occ:[[vk,v,n]] }
+const verbTot = new Map(), nounTot = new Map(); // collocation marginals for log-likelihood
+let colSlots = 0;
 
 const isNoun = (a) => a && a.root && NOUN_POS.has(a.pos);
 
@@ -109,6 +112,26 @@ for (const vk in verses) {
         w = e; // skip the chain so its sub-runs aren't double-counted in this verse
       }
     }
+    // (c) COLLOCATION — a verb + its nearest following DIRECT (non-governed) content noun
+    //     (أقام الصلاة, ملكت أيمان, ضرب مثلاً). Stop at a preposition (a governed noun is a frame,
+    //     not a direct object). Log-likelihood ranking lets tight units rise above diffuse pairings
+    //     (اتقى→الله is tight; قال→الله is diffuse), so frequent-but-loose subjects don't dominate.
+    if (A && A.pos === "verb" && A.root) {
+      for (let k = w + 1; k < Math.min(words.length, w + 4); k++) {
+        if (prepOf[k]) break;                                   // governed by a preposition → frame
+        const B = agg[k];
+        if (B.pos === "pron" || B.pos === "particle") continue; // skip clitics / function words
+        if (isNoun(B)) {
+          const key = `${A.lemma}|${B.lemma}`;
+          const rec = colloc.get(key) || { verb: A.lemma, verbRoot: A.root, noun: B.lemma, nounRoot: B.root, count: 0, occ: [] };
+          rec.count++; rec.occ.push([vk, w, k]); colloc.set(key, rec);
+          verbTot.set(A.lemma, (verbTot.get(A.lemma) || 0) + 1);
+          nounTot.set(B.lemma, (nounTot.get(B.lemma) || 0) + 1);
+          colSlots++;
+        }
+        break; // the first content word after the verb decides
+      }
+    }
   }
 }
 
@@ -116,6 +139,19 @@ const compoundList = [...compounds.values()]
   .filter((c) => c.count >= 2)
   .sort((x, y) => y.count - x.count || y.len - x.len)
   .slice(0, 800);
+
+/* ── Collocation ranking by log-likelihood (G²) over the verb×noun table ──────── */
+const g2 = (o11, r1, c1, N) => {
+  const o12 = r1 - o11, o21 = c1 - o11, o22 = N - r1 - c1 + o11;
+  const e = (a, b) => (a * b) / N;
+  const t = (o, ex) => (o > 0 && ex > 0 ? o * Math.log(o / ex) : 0);
+  return 2 * (t(o11, e(r1, c1)) + t(o12, e(r1, N - c1)) + t(o21, e(N - r1, c1)) + t(o22, e(N - r1, N - c1)));
+};
+const collocList = [...colloc.values()]
+  .filter((c) => c.count >= 3)
+  .map((c) => ({ ...c, ll: +g2(c.count, verbTot.get(c.verb), nounTot.get(c.noun), colSlots).toFixed(2) }))
+  .sort((x, y) => y.ll - x.ll)
+  .slice(0, 700);
 
 /* ── Frames: keep meaningful recurrence, drop hapax noise ─────────────────────── */
 const frameList = [...frames.values()].filter((f) => f.count >= 2).sort((a, b) => b.count - a.count);
@@ -156,22 +192,25 @@ if (existsSync(IDIOMS)) {
   }
 }
 
-console.log(`Expressions: ${frameList.length} frames, ${compoundList.length} compounds, ${idioms.length} idioms`);
-console.log(`  frame occurrences: ${frameList.reduce((s, f) => s + f.count, 0)} · top: ${frameList.slice(0, 3).map((f) => `${f.head}+${f.prep}(${f.count})`).join(", ")}`);
+console.log(`Expressions: ${frameList.length} frames, ${collocList.length} collocations, ${compoundList.length} compounds, ${idioms.length} idioms`);
+console.log(`  frame top: ${frameList.slice(0, 3).map((f) => `${f.head}+${f.prep}(${f.count})`).join(", ")}`);
+console.log(`  colloc top: ${collocList.slice(0, 4).map((c) => `${c.verb}·${c.noun}(${c.count})`).join(", ")}`);
 
 /* ── Integrity assertions ─────────────────────────────────────────────────────── */
 if (frameList.length < 200) fail(`only ${frameList.length} frames — detector likely broken`);
 if (compoundList.length < 50) fail(`only ${compoundList.length} compounds — detector likely broken`);
+if (collocList.length < 50) fail(`only ${collocList.length} collocations — detector likely broken`);
 const aminBi = frames.get("verb|آمَنَ|ب");
 if (!aminBi || aminBi.count < 100) fail(`آمَنَ+بـ frame missing or too small (${aminBi?.count}) — alignment broken`);
 const missingCurated = idioms.filter((i) => i.count === 0).map((i) => i.display);
 if (missingCurated.length) console.warn(`  WARN: curated idioms with no occurrences: ${missingCurated.join(", ")}`);
 
 const out = {
-  note: "Multi-word expressions mined from the Quranic Arabic Corpus morphology. frames: head + governed preposition (تعدية); compounds: إضافة chains (2+ words) by frequency; idioms: curated non-compositional. Candidates evidenced by verses — the reader judges. No translation: occurrences carry the sense.",
+  note: "Multi-word expressions mined from the Quranic Arabic Corpus morphology. frames: head + governed preposition (تعدية); collocations: verb + characteristic noun (المصاحبات) by log-likelihood; compounds: إضافة chains (2+ words) by frequency; idioms: curated non-compositional. Candidates evidenced by verses — the reader judges. No translation: occurrences carry the sense.",
   prepDisp: PREP_DISP,
   frames: frameList,
   headTotals: Object.fromEntries(headTotals),
+  collocations: collocList,
   compounds: compoundList,
   idioms,
 };

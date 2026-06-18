@@ -19,6 +19,7 @@ export function indexExpressions(expr) {
   const byHead = new Map();     // "pos|lemma" → [frame…]
   const headByRoot = new Map(); // root → Set("pos|lemma")
   const compByRoot = new Map(); // root → [compound…]
+  const colByRoot = new Map();  // root → [collocation…]
   for (const f of expr?.frames || []) {
     const k = headKeyOf(f);
     if (!byHead.has(k)) byHead.set(k, []);
@@ -28,7 +29,10 @@ export function indexExpressions(expr) {
   for (const c of expr?.compounds || []) {
     for (const r of new Set(c.roots || [])) { if (!r) continue; if (!compByRoot.has(r)) compByRoot.set(r, []); compByRoot.get(r).push(c); }
   }
-  return { byHead, headByRoot, compByRoot };
+  for (const c of expr?.collocations || []) {
+    for (const r of new Set([c.verbRoot, c.nounRoot])) { if (!r) continue; if (!colByRoot.has(r)) colByRoot.set(r, []); colByRoot.get(r).push(c); }
+  }
+  return { byHead, headByRoot, compByRoot, colByRoot };
 }
 
 /* One head's governed-preposition contrast, strongest first, with the bare (un-governed)
@@ -55,12 +59,13 @@ export function headRows(expr, idx) {
 }
 
 /* Every expression a root participates in — for the root lab's "Expressions" cross-link.
- * Returns { heads:[frameContrast…], compounds:[compound…] }. */
+ * Returns { heads:[frameContrast…], collocations:[…], compounds:[compound…] }. */
 export function expressionsForRoot(expr, idx, root) {
-  if (!root) return { heads: [], compounds: [] };
+  if (!root) return { heads: [], collocations: [], compounds: [] };
   const heads = [...(idx.headByRoot.get(root) || [])].map((k) => frameContrast(expr, idx, k)).filter(Boolean).sort((a, b) => b.governed - a.governed);
+  const collocations = (idx.colByRoot.get(root) || []).slice().sort((a, b) => b.ll - a.ll);
   const compounds = (idx.compByRoot.get(root) || []).slice().sort((a, b) => b.count - a.count);
-  return { heads, compounds };
+  return { heads, collocations, compounds };
 }
 
 const sortVk = (x, y) => { const [sa, aa] = x.split(":").map(Number), [sb, ab] = y.split(":").map(Number); return sa - sb || aa - ab; };
