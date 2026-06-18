@@ -1254,6 +1254,7 @@ export default function QuranGraph() {
       action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 16 root mode
       action('[data-tour="echoesBtn"]', "echoes", {}, "modal:phrase", "auto", lit),                   // 16 echoes
       action('[data-tour="contextBtn"]', "context", {}, "modal:ctx", "auto", lit),                    // 17 context
+      action('[data-tour="exprBtn"]', "expr", {}, "modal:expr", "bottom", lit),                        // expressions explorer
       action('[data-tour="tools"]', "toolsOpen", {}, "tools", "bottom"),                              // 18 open tools
       action('[data-tour="toolspop"]', "toolsTry", { tools: true }, "tool-toggle", "left"),           // 19 try a toggle
       action('[data-tour="saveViewBtn"]', "saveView", {}, "save", "left"),                            // 20 save the view
@@ -1299,12 +1300,12 @@ export default function QuranGraph() {
     else if (gate === "ws") done = wsOpen;
     else if (gate === "theme") done = theme !== B.theme || lang !== B.lang;
     else if (gate.startsWith("modal:")) {
-      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : gate === "modal:help" ? showHelp : false;
+      const open = gate === "modal:dist" ? !!dist : gate === "modal:cmp" ? !!cmp : gate === "modal:occ" ? !!occ : gate === "modal:phrase" ? !!phrase : gate === "modal:ctx" ? !!ctx : gate === "modal:expr" ? exprOpen : gate === "modal:help" ? showHelp : false;
       if (open) B.armed = true; // user opened it
       done = B.armed && !open; // …then closed it
     }
     if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
-  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, showHelp]);
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, exprOpen, showHelp]);
 
   // Suppress text selection while the tour runs (so dragging the graph or the
   // tour card never selects page text).
@@ -1565,7 +1566,7 @@ export default function QuranGraph() {
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
-          <button type="button" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
+          <button type="button" data-tour="exprBtn" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
             aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprOpen((o) => !o); }}>⛓</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
