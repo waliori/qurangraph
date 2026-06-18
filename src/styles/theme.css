@@ -864,3 +864,96 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ═══ Floating phonetic Arabic keyboard ═══
+ * Portalled to <body> at z-index 2000 so it floats above every modal/drawer (max 80)
+ * and is never clipped. Keys mimic the reference design: a light cap, the Arabic glyph
+ * large, the Latin trigger as a small hint above it. */
+.ag-keyboard {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  z-index: 2000;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 12px)); /* always fits the viewport */
+  max-width: calc(100vw - 12px);
+  background: var(--ink-900, #0c1018);
+  border: 1px solid var(--border-strong, #2a3346);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-3, 0 20px 60px rgba(0,0,0,.58));
+  padding: clamp(5px, 1.2vw, 8px);
+  user-select: none;
+  animation: ag-kb-rise var(--dur-base, 240ms) var(--ease-out, cubic-bezier(.16,1,.3,1));
+}
+@keyframes ag-kb-rise { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; } }
+
+.ag-kb-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 4px 8px;
+  cursor: grab;
+  touch-action: none;
+  color: var(--text-muted, #8d9bb5);
+}
+.ag-kb-head:active { cursor: grabbing; }
+.ag-kb-title { flex: 1; font-family: var(--font-ui); font-size: var(--text-sm, 13px); color: var(--text-body, #ccd6e6); }
+.ag-kb-x {
+  border: none; background: transparent; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 4px 6px; border-radius: var(--radius-sm, 7px);
+}
+.ag-kb-x:hover { background: var(--ink-700, #1a2130); color: var(--text-strong, #f3f6fc); }
+
+.ag-kb-keys { display: flex; flex-direction: column; gap: clamp(3px, 0.8vw, 5px); }
+.ag-kb-row { display: flex; gap: clamp(3px, 0.8vw, 5px); justify-content: center; flex-wrap: nowrap; }
+.ag-kb-ctrl { margin-block-start: 2px; }
+
+/* Keys default to a dark cap that blends into the dark UI (a bright white cap was too
+ * stark); light theme restores the white cap + crimson glyph of the reference design.
+ * The Latin hint is pinned top-centre, the Arabic glyph centred in the cap. */
+.ag-kb-key {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0; /* shrink to fit — rows never overflow narrow screens */
+  height: clamp(40px, 11.5vw, 50px);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink-700, #1b2230);
+  color: var(--gold-300, #f0cf7a);
+  border: 1px solid var(--border-strong, #2c3850);
+  border-radius: var(--radius-sm, 7px);
+  cursor: pointer;
+  padding: clamp(11px, 3vw, 13px) 1px 3px;
+  transition: transform var(--dur-fast, 130ms) var(--ease-standard),
+              background var(--dur-fast, 130ms), border-color var(--dur-fast, 130ms);
+}
+.ag-kb-key:hover { background: var(--ink-600, #232c40); border-color: var(--gold-500, #f5b301); }
+.ag-kb-key:active { transform: translateY(1px); background: var(--ink-500, #2a3346); }
+.ag-kb-key.is-wide { flex: 4 1 0; }
+.ag-kb-key.is-mark .ag-kb-ar { color: var(--gold-200, #f7e0a3); }
+.ag-kb-hint {
+  position: absolute; inset-block-start: clamp(2px, 0.8vw, 4px); inset-inline: 0;
+  text-align: center;
+  font-family: var(--font-ui); font-size: clamp(7px, 1.7vw, 9px); line-height: 1;
+  color: var(--text-muted, #8d9bb5); direction: ltr; pointer-events: none;
+}
+.ag-kb-ar { font-family: var(--font-quran, 'Amiri', serif); font-size: clamp(14px, 4.6vw, 20px); line-height: 1; }
+
+/* Control row (Space · ⌫): plain centred UI text, no hint slot to reserve. */
+.ag-kb-ctrl .ag-kb-key { padding: 4px 8px; font-family: var(--font-ui); font-size: clamp(12px, 3vw, 14px); font-weight: 600; }
+
+/* Light theme — warm parchment, not stark cool-white: a deeper panel with raised
+ * cream key caps (mirroring the dark theme's panel/key relationship) + crimson glyph. */
+[data-theme="light"] .ag-keyboard { background: var(--ink-800, #ece4cd); border-color: var(--border-default, rgba(120,100,50,.28)); }
+[data-theme="light"] .ag-kb-key { background: var(--ink-900, #fbf7ec); color: #7a1f2b; border-color: var(--border-default, rgba(120,100,50,.28)); }
+[data-theme="light"] .ag-kb-key:hover { background: var(--ink-850, #f5efdf); border-color: var(--gold-500, #92400e); }
+[data-theme="light"] .ag-kb-key:active { background: color-mix(in oklab, var(--gold-500) 14%, var(--ink-900, #fbf7ec)); }
+[data-theme="light"] .ag-kb-key.is-mark .ag-kb-ar { color: #b03048; }
+[data-theme="light"] .ag-kb-hint { color: var(--text-muted, #6f6757); }
+
+/* Phones: hug the bottom edge. Sizing itself is fluid (clamp), so no per-key overrides. */
+@media (max-width: 560px) {
+  .ag-keyboard { bottom: 6px; }
+  .ag-kb-ctrl .ag-kb-key { padding: 4px; }
+}

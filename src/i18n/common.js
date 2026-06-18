@@ -52,6 +52,15 @@ export const ar = {
   "common.github": " المصدر على GitHub",
   "common.theme": "تبديل السمة",
 
+  // Floating Arabic keyboard
+  "keyboard.toggle": "لوحة المفاتيح العربية (اكتب بالحروف اللاتينية)",
+  "keyboard.title": "لوحة مفاتيح عربية",
+  "keyboard.close": "إغلاق لوحة المفاتيح",
+  "keyboard.collapse": "إخفاء المفاتيح",
+  "keyboard.expand": "إظهار المفاتيح",
+  "keyboard.space": "مسافة",
+  "keyboard.backspace": "حذف",
+
   // HUD
   "common.hud.countTitle": "عدد العقد (الكلمات والآيات) وعدد الروابط المعروضة الآن",
   "common.hud.count": "{n} عقدة · {m} رابط",
@@ -286,6 +295,15 @@ export const en = {
   "common.help": "Help & guide",
   "common.github": "Source code on GitHub",
   "common.theme": "Toggle theme",
+
+  // Floating Arabic keyboard
+  "keyboard.toggle": "Arabic keyboard (type with Latin letters)",
+  "keyboard.title": "Arabic keyboard",
+  "keyboard.close": "Close keyboard",
+  "keyboard.collapse": "Hide keys",
+  "keyboard.expand": "Show keys",
+  "keyboard.space": "Space",
+  "keyboard.backspace": "Backspace",
 
   // HUD
   "common.hud.countTitle": "Number of nodes (words and verses) and links currently shown",

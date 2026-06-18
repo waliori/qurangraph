@@ -17,6 +17,7 @@ import { GraphCanvas } from "./components/GraphCanvas.jsx";
 import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
+import { ArabicKeyboard } from "./components/ArabicKeyboard.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
 import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
@@ -105,6 +106,7 @@ export default function QuranGraph() {
   const [morphFilter, setMorphFilter] = usePersistedState("qg.morphFilter", EMPTY_MORPH_FILTER, sanitizeMorphFilter);
   const [theme, setTheme] = usePersistedState("qg.theme", "dark", (v, f) => (v === "dark" || v === "light" ? v : f));
   const [renderer, setRenderer] = usePersistedState("qg.renderer", "svg", (v, f) => (v === "svg" || v === "canvas" ? v : f));
+  const [kbEnabled, setKbEnabled] = usePersistedState("qg.keyboard", false, (v) => !!v); // floating Arabic keyboard
   const [expandedWords, setExpandedWords] = useState(new Set());
   const [expandedVerses, setExpandedVerses] = useState(new Set());
   const [hovered, setHovered] = useState(null);
@@ -1590,6 +1592,8 @@ export default function QuranGraph() {
                 onClick={() => setNumerals(arabicActive ? "western" : "arabic")}>{arabicActive ? "123" : "١٢٣"}</button>
             );
           })()}
+          <button type="button" className={"ag-iconbtn" + (kbEnabled ? " is-active" : "")} title={t("keyboard.toggle")} aria-label={t("keyboard.toggle")}
+            aria-pressed={kbEnabled} onClick={() => setKbEnabled((k) => !k)}>⌨</button>
           <button type="button" data-tour="themeBtn" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
             onClick={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
         </div>
@@ -2129,6 +2133,9 @@ export default function QuranGraph() {
 
       {/* One-click-save confirmation toast */}
       {ws.toastMsg && <div className="ag-toast" role="status" aria-live="polite">{ws.toastMsg}</div>}
+
+      {/* Floating phonetic Arabic keyboard — portals to <body> above all dialogs */}
+      <ArabicKeyboard open={kbEnabled} onClose={() => setKbEnabled(false)} />
     </div>
   );
 }
