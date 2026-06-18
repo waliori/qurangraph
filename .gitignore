@@ -2,6 +2,11 @@
 node_modules
 dist
 
+# Local secrets / environment — NEVER commit. .env.example IS tracked (template).
+/.env
+/.env.*
+!/.env.example
+
 # Built data artifacts — reconstructed from the tracked corpora in data/source/
 # via `npm run data:transform && npm run data:roots` (and inside the Dockerfile).
 # data/source/ itself IS tracked: it holds the necessary, non-reconstructable
