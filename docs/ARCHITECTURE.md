@@ -63,9 +63,9 @@ and refines as deferred assets arrive:
   per occurrence (splitting homographs).
 - **lexicons** — the manifest, then the active lexicon's concise glosses, then
   individual full-article **shards** on "show more".
-- **semantic-neighbours / relations / surah-meta** — loaded on first open of the lens
-  that needs them (root/āya labs, corpus explorer, sūra lab). All best-effort: a missing
-  file degrades to an empty/hidden section, never an error.
+- **semantic-neighbours / relations / expressions** — loaded on first open of the lens
+  that needs them (root/āya labs, corpus & expressions explorers, a selected word). All
+  best-effort: a missing file degrades to an empty/hidden section, never an error.
 
 ---
 
@@ -176,9 +176,9 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
   `findSharedPhrases` (المتشابهات: maximal contiguous shared runs, sub-phrase-suppressed).
 - `rhyme.js` — the fāṣila: a PAUSAL skeleton (no ى→ي fold; ة→ه), `rhymeKey` (strict
   ending) + `rawiyKey` (loose الروي), `suraRhymeScheme`, `rhymeMates`.
-- `surah.js` — sūra altitude: `surahKeyness` (G² over the whole corpus or a revelation-class
-  `population`), `surahCohesion` + `surahSelfSimilarity` (idf-weighted root overlap →
-  topic boundaries / ring composition), `surahBonds` (الأواصر), `surahProfile`.
+- `surah.js` — sūra altitude: `surahKeyness` (G² over the whole corpus), `surahCohesion` +
+  `surahSelfSimilarity` (idf-weighted root overlap → topic boundaries / ring composition),
+  `surahBonds` (الأواصر), `surahProfile`.
 - `verse.js` — `verseProfile` (fingerprint) and `similarVerses` (idf-weighted shared-root cosine).
 - `derivation.js` — `derivationFamily` (الصرف: a root's derived lemmas by Form/POS).
 - `kinship.js` — `radicalKin` (الاشتقاق الأكبر: anagram / shared-radical roots).
@@ -191,6 +191,11 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
 - `relations.js` — runtime readers over the precomputed lexical-relations map: `oppositesOf` /
   `affinityOf` / `verseAntithesis` / `oppositesCatalogue` (الطباق + affinity).
 - `names.js` — `divineNames` (a conservative أسماء الله index, keyed by attested surface form).
+- `expressions.js` — runtime readers over the precomputed multi-word inventory (`expressions.json`):
+  `indexExpressions` (reverse indices by head/root/verb), `frameContrast` (a head's
+  governed-preposition contrast + the bare residual), `headRows` (the government matrix),
+  `expressionsForRoot` (a root's frames / collocations / compounds, for the inline lenses),
+  `indexByVerse` (verse → its expressions), `occVerses` / `distBySura` (التعدية · المصاحبات · الإضافة).
 
 ---
 
@@ -251,14 +256,15 @@ src/
     nodeAria.js            shared screen-reader node labels
     OccurrencesModal · ContextModal · DistributionModal · CompareModal
     PhraseModal · DefinitionModal · HelpModal              analysis/reading modals
-    RhymeModal · RootLabModal · AyaLabModal · SurahLabModal · CorpusLabModal   the labs
+    RhymeModal · RootLabModal · AyaLabModal · SurahLabModal · CorpusLabModal
+    ExpressionsModal                                       the labs & explorers
     MorphologyFilter · StopWordEditor                      tool panels
     WorkspaceDrawer · StickyNotes                          the notebook UI
     ErrorBoundary.jsx
   hooks/   usePersistedState · useUrlState · useExplorationHistory
            useWorkspace · useModalFocus · useVirtualRows
   analytics/  stats · phrases · rhyme · surah · verse · derivation · kinship ·
-              iltifat · diff · letters · corpus · relations · names
+              iltifat · diff · letters · corpus · relations · names · expressions
   i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/ws/lab/tour
 scripts/   data pipeline (see DATA.md)
 ```

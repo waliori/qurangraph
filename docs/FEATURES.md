@@ -134,6 +134,9 @@ on mobile.
 - **Morphology** — the corpus's per-occurrence analysis (POS, root, Form, aspect,
   voice, mood, person/gender/number/case, lemma). If this occurrence's root
   differs from the grouping root, a **homograph** note flags it.
+- **Expressions** — the multi-word units this word's root takes part in (government
+  frames, collocations, iḍāfa compounds) with counts; "see all" opens the
+  Expressions explorer scoped to the root.
 - The **source verse** the word was expanded from.
 
 **For a verse**, it shows the highlighted text, the shared words, and actions:
@@ -194,27 +197,51 @@ A verse's ending sound, the sūrah's rhyme scheme strip, and the verses sharing 
 by the **full ending** or, more loosely, by the **rawiy** (الروي) consonant alone.
 
 ### Root lab
-Four lenses on one root: **derivation** (الصرف — derived words by Form/POS), **letter kinship**
+Lenses on one root: **derivation** (الصرف — derived words by Form/POS), **letter kinship**
 (الاشتقاق الأكبر — anagram / shared-radical roots), **opposites** (الطباق — roots the Qurʾān sets
-in antithesis, each evidenced by its verses, plus distributional near-synonyms), and **semantic
-neighbours** (shared-context meaning, with a small-corpus confidence cue).
+in antithesis, each evidenced by its verses, plus distributional near-synonyms), **semantic
+neighbours** (shared-context meaning, with a small-corpus confidence cue), and **expressions**
+(التعابير — the government frames, collocations, and iḍāfa constructs the root takes part in, each
+opening its āyāt).
 
 ### Āya lab
 A verse fingerprint (length, roots, POS mix, Forms, rhyme, rarest roots), the **most similar
 verses** by shared-root cosine — with a **diff** toggle that shows exactly what a near-identical
-verse changes — and the **antithesis** attested at the verse (e.g. صدّق ↔ كذّب across 75:31–32).
+verse changes — the **antithesis** attested at the verse (e.g. صدّق ↔ كذّب across 75:31–32), and
+the **expressions in this verse** (the government / collocation / iḍāfa / idiom units it contains,
+each highlighted in place).
 
 ### Sūra lab
-Sūra altitude: profile (with **Meccan/Medinan**, revelation order, juzʾ span, sajda, and the
-disjoined-letter **muqaṭṭaʿāt** over-representation); **keyness** (distinctive roots, vs the whole
-Qurʾān or its own revelation class); **cohesion** (topic boundaries); **structure** (verse×verse
-self-similarity heatmap + echoes); **iltifāt** (the person/number-shift contour and turns);
-**bonds** (الأواصر); and **compare** with another sūra.
+Sūra altitude: profile (length, distinct roots, dominant rhyme, and the disjoined-letter
+**muqaṭṭaʿāt** over-representation); **keyness** (distinctive roots vs the whole Qurʾān);
+**cohesion** (topic boundaries); **structure** (verse×verse self-similarity heatmap + echoes);
+**iltifāt** (the person/number-shift contour and turns); **bonds** (الأواصر); and **compare**
+with another sūra.
 
 ### Corpus explorer (≣)
 The bird's-eye view: every root by **frequency** + the **hapax legomena**; a **grammar** catalogue
 ("every Form VIII verb", "every passive"); the **opposites** catalogue (all antithesis pairs); and
 a **divine-names** index. Everything exports.
+
+### Expressions explorer (⛓)
+Multi-word units, not single words — mined offline from the corpus morphology, four facets:
+
+- **Government** (التعدية) — a head (verb / noun) and the **preposition** it governs, drawn as a
+  heatmap matrix (rows = heads, columns = the nine ḥurūf al-jarr + a *bare* column, cells shaded by
+  frequency). The sense shifts with the ḥarf — آمَنَ **بـ** "believe IN" vs آمَنَ **لـ**. Click a
+  cell for its āyāt.
+- **Collocations** (المصاحبات) — a verb and the nouns that recur with it (أقام الصلاة, آتى الزكاة,
+  ملكت الأيمان), ranked by log-likelihood so tight units rise above diffuse pairings; grouped by verb.
+- **Compounds** (الإضافة) — genitive constructs, including multi-word chains (مالك يوم الدين),
+  grouped by their head noun.
+- **Idioms** — a small **curated**, reviewed list of non-compositional expressions, matched to
+  their verses.
+
+Clicking any expression opens its leaf: the **āyāt** (the expression's own words highlighted), an
+interactive **sūra-distribution** bar (hover to read a sūra, click to filter the list to it), the
+**component roots** (open each in the root lab), and a **bidirectional** contrast (e.g. the other
+verbs that take this noun). No translation anywhere — the occurrences carry the sense. The same
+expressions also surface **inline** in the word inspector, the root lab, and the āya lab (below).
 
 ---
 

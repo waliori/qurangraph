@@ -27,12 +27,12 @@ npm run data:roots         # morphology → roots.json, lemmas.json, morphology.
 npm run data:lexicons      # dictionaries → lexicons/*.json (+ index.json)
 npm run data:semantic      # distributional neighbours → semantic-neighbours.json
 npm run data:relations     # antithesis + affinity → relations.json
-npm run data:meta          # revelation place/order, juzʾ, sajda → surah-meta.json
+npm run data:expressions   # multi-word expressions → expressions.json
 npm run data:manifest      # record source revisions + checksums → sources.json
 
 # Re-fetch the upstream corpora first, then build everything:
 npm run data:download
-npm run data:build         # download → transform → roots → lexicons → manifest
+npm run data:build         # download, then every build step above, in order
 ```
 
 `data:download` and `data:build` are only needed to refresh the inputs; day to day
@@ -88,7 +88,7 @@ Coverage tripwires guard the alignment (root ≥ 45 %, lemma ≥ 85 %). Typical:
 ≈65 % of tokens carry a root, ≈96 % a lemma (the rest are particles/proper nouns).
 
 ### `build-lexicons.js` → `lexicons/`
-Parses the three dictionaries, indexes each by root, and aligns to the Qurʾān's
+Parses the six dictionaries, indexes each by root, and aligns to the Qurʾān's
 roots (`matchRoot`: exact → geminate-collapse ربب→رب → alif/hamza fold). Outputs:
 
 - `lexicons/<id>.json` — concise meanings: `{ root: { c, f, cite:{vol,page} } }`
@@ -117,10 +117,24 @@ against an adversative بل/لكن, position-aligned, within or across consecuti
 Output: `{ byRoot, catalogue }` where each opposite pair carries its evidence verses; affinity =
 distributionally close but un-contrasted (near-synonym). `seed:true` tags the curated pairs.
 
-### `build-meta.js` → `surah-meta.json`
-Curated structural reference (inlined, tracked): revelation place (مكية/مدنية) + nuzūl order
-(Cairo standard), the 30 juzʾ starts, the 15 sajdas. Integrity-asserted (114 sūras, 86/28 split,
-order is a 1..114 permutation). Chronology is offered as a tradition-based lens, not a datum.
+### `build-expressions.js` → `expressions.json`
+Multi-word units mined from the **segmented** Quranic Arabic Corpus morphology
+(`data/source/quran-morphology.txt`) — the only source that keeps proclitic prepositions (the بـ
+in بالغيب is its own segment there; it's lost in the collapsed `morphology.json`). Corpus word
+indices align 1:1 with the Tanzil tokens (one known edge case), so occurrences store word indices
+for in-place highlighting. Four typed sets, all evidenced by their verses:
+
+- **frames** — a head (verb / content noun) + a governed ḥarf jarr (تعدية), bound to the nearest
+  preceding content head; a per-head total is kept so the UI can show the *bare* (un-governed)
+  residual.
+- **collocations** — a verb + its nearest non-governed content noun (المصاحبات), ranked by
+  Dunning's signed log-likelihood so tight units (أقام الصلاة) rise above diffuse subjects.
+- **compounds** — إضافة chains (a noun + one or more genitive nouns), the maximal run per position.
+- **idioms** — a human-curated seed (`data/idioms.json`, **tracked** like `data/antonyms.json`)
+  matched to verses on a consonantal skeleton (dagger-alif and proclitics reconciled).
+
+Integrity-asserted (≥200 frames, ≥50 collocations/compounds, and the آمَنَ+بـ frame present — a
+proxy for QAC↔Tanzil word alignment). **No translation** is emitted: the verses carry the sense.
 
 ### `build-sources-manifest.js` → `sources.json`
 Records, for each file in `data/source/`, the repo/ref/path it came from plus its
@@ -150,5 +164,5 @@ domain root and under a sub-path (e.g. GitHub Pages):
 - eager: `loadHafsData`, `loadRoots`.
 - lazy: `loadLemmas`, `loadMorphology`, `loadLexiconManifest`, `loadLexicon(id)`,
   `loadLexiconFullShard(id, shard)`, `loadSemanticNeighbors`, `loadRelations`,
-  `loadSurahMeta`. The last three are optional — they resolve to `null`/`{}` if the build
+  `loadExpressions`. The last three are optional — they resolve to `null`/`{}` if the build
   didn't emit them, so the lens hides its section rather than erroring.

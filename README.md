@@ -38,13 +38,18 @@ morphology, and lexicon glosses are never translated.
   speech / verb Form (وزن) / aspect / voice, and read a word's full per-occurrence
   analysis in the inspector. Homographs are grouped by their commoner root but
   flagged when *this* occurrence's root differs.
-- **Three classical Arabic lexicons** — Maqāyīs (Ibn Fāris), Mufradāt (al-Rāghib),
+- **Six classical Arabic lexicons** — al-ʿAyn (al-Khalīl b. Aḥmad), al-Ṣiḥāḥ
+  (al-Jawharī), Maqāyīs (Ibn Fāris), al-Muḥkam (Ibn Sīda), Mufradāt (al-Rāghib),
   Lisān al-ʿArab (Ibn Manẓūr) — swappable per word, concise + full article, with
   print volume/page citation and **BibTeX/RIS** export.
 - **Analytics** — distribution by sūrah, within-verse **collocation** (PMI + signed
   log-likelihood), **direct neighbours** (the word immediately before/after a term,
   corpus-wide adjacency), two-term **compare**, and shared multi-word phrases
   (المتشابهات). Everything exports to **CSV/JSON**.
+- **Expressions** (التعابير) — multi-word units, not single words: a head's **governed
+  prepositions** as a heatmap matrix (آمَنَ بـ "believe IN" vs آمَنَ لـ), **collocations**
+  (أقام الصلاة), **iḍāfa** constructs (مالك يوم الدين), and curated **idioms** — mined from the
+  corpus morphology and surfaced inline on every word. No translation; the verses carry the sense.
 - **Rarity-weighted edges** (rarer shared word = stronger signal) + a "rare links
   only" filter, and an **editable stop-word layer** (particles vs. content words).
 - **Workspace** — a client-side researcher's notebook: save graph snapshots,
