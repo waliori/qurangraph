@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { indexExpressions, frameContrast, headRows, expressionsForRoot, occVerses, FRAME_SPAN, COMPOUND_SPAN, idiomSpan } from "./expressions.js";
+import { indexExpressions, frameContrast, headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "./expressions.js";
 
 // A tiny inventory shaped like public/data/expressions.json.
 const expr = {
-  prepGloss: { "ب": { ar: "بـ", en: "bi" }, "إِلَى": { ar: "إِلَى", en: "ilā" } },
+  prepDisp: { "ب": "بـ", "إِلَى": "إِلَى" },
   frames: [
     { head: "آمَنَ", root: "أمن", pos: "verb", prep: "ب", count: 5, occ: [["2:3", 1, 2], ["2:8", 0, 1]] },
     { head: "آمَنَ", root: "أمن", pos: "verb", prep: "إِلَى", count: 1, occ: [["4:60", 0, 1]] },
@@ -11,11 +11,11 @@ const expr = {
   ],
   headTotals: { "verb|آمَنَ": 10, "verb|دَعا": 4 },
   compounds: [
-    { a: "سَبِيل", b: "اللَّه", aRoot: "سبل", bRoot: "أله", count: 4, ll: 90, occ: [["2:154", 3]] },
-    { a: "يَوْم", b: "قِيامَة", aRoot: "يوم", bRoot: "قوم", count: 6, ll: 120, occ: [["2:85", 5]] },
+    { words: ["سَبِيل", "اللَّه"], roots: ["سبل", "أله"], len: 2, count: 4, occ: [["2:154", 3]] },
+    { words: ["مالِك", "يَوْم", "دِين"], roots: ["ملك", "يوم", "دين"], len: 3, count: 6, occ: [["1:4", 0]] },
   ],
   idioms: [
-    { display: "حبل الله", skeleton: "حبل الله", en: "the rope of God", type: "curated", count: 1, occ: [["3:103", 2]] },
+    { display: "حبل الله", skeleton: "حبل الله", len: 2, type: "curated", count: 1, occ: [["3:103", 2]] },
   ],
 };
 
@@ -28,7 +28,7 @@ describe("indexExpressions + frameContrast", () => {
     expect(c.governed).toBe(6);          // 5 + 1
     expect(c.total).toBe(10);
     expect(c.bare).toBe(4);              // 10 − 6
-    expect(c.preps[0].gloss.en).toBe("bi");
+    expect(c.preps[0].disp).toBe("بـ");
   });
 
   it("returns null for an unknown head", () => {
@@ -47,7 +47,9 @@ describe("expressionsForRoot", () => {
     expect(expressionsForRoot(expr, idx, "أمن").heads.map((h) => h.head)).toEqual(["آمَنَ"]);
     const comp = expressionsForRoot(expr, idx, "أله").compounds;
     expect(comp).toHaveLength(1);
-    expect(comp[0].a).toBe("سَبِيل");
+    expect(comp[0].words.join(" ")).toBe("سَبِيل اللَّه");
+    // a 3-word chain is indexed under each member root
+    expect(expressionsForRoot(expr, idx, "يوم").compounds[0].len).toBe(3);
   });
   it("is empty for a root with no expressions", () => {
     expect(expressionsForRoot(expr, idx, "زززز")).toEqual({ heads: [], compounds: [] });
@@ -65,8 +67,8 @@ describe("occVerses + spans", () => {
     const v = occVerses([["2:3", 0, 1], ["9:9", 0, 1]], vd, FRAME_SPAN);
     expect(v.map((x) => x.vk)).toEqual(["2:3"]);
   });
-  it("compound span covers both nouns; idiom span covers the run", () => {
-    expect(COMPOUND_SPAN(["2:154", 3])).toEqual([3, 4]);
-    expect(idiomSpan(2)(["3:103", 2])).toEqual([2, 3]);
+  it("spanRun covers a contiguous run from the start index", () => {
+    expect(spanRun(2)(["2:154", 3])).toEqual([3, 4]);
+    expect(spanRun(3)(["1:4", 0])).toEqual([0, 1, 2]);
   });
 });

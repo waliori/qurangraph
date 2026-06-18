@@ -26,7 +26,7 @@ export function indexExpressions(expr) {
     if (f.root) { if (!headByRoot.has(f.root)) headByRoot.set(f.root, new Set()); headByRoot.get(f.root).add(k); }
   }
   for (const c of expr?.compounds || []) {
-    for (const r of [c.aRoot, c.bRoot]) { if (!r) continue; if (!compByRoot.has(r)) compByRoot.set(r, []); compByRoot.get(r).push(c); }
+    for (const r of new Set(c.roots || [])) { if (!r) continue; if (!compByRoot.has(r)) compByRoot.set(r, []); compByRoot.get(r).push(c); }
   }
   return { byHead, headByRoot, compByRoot };
 }
@@ -39,7 +39,7 @@ export function frameContrast(expr, idx, headKey) {
   if (!list || !list.length) return null;
   const total = expr.headTotals?.[headKey] || 0;
   const governed = list.reduce((s, f) => s + f.count, 0);
-  const preps = list.map((f) => ({ prep: f.prep, gloss: expr.prepGloss?.[f.prep] || null, count: f.count, occ: f.occ }))
+  const preps = list.map((f) => ({ prep: f.prep, disp: expr.prepDisp?.[f.prep] || f.prep, count: f.count, occ: f.occ }))
     .sort((a, b) => b.count - a.count);
   const [pos, head] = headKey.split("|");
   return { head, pos, root: list[0].root, total, governed, bare: Math.max(0, total - governed), preps };
@@ -59,7 +59,7 @@ export function headRows(expr, idx) {
 export function expressionsForRoot(expr, idx, root) {
   if (!root) return { heads: [], compounds: [] };
   const heads = [...(idx.headByRoot.get(root) || [])].map((k) => frameContrast(expr, idx, k)).filter(Boolean).sort((a, b) => b.governed - a.governed);
-  const compounds = (idx.compByRoot.get(root) || []).slice().sort((a, b) => b.ll - a.ll);
+  const compounds = (idx.compByRoot.get(root) || []).slice().sort((a, b) => b.count - a.count);
   return { heads, compounds };
 }
 
@@ -80,7 +80,7 @@ export function occVerses(occ, verseData, span) {
   return [...m.entries()].map(([vk, set]) => ({ vk, hi: [...set] })).sort((a, b) => sortVk(a.vk, b.vk));
 }
 
-/* Span helpers per expression type. */
-export const FRAME_SPAN = (o) => [o[1], o[2]];                         // head + preposition word
-export const COMPOUND_SPAN = (o) => [o[1], o[1] + 1];                  // muḍāf + muḍāf ilayh
-export const idiomSpan = (len) => (o) => Array.from({ length: len }, (_, j) => o[1] + j);
+/* Span helpers. Frames mark two non-adjacent words (head + preposition); compounds and idioms
+ * mark a contiguous run of `len` words from the start index. */
+export const FRAME_SPAN = (o) => [o[1], o[2]];
+export const spanRun = (len) => (o) => Array.from({ length: len }, (_, j) => o[1] + j);

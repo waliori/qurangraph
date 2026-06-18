@@ -35,20 +35,14 @@ for (const f of [MORPH, HAFS]) if (!existsSync(f)) { console.error(`Missing ${f}
 
 const fail = (m) => { console.error(`ERROR: expressions — ${m}`); process.exit(1); };
 
-// The ḥurūf al-jarr that govern a following noun. Keyed by the corpus lemma; the long
-// tail of the bare-"P" tag is noise (diptote nouns), so we whitelist the real set.
-const PREP_GLOSS = {
-  "ب": { ar: "بـ", en: "bi — in / with / by" },
-  "ل": { ar: "لـ", en: "li — for / to" },
-  "ك": { ar: "كـ", en: "ka — like / as" },
-  "مِن": { ar: "مِن", en: "min — from / of" },
-  "فِي": { ar: "فِي", en: "fī — in" },
-  "عَلَى": { ar: "عَلَى", en: "ʿalā — on / upon / against" },
-  "إِلَى": { ar: "إِلَى", en: "ilā — to / toward" },
-  "عَن": { ar: "عَن", en: "ʿan — from / about" },
-  "حَتَّى": { ar: "حَتَّى", en: "ḥattā — until" },
+// The ḥurūf al-jarr that govern a following noun, keyed by the corpus lemma → display form
+// (the proclitic ones show as بـ/لـ/كـ). The long tail of the bare-"P" tag is noise (diptote
+// nouns), so we whitelist the real set.
+const PREP_DISP = {
+  "ب": "بـ", "ل": "لـ", "ك": "كـ", "مِن": "مِن", "فِي": "فِي",
+  "عَلَى": "عَلَى", "إِلَى": "إِلَى", "عَن": "عَن", "حَتَّى": "حَتَّى",
 };
-const PREPS = new Set(Object.keys(PREP_GLOSS));
+const PREPS = new Set(Object.keys(PREP_DISP));
 // A government head is a verb or a common (deverbal) noun — NOT a proper noun: اللَّه etc. don't
 // "govern" a ḥarf in the تعدية sense (they're subject/object; the preposition binds a later word).
 const HEAD_POS = new Set(["verb", "noun", "actpcpl", "passpcpl"]);
@@ -71,9 +65,9 @@ for (const ln of readFileSync(MORPH, "utf8").trim().split("\n")) {
 /* ── Detectors ──────────────────────────────────────────────────────────────── */
 const frames = new Map();      // "pos|lemma|prep" → { head, root, pos, prep, count, occ:[[vk,h,p]] }
 const headTotals = new Map();  // "pos|lemma" → total content occurrences (for bare = total − governed)
-const compounds = new Map();   // "aLemma|bLemma" → { a, b, aRoot, bRoot, count, occ:[[vk,w]] }
-const firstNoun = new Map(), secondNoun = new Map(); // إضافة marginals for LL
-let idafaSlots = 0;
+const compounds = new Map();   // "lemma lemma…" → { words, roots, len, count, occ:[[vk,start]] }
+
+const isNoun = (a) => a && a.root && NOUN_POS.has(a.pos);
 
 for (const vk in verses) {
   const words = verses[vk];
@@ -98,42 +92,38 @@ for (const vk in verses) {
         e.count++; e.occ.push([vk, hi, w]); frames.set(key, e);
       }
     }
-    // (b) إضافة — content noun (no ال) immediately followed by a genitive content noun
-    //     that is not itself governed by a preposition.
-    const A = agg[w], B = agg[w + 1];
-    if (A && B && A.root && B.root && NOUN_POS.has(A.pos) && NOUN_POS.has(B.pos) && B.gcase === "gen" && !hasDet(words[w]) && !prepOf[w] && !prepOf[w + 1]) {
-      idafaSlots++;
-      firstNoun.set(A.lemma, (firstNoun.get(A.lemma) || 0) + 1);
-      secondNoun.set(B.lemma, (secondNoun.get(B.lemma) || 0) + 1);
-      const key = `${A.lemma}|${B.lemma}`;
-      const e = compounds.get(key) || { a: A.lemma, b: B.lemma, aRoot: A.root, bRoot: B.root, count: 0, occ: [] };
-      e.count++; e.occ.push([vk, w]); compounds.set(key, e);
+    // (b) إضافة CHAIN — a muḍāf (content noun, no ال, not preposition-governed) followed by ONE
+    //     OR MORE genitive content nouns (يوم الدين, مالك يوم الدين). We take the MAXIMAL run and
+    //     skip past it, so each chain is counted at its full length; shorter constructs that recur
+    //     on their own are still caught where they stand alone. Don't start mid-chain (when w is
+    //     itself a genitive continuation of the previous noun).
+    const A = agg[w];
+    if (isNoun(A) && !hasDet(words[w]) && !prepOf[w] && !(w > 0 && isNoun(agg[w - 1]) && A.gcase === "gen")) {
+      let e = w;
+      while (e + 1 < words.length && isNoun(agg[e + 1]) && agg[e + 1].gcase === "gen" && !prepOf[e + 1]) e++;
+      if (e > w) {
+        const members = agg.slice(w, e + 1);
+        const key = members.map((m) => m.lemma).join(" ");
+        const rec = compounds.get(key) || { words: members.map((m) => m.lemma), roots: members.map((m) => m.root), len: members.length, count: 0, occ: [] };
+        rec.count++; rec.occ.push([vk, w]); compounds.set(key, rec);
+        w = e; // skip the chain so its sub-runs aren't double-counted in this verse
+      }
     }
   }
 }
 
-/* ── إضافة ranking by log-likelihood (G²) over the noun-noun adjacency ────────── */
-const g2 = (o11, r1, c1, N) => {
-  const o12 = r1 - o11, o21 = c1 - o11, o22 = N - r1 - c1 + o11;
-  const e = (a, b) => (a * b) / N;
-  const t = (o, ex) => (o > 0 && ex > 0 ? o * Math.log(o / ex) : 0);
-  return 2 * (t(o11, e(r1, c1)) + t(o12, e(r1, N - c1)) + t(o21, e(N - r1, c1)) + t(o22, e(N - r1, N - c1)));
-};
 const compoundList = [...compounds.values()]
   .filter((c) => c.count >= 2)
-  .map((c) => ({ ...c, ll: +g2(c.count, firstNoun.get(c.a), secondNoun.get(c.b), idafaSlots).toFixed(2) }))
-  .sort((x, y) => y.ll - x.ll)
+  .sort((x, y) => y.count - x.count || y.len - x.len)
   .slice(0, 800);
 
 /* ── Frames: keep meaningful recurrence, drop hapax noise ─────────────────────── */
 const frameList = [...frames.values()].filter((f) => f.count >= 2).sort((a, b) => b.count - a.count);
 
-/* ── Idioms: curated seed (verses attached) + statistical content bigrams ──────── */
-// Consonantal skeleton for phrase matching. norm() already strips the Uthmani dagger-alif
-// (so صِرَٰط → صرط) while plain spellings keep ا; dropping every ا reconciles the two and
-// makes matching robust to that mismatch. Multi-word contiguity keeps false positives away.
-// norm() deletes the Uthmani dagger-alif (صِرَٰط → صرط), which a plain ا spelling keeps; map it
-// to a real alif first so both sides agree, without the over-folding of stripping every alif.
+/* ── Idioms: curated seed (any length), with their verses attached ─────────────── */
+// Consonantal skeleton for phrase matching. norm() deletes the Uthmani dagger-alif
+// (صِرَٰط → صرط), which a plain ا spelling keeps; map it to a real alif first so both sides
+// agree. Multi-word contiguity keeps false positives away.
 const skel = (w) => norm(w.replace(/ٰ/g, "ا"));
 // The first idiom word may carry a proclitic (بِحبل for حبل): accept the verse word if removing
 // up to two leading proclitic letters yields the target exactly. Precise (equality after a
@@ -162,7 +152,7 @@ if (existsSync(IDIOMS)) {
         if (ok) occ.push([vk, i]);
       }
     }
-    idioms.push({ display: it.ar, skeleton: sk.join(" "), en: it.en || null, type: "curated", count: occ.length, occ });
+    idioms.push({ display: it.ar, skeleton: sk.join(" "), len: sk.length, type: "curated", count: occ.length, occ });
   }
 }
 
@@ -178,8 +168,8 @@ const missingCurated = idioms.filter((i) => i.count === 0).map((i) => i.display)
 if (missingCurated.length) console.warn(`  WARN: curated idioms with no occurrences: ${missingCurated.join(", ")}`);
 
 const out = {
-  note: "Multi-word expressions mined from the Quranic Arabic Corpus morphology. frames: head + governed preposition (تعدية); compounds: إضافة ranked by log-likelihood; idioms: curated (non-compositional) + statistical. Candidates evidenced by verses — the reader judges.",
-  prepGloss: PREP_GLOSS,
+  note: "Multi-word expressions mined from the Quranic Arabic Corpus morphology. frames: head + governed preposition (تعدية); compounds: إضافة chains (2+ words) by frequency; idioms: curated non-compositional. Candidates evidenced by verses — the reader judges. No translation: occurrences carry the sense.",
+  prepDisp: PREP_DISP,
   frames: frameList,
   headTotals: Object.fromEntries(headTotals),
   compounds: compoundList,

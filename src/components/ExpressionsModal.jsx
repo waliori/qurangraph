@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { indexExpressions, headRows, expressionsForRoot, occVerses, FRAME_SPAN, COMPOUND_SPAN, idiomSpan } from "../analytics/expressions.js";
+import { indexExpressions, headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
@@ -27,7 +27,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const [tab, setTab] = useState("frames");
   const [query, setQuery] = useState("");
   const [focus, setFocus] = useState(focusRoot || null); // root-scoped view
-  const [detail, setDetail] = useState(null); // { label, sub, verses:[{vk,hi}] }
+  const [detail, setDetail] = useState(null); // { label, verses:[{vk,hi}] }
   const [preview, setPreview] = useState(null); // vk in the sticky foot
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { setFocus(focusRoot || null); setDetail(null); setPreview(null); }, [focusRoot]);
@@ -38,8 +38,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const rootView = useMemo(() => (idx && focus ? expressionsForRoot(expr, idx, focus) : null), [idx, expr, focus]);
   const q = query.trim();
   const matchHead = (h) => !q || h.head.includes(q) || h.root?.includes(q);
-  const matchComp = (c) => !q || c.a.includes(q) || c.b.includes(q);
-  const matchIdiom = (i) => !q || i.display.includes(q) || (i.en || "").toLowerCase().includes(q.toLowerCase());
+  const matchComp = (c) => !q || c.words.some((w) => w.includes(q));
+  const matchIdiom = (i) => !q || i.display.includes(q);
 
   if (!open) return null;
   if (!expr) return (
@@ -49,7 +49,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
     </ModalShell>
   );
 
-  const showOcc = (label, sub, occ, span) => { setDetail({ label, sub, verses: occVerses(occ, verseData, span) }); setPreview(null); };
+  const showOcc = (label, occ, span) => { setDetail({ label, verses: occVerses(occ, verseData, span) }); setPreview(null); };
   const pv = preview ? verseData[preview] : null;
   const pvHi = pv && detail ? detail.verses.find((v) => v.vk === preview)?.hi : null;
 
@@ -64,9 +64,9 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
       <span style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1 }}>
         {h.preps.map((p) => (
           <button type="button" className="ag-tag ag-tag-btn" key={p.prep} style={{ fontFamily: "var(--font-quran)" }}
-            title={p.gloss ? `${p.gloss.en} · ${t("expr.occN", { n: p.count })}` : t("expr.occN", { n: p.count })}
-            onClick={() => showOcc(`${h.head} ${p.gloss?.ar || p.prep}`, p.gloss?.en, p.occ, FRAME_SPAN)}>
-            {p.gloss?.ar || p.prep} <b style={{ color: "var(--gold-400)" }}>{fmtNum(p.count)}</b>
+            title={t("expr.occN", { n: p.count })}
+            onClick={() => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN)}>
+            {p.disp} <b style={{ color: "var(--gold-400)" }}>{fmtNum(p.count)}</b>
           </button>
         ))}
         {h.bare > 0 && <span className="ag-tag" title={t("expr.bareHint")} style={{ opacity: 0.7 }}>{t("expr.bare")} {fmtNum(h.bare)}</span>}
@@ -87,7 +87,6 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
       <div className="ag-dist-body">
         {detail ? (
           <div className="ag-dist-sec">
-            {detail.sub && <p className="ag-hint">{detail.sub}</p>}
             <p className="ag-hint">{t("expr.listHint")}</p>
             {detail.verses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
               <ul className="ag-phrase-list">
@@ -116,8 +115,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <div className="ag-dist-tags">
                 {rootView.compounds.map((c, i) => (
                   <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(`${c.a} ${c.b}`, null, c.occ, COMPOUND_SPAN)}>
-                    {c.a} {c.b} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
+                    {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                   </button>
                 ))}
               </div>
@@ -143,8 +142,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <div className="ag-dist-tags">
                 {(expr.compounds || []).filter(matchComp).slice(0, CAP).map((c, i) => (
                   <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                    title={t("expr.compoundChip", { count: c.count, ll: c.ll })} onClick={() => showOcc(`${c.a} ${c.b}`, null, c.occ, COMPOUND_SPAN)}>
-                    {c.a} {c.b} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
+                    {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
                   </button>
                 ))}
               </div>
@@ -157,9 +156,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
               <ul className="ag-phrase-list">
                 {(expr.idioms || []).filter(matchIdiom).slice(0, CAP).map((it, i) => (
                   <li key={i}><span className="ag-modal-row" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                    <button type="button" className="ag-tag ag-tag-btn" disabled={it.count === 0} style={{ fontFamily: "var(--font-quran)", fontSize: "1.05em" }}
-                      onClick={() => showOcc(it.display, it.en, it.occ, idiomSpan(it.skeleton.split(" ").length))}>{it.display}</button>
-                    {it.en && <span className="ag-dist-name" style={{ flex: 1 }}>{it.en}</span>}
+                    <button type="button" className="ag-tag ag-tag-btn" disabled={it.count === 0} style={{ fontFamily: "var(--font-quran)", fontSize: "1.05em", flex: 1, textAlign: "start" }}
+                      onClick={() => showOcc(it.display, it.occ, spanRun(it.len || it.skeleton.split(" ").length))}>{it.display}</button>
                     <span className="ag-dist-num" style={{ color: "var(--gold-400)" }}>{fmtNum(it.count)}</span>
                   </span></li>
                 ))}
