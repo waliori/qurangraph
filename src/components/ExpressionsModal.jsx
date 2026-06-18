@@ -35,6 +35,15 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const idx = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
   const heads = useMemo(() => (idx && tab === "frames" && !focus ? headRows(expr, idx) : null), [idx, expr, tab, focus]);
   const rootView = useMemo(() => (idx && focus ? expressionsForRoot(expr, idx, focus) : null), [idx, expr, focus]);
+  // Compounds grouped by their shared head noun (muḍāf), so سبيل الله / رسول الله / كتاب الله
+  // cluster. Richest clusters (most distinct constructs) first, then by total frequency.
+  const compGroups = useMemo(() => {
+    if (!expr || tab !== "compounds" || focus) return null;
+    const m = new Map();
+    for (const c of expr.compounds || []) { const h = c.words[0]; if (!m.has(h)) m.set(h, { head: h, items: [], total: 0 }); const g = m.get(h); g.items.push(c); g.total += c.count; }
+    for (const g of m.values()) g.items.sort((a, b) => b.count - a.count);
+    return [...m.values()].sort((a, b) => b.items.length - a.items.length || b.total - a.total);
+  }, [expr, tab, focus]);
   const q = query.trim();
   const matchHead = (h) => !q || h.head.includes(q) || h.root?.includes(q);
   const matchComp = (c) => !q || c.words.some((w) => w.includes(q));
@@ -160,30 +169,43 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
             </div>
           ); })()}
 
-          {tab === "compounds" && (
-            <div className="ag-dist-sec">
-              <p className="ag-hint">{t("expr.compoundsHint")}</p>
-              <div className="ag-dist-tags">
-                {(expr.compounds || []).filter(matchComp).slice(0, CAP).map((c, i) => (
-                  <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                    title={t("expr.occN", { n: c.count })} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
-                    {c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
-                  </button>
+          {tab === "compounds" && (() => {
+            const groups = compGroups.map((g) => ({ ...g, items: g.items.filter(matchComp) })).filter((g) => g.items.length).slice(0, CAP);
+            return (
+              <div className="ag-dist-sec">
+                <p className="ag-hint">{t("expr.compoundsHint")}</p>
+                {groups.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : groups.map((g) => (
+                  <div key={g.head} style={{ marginBlockEnd: "var(--space-2)" }}>
+                    <div className="ag-dist-sec-h"><span style={{ fontFamily: "var(--font-quran)" }}>{g.head}</span></div>
+                    <div className="ag-dist-tags">
+                      {g.items.map((c, i) => (
+                        <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
+                          title={`${c.words.join(" ")} · ${t("expr.occN", { n: c.count })}`} onClick={() => showOcc(c.words.join(" "), c.occ, spanRun(c.len))}>
+                          {c.words.slice(1).join(" ")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(c.count)}</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
+                {compGroups.length > CAP && <p className="ag-hint">{t("expr.more", { n: compGroups.length - CAP })}</p>}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {tab === "idioms" && (
             <div className="ag-dist-sec">
               <p className="ag-hint">{t("expr.idiomsHint")}</p>
               <ul className="ag-phrase-list">
                 {(expr.idioms || []).filter(matchIdiom).slice(0, CAP).map((it, i) => (
-                  <li key={i}><span className="ag-modal-row" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                    <button type="button" className="ag-tag ag-tag-btn" disabled={it.count === 0} style={{ fontFamily: "var(--font-quran)", fontSize: "1.05em", flex: 1, textAlign: "start" }}
-                      onClick={() => showOcc(it.display, it.occ, spanRun(it.len || it.skeleton.split(" ").length))}>{it.display}</button>
-                    <span className="ag-dist-num" style={{ color: "var(--gold-400)" }}>{fmtNum(it.count)}</span>
-                  </span></li>
+                  <li key={i}>
+                    <button type="button" className="ag-modal-row" disabled={it.count === 0}
+                      style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline", opacity: it.count === 0 ? 0.5 : 1 }}
+                      title={t("expr.occN", { n: it.count })}
+                      onClick={() => showOcc(it.display, it.occ, spanRun(it.len || it.skeleton.split(" ").length))}>
+                      <span style={{ fontFamily: "var(--font-quran)", flex: 1 }}>{it.display}</span>
+                      <span className="ag-dist-num" style={{ color: "var(--gold-400)", flexShrink: 0 }}>{fmtNum(it.count)}</span>
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
