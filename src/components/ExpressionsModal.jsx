@@ -20,7 +20,6 @@ import { useI18n } from "../i18n/index.js";
  */
 const TABS = ["frames", "compounds", "idioms"];
 const CAP = 200;
-const POS_BADGE = { verb: "t-verse", noun: "t-root", pn: "t-root", actpcpl: "t-root", passpcpl: "t-root" };
 
 export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
@@ -53,26 +52,51 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const pv = preview ? verseData[preview] : null;
   const pvHi = pv && detail ? detail.verses.find((v) => v.vk === preview)?.hi : null;
 
-  // A head's preposition contrast as a row of clickable chips + the bare residual.
-  const contrastRow = (h) => (
-    <div className="ag-dist-row" key={`${h.pos}|${h.head}`} style={{ alignItems: "baseline" }}>
-      <span className="ag-dist-name" style={{ display: "flex", gap: 5, alignItems: "baseline" }}>
-        <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} disabled={!h.root}
-          title={h.root ? t("expr.openRoot", { root: h.root }) : undefined} onClick={() => h.root && onRoot?.(h.root)}>{h.head}</button>
-        <span className={`ag-badge ${POS_BADGE[h.pos] || "t-root"}`} style={{ fontSize: "var(--text-xs)" }}>{t(`expr.pos.${h.pos}`)}</span>
-      </span>
-      <span style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1 }}>
-        {h.preps.map((p) => (
-          <button type="button" className="ag-tag ag-tag-btn" key={p.prep} style={{ fontFamily: "var(--font-quran)" }}
-            title={t("expr.occN", { n: p.count })}
-            onClick={() => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN)}>
-            {p.disp} <b style={{ color: "var(--gold-400)" }}>{fmtNum(p.count)}</b>
-          </button>
-        ))}
-        {h.bare > 0 && <span className="ag-tag" title={t("expr.bareHint")} style={{ opacity: 0.7 }}>{t("expr.bare")} {fmtNum(h.bare)}</span>}
-      </span>
-    </div>
-  );
+  // The government CONTRAST as a matrix: rows = heads, fixed columns = the ḥurūf al-jarr (+ a
+  // bare column), cells shaded by how often that head takes that preposition. A column scan shows
+  // every verb that takes بـ; a row shows one head's whole government profile. Click a cell → āyāt.
+  const PREP_COLS = expr.prepDisp ? Object.keys(expr.prepDisp) : [];
+  const renderMatrix = (rows) => {
+    if (!rows.length) return <span className="ag-dist-name">{t("expr.none")}</span>;
+    const max = rows.reduce((m, h) => Math.max(m, ...h.preps.map((p) => p.count)), 1);
+    const shade = (c) => Math.round((0.14 + 0.86 * Math.log1p(c) / Math.log1p(max)) * 100);
+    const th = { padding: "3px 5px", fontFamily: "var(--font-quran)", color: "var(--text-muted)", fontWeight: 600, position: "sticky", top: 0, background: "var(--ink-800)", zIndex: 1 };
+    return (
+      <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 6 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "var(--text-xs)" }}>
+          <thead><tr>
+            <th style={{ ...th, insetInlineStart: 0, zIndex: 2 }} />
+            {PREP_COLS.map((pk) => <th key={pk} style={th} title={expr.prepDisp[pk]}>{expr.prepDisp[pk]}</th>)}
+            <th style={{ ...th, color: "var(--text-faint)" }} title={t("expr.bare")}>⌀</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((h) => {
+              const by = new Map(h.preps.map((p) => [p.prep, p]));
+              return (
+                <tr key={`${h.pos}|${h.head}`}>
+                  <th scope="row" style={{ textAlign: "start", whiteSpace: "nowrap", position: "sticky", insetInlineStart: 0, background: "var(--ink-800)", padding: "1px 4px", zIndex: 1 }}>
+                    <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }} disabled={!h.root}
+                      title={h.root ? t("expr.openRoot", { root: h.root }) : undefined} onClick={() => h.root && onRoot?.(h.root)}>{h.head}</button>
+                  </th>
+                  {PREP_COLS.map((pk) => {
+                    const p = by.get(pk); const c = p ? p.count : 0; const pct = c ? shade(c) : 0;
+                    return (
+                      <td key={pk} onClick={c ? () => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN) : undefined}
+                        title={c ? `${h.head} ${p.disp} · ${t("expr.occN", { n: c })}` : undefined}
+                        style={{ textAlign: "center", minWidth: 30, height: 26, padding: 0, cursor: c ? "pointer" : "default",
+                          background: c ? `color-mix(in oklab, var(--gold-500) ${pct}%, transparent)` : "transparent",
+                          color: pct > 55 ? "var(--ink-900)" : "var(--text-body)" }}>{c ? fmtNum(c) : ""}</td>
+                    );
+                  })}
+                  <td style={{ textAlign: "center", color: "var(--text-faint)" }} title={t("expr.bareHint")}>{h.bare ? fmtNum(h.bare) : ""}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
@@ -108,7 +132,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
             {rootView.heads.length === 0 && rootView.compounds.length === 0 && <span className="ag-dist-name">{t("expr.none")}</span>}
             {rootView.heads.length > 0 && <>
               <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
-              <div className="ag-dist-bars">{rootView.heads.map(contrastRow)}</div>
+              {renderMatrix(rootView.heads)}
             </>}
             {rootView.compounds.length > 0 && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.compounds")}</span></div>
@@ -128,13 +152,13 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
           </div>
           <input className="ag-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("expr.searchPh")} aria-label={t("expr.searchPh")} style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} />
 
-          {tab === "frames" && (
+          {tab === "frames" && (() => { const hs = heads.filter(matchHead); return (
             <div className="ag-dist-sec">
               <p className="ag-hint">{t("expr.framesHint")}</p>
-              <div className="ag-dist-bars">{heads.filter(matchHead).slice(0, CAP).map(contrastRow)}</div>
-              {heads.filter(matchHead).length > CAP && <p className="ag-hint">{t("expr.more", { n: heads.filter(matchHead).length - CAP })}</p>}
+              {renderMatrix(hs.slice(0, CAP))}
+              {hs.length > CAP && <p className="ag-hint">{t("expr.more", { n: hs.length - CAP })}</p>}
             </div>
-          )}
+          ); })()}
 
           {tab === "compounds" && (
             <div className="ag-dist-sec">
