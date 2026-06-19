@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { norm } from "../arabic-utils.js";
-import { fColor, dColor, eColor, eWidth } from "../theme.js";
+import { fColor, dColor, eColor, eWidth, eDash } from "../theme.js";
 import { useI18n } from "../i18n/index.js";
 import { nodeAria } from "./nodeAria.js";
 
@@ -121,10 +121,14 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewpo
         const baseStroke = rarity ? eColor(l.weight, theme) : (theme === "light" ? "#cbbfa0" : "#243150");
         const baseWidth = rarity ? eWidth(l.weight) : 0.5;
         const baseOp = rarity ? 0.5 : 0.32;
+        // Resting rarity edges also carry a colour-blind-safe dash texture (solid for the
+        // common bulk; high-signal tiers dashed). Bright/highlighted edges stay solid.
+        const dash = !bright && rarity ? eDash(l.weight) : "";
         return <line key={`l${i}`} ref={(el) => { if (el) reg.links.set(i, { el, s: l.source, t: l.target }); else reg.links.delete(i); }}
           x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
           stroke={bright ? (onA ? (theme === "light" ? "#b4530977" : "#fcd34d77") : isC ? T.linkCenter : T.link) : baseStroke}
           strokeWidth={bright ? (isC ? 1.8 : 1) : baseWidth}
+          strokeDasharray={dash || undefined}
           strokeOpacity={bright ? 0.7 : baseOp} />;
       })}
       {showLoops && loopLinks.map((l, i) => {

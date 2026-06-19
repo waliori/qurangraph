@@ -14,7 +14,7 @@ import { useWorkspace } from "../hooks/useWorkspace.js";
  *     حرف (وما، فلا، …) still align — caught via a particle-stripped seed index built here.
  * The default (all-words) seed index is built once by the parent and passed in. */
 
-const VERSE_CAP = 60; // most a single phrase lists inline before a "+N more" note
+const VERSE_BATCH = 60; // verses revealed per "show more" step (a recurrent phrase can have hundreds)
 
 // Highlight the shared run inside a verse. Contiguous by default; when particles were
 // ignored, the run's content tokens may be separated by particles, so match them as an
@@ -41,6 +41,47 @@ function PhraseVerse({ words, phraseNorm, gapAware }) {
     <span className="ag-phrase-verse" dir="rtl">
       {words.map((w, i) => <span key={i} className={hit.has(i) ? "ag-phrase-hit" : undefined}>{w.orig} </span>)}
     </span>
+  );
+}
+
+// One phrase's verse list. Verses are revealed in batches (instead of a hard cap that
+// stranded the tail) so even a phrase shared by hundreds of āyāt is fully reachable while
+// the initial paint stays light. Local reveal state resets naturally: a new result set
+// gives each section a new React key, remounting it back to the first batch.
+function PhraseSection({ p, verseData, ignoreParticles, onNavigate, t, fmtNum }) {
+  const [shown, setShown] = useState(VERSE_BATCH);
+  const visible = p.verses.slice(0, shown);
+  const remaining = p.verses.length - shown;
+  return (
+    <section className="ag-phrase-sec">
+      <div className="ag-phrase-head">
+        <span className="ag-phrase-text" dir="rtl" style={{ fontFamily: "var(--font-quran)" }}>{p.tokens.join(" ")}</span>
+        <span className="ag-phrase-meta">
+          <span className="ag-tag">{t("phrase.wordsTag", { n: p.len })}</span>
+          <span className="ag-tag" style={{ color: "var(--gold-400)" }}>{t("phrase.ayahTag", { n: p.verses.length })}</span>
+        </span>
+      </div>
+      <ul className="ag-phrase-list">
+        {visible.map((vk) => {
+          const v = verseData[vk];
+          if (!v) return null;
+          return (
+            <li key={vk}>
+              <button type="button" className="ag-modal-row" onClick={() => onNavigate(v.s, v.a)} title={t("phrase.recenter")}>
+                <span className="ag-ayah-ref"><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{v.a}</span></span>
+                <span className="ag-modal-text"><PhraseVerse words={v.words} phraseNorm={p.norm} gapAware={ignoreParticles} /></span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {remaining > 0 && (
+        <button type="button" className="ag-btn" style={{ marginInlineStart: "auto", display: "block" }}
+          onClick={() => setShown((n) => n + VERSE_BATCH)}>
+          {t("phrase.showMore", { n: Math.min(remaining, VERSE_BATCH), total: fmtNum(p.verses.length) })}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -85,7 +126,7 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
   const cv = verseData[centerKey];
 
   return (
-    <ModalShell open={!!phrase} onClose={onClose} closeLabel={t("phrase.close")}
+    <ModalShell open={!!phrase} share onClose={onClose} closeLabel={t("phrase.close")}
       ariaLabel={t("phrase.ariaLabel", { surah: cv?.sn, ayah: cv?.a })}
       title={<>
         <span className="ag-badge t-verse">{t("phrase.badge")}</span>
@@ -120,35 +161,10 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
             <div className="ag-empty-inner" style={{ paddingBlock: "var(--space-5)", textAlign: "center", color: "var(--text-faint)" }}>{t("phrase.computing")}</div>
           ) : phrases.length === 0 ? (
             <div className="ag-empty-inner" style={{ paddingBlock: "var(--space-5)", textAlign: "center", color: "var(--text-faint)" }}>{t("phrase.empty")}</div>
-          ) : phrases.map((p, pi) => {
-            const shown = p.verses.slice(0, VERSE_CAP);
-            return (
-              <section className="ag-phrase-sec" key={pi}>
-                <div className="ag-phrase-head">
-                  <span className="ag-phrase-text" dir="rtl" style={{ fontFamily: "var(--font-quran)" }}>{p.tokens.join(" ")}</span>
-                  <span className="ag-phrase-meta">
-                    <span className="ag-tag">{t("phrase.wordsTag", { n: p.len })}</span>
-                    <span className="ag-tag" style={{ color: "var(--gold-400)" }}>{t("phrase.ayahTag", { n: p.verses.length })}</span>
-                  </span>
-                </div>
-                <ul className="ag-phrase-list">
-                  {shown.map((vk) => {
-                    const v = verseData[vk];
-                    if (!v) return null;
-                    return (
-                      <li key={vk}>
-                        <button type="button" className="ag-modal-row" onClick={() => onNavigate(v.s, v.a)} title={t("phrase.recenter")}>
-                          <span className="ag-ayah-ref"><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{v.a}</span></span>
-                          <span className="ag-modal-text"><PhraseVerse words={v.words} phraseNorm={p.norm} gapAware={ignoreParticles} /></span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {p.verses.length > VERSE_CAP && <p className="ag-hint">{t("phrase.moreAyat", { n: p.verses.length - VERSE_CAP })}</p>}
-              </section>
-            );
-          })}
+          ) : phrases.map((p, pi) => (
+            <PhraseSection key={`${p.norm}#${pi}`} p={p} verseData={verseData} ignoreParticles={ignoreParticles}
+              onNavigate={onNavigate} t={t} fmtNum={fmtNum} />
+          ))}
         </div>
     </ModalShell>
   );

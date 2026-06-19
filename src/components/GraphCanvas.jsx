@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { drawScene } from "../graph/canvasRenderer.js";
 import { nodeAria } from "./nodeAria.js";
 import { useI18n } from "../i18n/index.js";
@@ -18,11 +18,16 @@ import { useI18n } from "../i18n/index.js";
  * giving keyboard + screen-reader users the same reach — BUT only up to MIRROR_CAP.
  * Canvas mode exists precisely for huge graphs, where thousands of focusable buttons
  * would both reintroduce the per-node DOM the canvas avoids AND be unusable (thousands
- * of Tab stops). Past the cap we expose a short message pointing to search / the
- * expanded-words list instead.
+ * of Tab stops). Past the cap we add a FILTER box: typing narrows the live node set to
+ * the matches (rendered capped, so the DOM stays small and the Tab stops few), which
+ * gives keyboard / SR users reach to ANY node by name instead of a dead-end message.
  */
 
 const MIRROR_CAP = 400;
+// Match a node against the filter query on its visible label, lookup key, or root.
+const nodeMatches = (n, q) =>
+  (n.label || "").includes(q) || (n.lookup || "").includes(q) ||
+  (n.wordNorm || "").includes(q) || (n.rootLabel || "").includes(q);
 
 function GraphCanvasInner({ nodes, links, loopLinks, nmap, positionsRef, transform, dims, T, theme,
   showLoops, hovered, selected, activeWordNodeIds, highlightSet, highlightLinks, viewport,
@@ -30,6 +35,7 @@ function GraphCanvasInner({ nodes, links, loopLinks, nmap, positionsRef, transfo
   const { t } = useI18n();
   const canvasRef = useRef(null);
   const dprRef = useRef(1);
+  const [nodeFilter, setNodeFilter] = useState(""); // a11y mirror filter (only used past MIRROR_CAP)
   // Latest props, read by the imperative draw() so the parent can repaint at any time
   // (written in an effect, never during render — per the rules of refs).
   const propsRef = useRef(null);
@@ -76,17 +82,37 @@ function GraphCanvasInner({ nodes, links, loopLinks, nmap, positionsRef, transfo
     <>
       <canvas ref={canvasRef} className="ag-canvas" aria-hidden="true"
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
-      {/* Visually-hidden, focusable mirror of the nodes for keyboard / screen readers —
-          capped so a huge canvas graph doesn't recreate thousands of DOM nodes. */}
+      {/* Visually-hidden, focusable mirror of the nodes for keyboard / screen readers.
+          Small graphs list every node; large ones add a filter box so any node is still
+          reachable by name without thousands of Tab stops. */}
       <div className="ag-sr-only" data-panel="1" role="group" aria-label={t("common.aria.graphGroup", { n: nodes.length })}>
-        {nodes.length <= MIRROR_CAP
-          ? nodes.map((n) => (
-              <button key={n.id} type="button" aria-label={nodeAria(n, t)}
-                aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
-                onFocus={() => onNodeEnter(n)} onBlur={() => onNodeLeave(n)}
-                onClick={(e) => onNodeClick(n, e)}>{n.label}</button>
-            ))
-          : <p>{t("common.aria.graphTooLarge", { n: nodes.length })}</p>}
+        {(() => {
+          const overCap = nodes.length > MIRROR_CAP;
+          const q = nodeFilter.trim();
+          const pool = overCap && q ? nodes.filter((n) => nodeMatches(n, q)) : nodes;
+          const shown = overCap ? pool.slice(0, MIRROR_CAP) : pool;
+          return (
+            <>
+              {overCap && (
+                <input type="search" value={nodeFilter} aria-label={t("common.aria.graphFilter")}
+                  placeholder={t("common.aria.graphFilterPh")} onChange={(e) => setNodeFilter(e.target.value)} />
+              )}
+              {shown.map((n) => (
+                <button key={n.id} type="button" aria-label={nodeAria(n, t)}
+                  aria-expanded={(n.type === "word" || n.type === "verse") ? !!n.isExpanded : undefined}
+                  onFocus={() => onNodeEnter(n)} onBlur={() => onNodeLeave(n)}
+                  onClick={(e) => onNodeClick(n, e)}>{n.label}</button>
+              ))}
+              {overCap && (
+                <p aria-live="polite">
+                  {q && pool.length === 0
+                    ? t("common.aria.graphNoMatch", { q })
+                    : t("common.aria.graphFiltered", { shown: shown.length, n: nodes.length })}
+                </p>
+              )}
+            </>
+          );
+        })()}
       </div>
     </>
   );

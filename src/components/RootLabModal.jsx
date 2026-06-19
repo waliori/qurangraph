@@ -75,7 +75,7 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
   };
 
   return (
-    <ModalShell open={!!lab} onClose={onClose} closeLabel={t("lab.close")}
+    <ModalShell open={!!lab} share onClose={onClose} closeLabel={t("lab.close")}
       ariaLabel={t("lab.title", { label: lab.label })}
       title={<>
         {back && <button type="button" className="ag-btn" title={t("lab.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}

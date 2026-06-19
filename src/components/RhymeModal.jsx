@@ -54,7 +54,7 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
   const pvColor = (pvEnding && colors.get(pvEnding)) || "var(--gold-400)";
 
   return (
-    <ModalShell open={!!rhyme} onClose={onClose} closeLabel={t("rhyme.close")}
+    <ModalShell open={!!rhyme} share onClose={onClose} closeLabel={t("rhyme.close")}
       ariaLabel={t("rhyme.title", { ref })}
       title={<>
         {rhyme.back && <button type="button" className="ag-btn" title={t("rhyme.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}

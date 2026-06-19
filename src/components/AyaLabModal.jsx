@@ -53,7 +53,7 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
   const pv = preview ? verseData[preview] : null;
 
   return (
-    <ModalShell open={!!aya} onClose={onClose} closeLabel={t("aya.close")}
+    <ModalShell open={!!aya} share onClose={onClose} closeLabel={t("aya.close")}
       ariaLabel={t("aya.title", { ref })}
       title={<>
         {aya.back && <button type="button" className="ag-btn" title={t("aya.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}

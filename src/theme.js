@@ -48,3 +48,13 @@ const E_LIGHT = ["#b8ac8a", "#1d4ed8", "#0f766e", "#b45309"];
 function eBucket(w) { if (w < 0.18) return 0; if (w < 0.28) return 1; if (w < 0.45) return 2; return 3; }
 export function eColor(weight, theme = "dark") { return (theme === "light" ? E_LIGHT : E_DARK)[eBucket(weight || 0)]; }
 export function eWidth(weight) { return 0.5 + Math.min(1, (weight || 0) * 1.6) * 2; }
+
+/* Non-colour rarity cue (colour-blind safe). Rarity is otherwise read from hue (eColor)
+ * + width (eWidth); for users who can't separate the hues, a stroke TEXTURE gives a
+ * redundant channel. The common bulk stays solid (so the dense default view is
+ * unchanged), and the two high-signal tiers get distinct dashes so the rarest — most
+ * meaningful — links stand out by pattern as well as colour. `eDash` → an SVG
+ * `stroke-dasharray` string ("" = solid); `eDashArr` → the canvas number[] form. */
+const E_DASH = ["", "", "10,4", "4,3"]; // common → rare: solid · solid · long-dash · short-dash
+export function eDash(weight) { return E_DASH[eBucket(weight || 0)]; }
+export function eDashArr(weight) { const d = eDash(weight); return d ? d.split(",").map(Number) : []; }

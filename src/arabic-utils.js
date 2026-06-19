@@ -120,3 +120,32 @@ export const STOP_CONTENT_DEFAULT = new Set("الله,رب,ربك,ربكم,رب�
 
 export let STOP = new Set([...STOP_PARTICLES, ...STOP_CONTENT_DEFAULT]);
 export function setStopSet(set) { STOP = set instanceof Set ? set : new Set(set || []); }
+
+/* ═══ Forgiving search keys ═══
+ *
+ * The corpus is Uthmani, so a long-ā may be a dagger alef (ٱلسَّلَٰم) or a waw+dagger
+ * (ٱلصَّلَوٰة، ٱلرِّبَوٰا). norm() strips the dagger, which makes conventional spellings
+ * (السلام، الصلاة، الربا) miss. `searchAlef` rewrites those to a plain alef instead, so a
+ * word is also indexed under its imlāʾī (modern) form; `looseKeys` returns every forgiving
+ * key for a word/query (the loose norm, the dagger/waw→alef form, and that form with
+ * hamza-carriers dropped — so a query's seated hamza ـئـ still matches the corpus ـءـ).
+ * Generic: derived purely from the given string, used both to index words and to resolve a
+ * query. Shared by the corpus-index builder and the toolbar search. */
+const DAGGER = "ٰ";
+const HAMZA = /[ءئؤ]/g;
+export const searchAlef = (raw) =>
+  norm(raw.replace(new RegExp("و" + DAGGER, "g"), "ا").replace(new RegExp(DAGGER, "g"), "ا")).replace(/ا{2,}/g, "ا");
+// STRONG keys: the loose norm + the dagger/waw→alef (imlāʾī) form. These are real spellings —
+// safe to index a word under AND to expand a prefix search over.
+export const strongKeys = (raw) =>
+  [...new Set([norm(raw), searchAlef(raw)].filter((k) => k && k.length >= 2))];
+// ALL keys, strong PLUS the hamza-carrier-dropped form. The dropped-hamza key lets a query
+// whose seat differs (ـئـ vs ـءـ) still RESOLVE to the corpus word — but it's a degraded form
+// (جِئْنَا → "جنا") that collides with unrelated stems as a prefix, so it must be used only for
+// direct resolution, never to seed suggestions. `fuzzyKeys` is exactly that residual set.
+export const looseKeys = (raw) =>
+  [...new Set([norm(raw), searchAlef(raw), searchAlef(raw.replace(HAMZA, ""))].filter((k) => k && k.length >= 2))];
+export const fuzzyKeys = (raw) => {
+  const strong = new Set(strongKeys(raw));
+  return looseKeys(raw).filter((k) => !strong.has(k));
+};

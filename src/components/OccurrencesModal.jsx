@@ -14,7 +14,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   const { t, tn } = useI18n();
   const ws = useWorkspace();
   const n = occ?.keys?.length || 0;
-  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
+  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, listProps, rowProps } =
     useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${n}` });
 
   if (!occ) return null;
@@ -26,7 +26,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
     if (!v) continue;
     rows.push(
       <li key={keys[i]} ref={rowRef(i)}>
-        <button type="button" className={"ag-modal-row" + (i === 0 ? " is-current" : "")}
+        <button type="button" {...rowProps(i)} className={"ag-modal-row" + (i === 0 ? " is-current" : "")}
           onClick={() => onNavigate(v.s, v.a)} title={t("occ.makeCenter")}>
           <span className="ag-ayah-ref">
             <span className="ag-ayah-surah">{v.sn}</span>
@@ -41,7 +41,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   }
 
   return (
-    <ModalShell open={!!occ} onClose={onClose} closeLabel={t("occ.close")}
+    <ModalShell open={!!occ} share onClose={onClose} closeLabel={t("occ.close")}
       onEscape={() => (occ?.back && onBack ? onBack() : onClose())}
       ariaLabel={t("occ.title", { label: occ.label })}
       title={<>
@@ -83,7 +83,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
                 exportTextFile(bib, `cite-occ-${occ.lookup || "term"}.bib`, "application/x-bibtex");
               }}>⧉ {t("common.cite.cite")}</button>
       </>}>
-        <ul className="ag-modal-list" ref={scrollRef} onScroll={onScroll}>
+        <ul className="ag-modal-list" ref={scrollRef} onScroll={onScroll} {...listProps} aria-label={t("occ.title", { label: occ.label })}>
           <li className="ag-vspace" aria-hidden="true" style={{ height: padTop }} />
           {rows}
           <li className="ag-vspace" aria-hidden="true" style={{ height: padBottom }} />

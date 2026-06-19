@@ -5,6 +5,11 @@ import QuranGraph from './QuranGraph.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 import { I18nProvider } from './i18n/index.js'
 import { WorkspaceProvider } from './hooks/useWorkspace.js'
+import { installGlobalErrorCapture } from './errorLog.js'
+
+// Record uncaught errors / promise rejections locally (never uploaded) so a crash
+// leaves an inspectable trace instead of only a transient console.error.
+installGlobalErrorCapture()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

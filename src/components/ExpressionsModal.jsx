@@ -133,7 +133,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   };
 
   return (
-    <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
+    <ModalShell open={open} share onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
       title={<>
         {(detail || focus) && <button type="button" className="ag-btn" title={t("expr.back")} onClick={() => (detail ? setDetail(null) : setFocus(null))} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("expr.badge")}</span>

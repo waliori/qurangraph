@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { norm, normStrict, groupKey } from "../arabic-utils.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { wordGroupKey } from "../arabic-utils.js";
+import { looseResolve } from "../search.js";
 import { distributionBySura, collocations, mergeCollocations } from "../analytics/stats.js";
 import { exportJsonFile, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
@@ -25,29 +26,25 @@ const COLLOC_SORTS = ["count", "ll", "pmi"]; // labels via t("cmp.sort.*")
 const A_COLOR = "var(--gold-400)";
 const B_COLOR = "var(--viridian-400)";
 
-// Resolve a typed query into a term against the active index, or null if it has no
-// occurrences (so an empty slot never claims a non-existent word).
-function resolveTerm(query, mode, precision, indices) {
-  const q = norm(query || "");
-  if (q.length < 2) return null;
-  const lookup = mode === "exact" ? (precision === "strict" ? normStrict(query) : q) : groupKey(q, mode);
-  const idx = indices?.[mode];
-  if (!idx || !(idx[lookup] && idx[lookup].length)) return null;
-  return { lookup, label: query.trim(), mode };
-}
-
 const fmtMetric = (v) => (v == null ? "" : Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1));
 
-// One editable term slot: a mode segment + a search field, plus the current term.
-function TermSlot({ term, color, indices, precision, onSet }) {
+// One editable term slot: a mode segment + a search field, plus the current term. The
+// query is resolved forgivingly (looseResolve): a lone match is set straight away, but an
+// ambiguous skeleton offers a "did you mean" chooser of the distinct senses — so e.g. جن in
+// Lemma mode lets you pick جِنّ (jinn) instead of silently landing on the verb جَنَّ.
+function TermSlot({ term, color, indices, precision, searchAlias, searchAliasFuzzy, onSet }) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
   const [mode, setMode] = useState(term?.mode || "root");
   const [miss, setMiss] = useState(false);
+  const [choices, setChoices] = useState(null); // candidate list when the query is ambiguous
+  const set = (lookup) => { onSet({ lookup, label: lookup, mode }); setQ(""); setMiss(false); setChoices(null); };
   const submit = (e) => {
     e.preventDefault();
-    const resolved = resolveTerm(q, mode, precision, indices);
-    if (resolved) { onSet(resolved); setQ(""); setMiss(false); } else setMiss(true);
+    const { candidates } = looseResolve(q, mode, precision, indices, searchAlias, searchAliasFuzzy);
+    if (!candidates.length) { setMiss(true); setChoices(null); }
+    else if (candidates.length === 1) set(candidates[0].lookup);
+    else setChoices(candidates);
   };
   return (
     <div className="ag-cmp-slot">
@@ -59,32 +56,59 @@ function TermSlot({ term, color, indices, precision, onSet }) {
       <form className="ag-cmp-pick" onSubmit={submit} role="search">
         <div className="ag-seg ag-seg-sm" role="group" aria-label={t("cmp.modeAria")}>
           {MODES.map((m) => (
-            <button type="button" key={m} className={mode === m ? "is-on" : ""} aria-pressed={mode === m} onClick={() => setMode(m)}>{t("cmp.mode." + m)}</button>
+            <button type="button" key={m} className={mode === m ? "is-on" : ""} aria-pressed={mode === m}
+              onClick={() => { setMode(m); setChoices(null); }}>{t("cmp.mode." + m)}</button>
           ))}
         </div>
         <div className="ag-cmp-pickrow">
           <input className={"ag-input" + (miss ? " is-miss" : "")} type="search" value={q}
             aria-label={t("cmp.searchAria")}
             placeholder={t("cmp.ph." + mode)}
-            onChange={(e) => { setQ(e.target.value); if (miss) setMiss(false); }} />
+            onChange={(e) => { setQ(e.target.value); if (miss) setMiss(false); if (choices) setChoices(null); }} />
           <button type="submit" className="ag-btn">{term ? t("cmp.change") : t("cmp.set")}</button>
         </div>
+        {choices && (
+          <div className="ag-cmp-choices" role="listbox" aria-label={t("cmp.didYouMean")}
+            style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}>
+            <span className="ag-hint" style={{ flexBasis: "100%", margin: 0 }}>{t("cmp.didYouMean")}</span>
+            {choices.map((c) => (
+              <button type="button" key={c.lookup} role="option" className="ag-tag ag-tag-btn" onClick={() => set(c.lookup)}
+                title={t("cmp.choiceTitle", { count: c.count })}>
+                <span style={{ fontFamily: "var(--font-quran)" }}>{c.lookup}</span> <b style={{ color }}>{c.count}</b>
+              </button>
+            ))}
+          </div>
+        )}
       </form>
     </div>
   );
 }
 
-export function CompareModal({ cmp, indices, verseData, surahList, stopSet, precision, onNavigate, onPick, onClose }) {
+export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, verseData, surahList, stopSet, precision, onNavigate, onPick, onChange, onClose }) {
   const { t } = useI18n();
   const ws = useWorkspace();
   const [A, setA] = useState(cmp?.A || null);
   const [B, setB] = useState(cmp?.B || null);
   const [sort, setSort] = useState("ll");
+  const [detail, setDetail] = useState(null); // a clicked sūra's co-occurrence sub-view: { sura, name }
   // Re-seed the slots when the modal is (re)opened with a fresh context. `cmp` is a
   // stable object while open, so a new open = a new identity — the React-recommended
   // "adjust state during render" pattern, no effect needed.
   const [seed, setSeed] = useState(cmp);
-  if (cmp !== seed) { setSeed(cmp); setA(cmp?.A || null); setB(cmp?.B || null); }
+  if (cmp !== seed) { setSeed(cmp); setA(cmp?.A || null); setB(cmp?.B || null); setDetail(null); }
+  // Editing either term invalidates an open co-occurrence sub-view.
+  const onSetA = (term) => { setA(term); setDetail(null); };
+  const onSetB = (term) => { setB(term); setDetail(null); };
+  const swap = () => { setA(B); setB(A); setDetail(null); };
+
+  // Push in-modal term edits back up so the shared link / saved view reflects the CURRENT
+  // comparison, not just the terms it was opened with. Skips the initial mount (those terms
+  // are already what the parent holds). Re-seeding above keeps this from looping.
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) { firstSync.current = false; return; }
+    onChange?.({ A, B });
+  }, [A, B, onChange]);
 
   const data = useMemo(() => {
     if (!A || !B) return null;
@@ -101,20 +125,27 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
     }
     const totalA = distA.reduce((s, d) => s + d.count, 0), totalB = distB.reduce((s, d) => s + d.count, 0);
     const surasA = distA.filter((d) => d.count > 0).length, surasB = distB.filter((d) => d.count > 0).length;
-    const firstA = {}, firstB = {};
-    for (const vk of idxA[A.lookup] || []) { const s = verseData[vk]?.s; if (s != null && !firstA[s]) firstA[s] = vk; }
-    for (const vk of idxB[B.lookup] || []) { const s = verseData[vk]?.s; if (s != null && !firstB[s]) firstB[s] = vk; }
-    return { rows, max, merged, totalA, totalB, surasA, surasB, firstA, firstB };
+    return { rows, max, merged, totalA, totalB, surasA, surasB };
   }, [A, B, indices, verseData, surahList, stopSet, sort]);
+
+  // Every verse in the clicked sūra where EITHER term occurs (their union), in āya order —
+  // the sub-view's content. A verse highlights whichever term(s) it carries in that term's
+  // colour (e.g. in al-Naml: jānn once, jinn twice → those three verses, each tinted to the
+  // word it holds). Each side keeps its own grouping mode.
+  const coVerses = useMemo(() => {
+    if (!detail || !A || !B) return [];
+    const idxA = indices?.[A.mode] || {}, idxB = indices?.[B.mode] || {};
+    const set = new Set();
+    for (const vk of idxA[A.lookup] || []) if (verseData[vk]?.s === detail.sura) set.add(vk);
+    for (const vk of idxB[B.lookup] || []) if (verseData[vk]?.s === detail.sura) set.add(vk);
+    return [...set].sort((a, b) => Number(a.split(":")[1]) - Number(b.split(":")[1]));
+  }, [detail, A, B, indices, verseData]);
 
   if (!cmp) return null;
 
   const metricOf = (c) => (sort === "pmi" ? c.pmi : sort === "ll" ? c.ll : null);
-  const navRow = (row) => {
-    const vk = data.firstA[row.sura] || data.firstB[row.sura];
-    const v = vk && verseData[vk];
-    if (v) onNavigate?.(v.s, v.a);
-  };
+  // A word's highlight colour: A's gold, B's teal, or none — by each term's own mode.
+  const wordColor = (w) => (A && wordGroupKey(w, A.mode) === A.lookup ? A_COLOR : B && wordGroupKey(w, B.mode) === B.lookup ? B_COLOR : null);
   const chip = (c, color, mode) => {
     const mv = metricOf(c);
     return (
@@ -129,11 +160,15 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
   const ready = A && B && data;
 
   return (
-    <ModalShell open={!!cmp} onClose={onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
-      title={<>
+    <ModalShell open={!!cmp} share onClose={onClose} onEscape={detail ? () => setDetail(null) : onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
+      title={detail ? (<>
+        <button type="button" className="ag-iconbtn" title={t("cmp.back")} aria-label={t("cmp.back")} onClick={() => setDetail(null)}>→</button>
+        <span className="ag-badge t-verse">{t("ctx.badge")}</span>
+        <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{detail.sura}. {detail.name}</h2>
+      </>) : (<>
         <h2 className="ag-modal-word">{t("cmp.title")}</h2>
         {ready && <span className="ag-modal-count"><b style={{ color: A_COLOR }}>{data.totalA}</b> · <b style={{ color: B_COLOR }}>{data.totalB}</b></span>}
-      </>}
+      </>)}
       actions={<>
             {ready && (
               <button type="button" className="ag-btn" title={t("ws.saveTitle")}
@@ -166,11 +201,38 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
             )}
       </>}>
 
+        {detail ? (
+          <div className="ag-dist-body">
+            <p className="ag-hint">
+              <span style={{ color: A_COLOR }}>▮ {A.label}</span> · <span style={{ color: B_COLOR }}>▮ {B.label}</span> — {t("cmp.coEach", { name: detail.name })}
+            </p>
+            {coVerses.length === 0 ? (
+              <p className="ag-dist-name" style={{ padding: "var(--space-3)" }}>{t("cmp.coNone")}</p>
+            ) : (
+              <ul className="ag-modal-list">
+                {coVerses.map((vk) => {
+                  const v = verseData[vk];
+                  if (!v) return null;
+                  return (
+                    <li key={vk}>
+                      <button type="button" className="ag-modal-row" onClick={() => onNavigate?.(v.s, v.a)} title={t("cmp.recenter")}>
+                        <span className="ag-ayah-ref"><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{v.a}</span></span>
+                        <span className="ag-modal-text" dir="rtl" style={{ fontFamily: "var(--font-quran)" }}>
+                          {v.words.map((w, i) => { const c = wordColor(w); return <span key={i} style={c ? { color: c, fontWeight: 700 } : undefined}>{w.orig} </span>; })}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (<>
         <div className="ag-cmp-slots">
-          <TermSlot term={A} color={A_COLOR} indices={indices} precision={precision} onSet={setA} />
+          <TermSlot term={A} color={A_COLOR} indices={indices} precision={precision} searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy} onSet={onSetA} />
           <button type="button" className="ag-iconbtn ag-cmp-swap" title={t("cmp.swap")} aria-label={t("cmp.swapAria")}
-            onClick={() => { const tmp = A; setA(B); setB(tmp); }}>⇄</button>
-          <TermSlot term={B} color={B_COLOR} indices={indices} precision={precision} onSet={setB} />
+            onClick={swap}>⇄</button>
+          <TermSlot term={B} color={B_COLOR} indices={indices} precision={precision} searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy} onSet={onSetB} />
         </div>
 
         {!ready ? (
@@ -184,7 +246,7 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
               </p>
               <div className="ag-dist-bars">
                 {data.rows.map((r) => (
-                  <button type="button" className="ag-dist-row ag-dist-rowbtn ag-cmp-row" key={r.sura} onClick={() => navRow(r)} title={t("cmp.rowTitle", { name: r.name, aLabel: A.label, aCount: r.a, bLabel: B.label, bCount: r.b })}>
+                  <button type="button" className="ag-dist-row ag-dist-rowbtn ag-cmp-row" key={r.sura} onClick={() => setDetail({ sura: r.sura, name: r.name })} title={t("cmp.rowTitle", { name: r.name, aLabel: A.label, aCount: r.a, bLabel: B.label, bCount: r.b })}>
                     <span className="ag-dist-name">{r.sura}. {r.name}</span>
                     <span className="ag-cmp-bars">
                       <span className="ag-cmp-barline"><span className="ag-dist-bar" style={{ width: `${(r.a / data.max) * 100}%`, background: A_COLOR }} /><b style={{ color: A_COLOR }}>{r.a || ""}</b></span>
@@ -229,6 +291,7 @@ export function CompareModal({ cmp, indices, verseData, surahList, stopSet, prec
             </div>
           </div>
         )}
+        </>)}
     </ModalShell>
   );
 }

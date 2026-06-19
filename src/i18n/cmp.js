@@ -31,6 +31,12 @@ export const ar = {
   "cmp.chooseTerm": "اختر مصطلحًا…",
   "cmp.change": "تغيير",
   "cmp.set": "تعيين",
+  "cmp.didYouMean": "هل تقصد؟",
+  "cmp.choiceTitle": "{count} آية",
+  "cmp.back": "رجوع إلى المقارنة",
+  "cmp.coEach": "آيات كلٍّ من الكلمتين في {name}",
+  "cmp.coNone": "لا ترد أيٌّ من الكلمتين في هذه السورة.",
+  "cmp.recenter": "اجعلها مركز الشبكة",
 };
 
 export const en = {
@@ -66,4 +72,10 @@ export const en = {
   "cmp.chooseTerm": "Choose a term…",
   "cmp.change": "Change",
   "cmp.set": "Set",
+  "cmp.didYouMean": "Did you mean?",
+  "cmp.choiceTitle": "{count} verses",
+  "cmp.back": "Back to comparison",
+  "cmp.coEach": "Verses of each term in {name}",
+  "cmp.coNone": "Neither term occurs in this sūrah.",
+  "cmp.recenter": "Make it the centre of the graph",
 };

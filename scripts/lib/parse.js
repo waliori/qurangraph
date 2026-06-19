@@ -204,6 +204,38 @@ function capAtSentence(s, max) {
   return (lastDot > max * 0.5 ? slice.slice(0, lastDot + 1) : slice).trim();
 }
 
+/* ═══ Concise core-sense extraction ═══
+ *
+ * The old heuristic was `indexOf('.')` — "everything up to the first period". That
+ * is unreliable for classical Arabic dictionary prose: OpenITI OCR scatters or omits
+ * the ASCII period, and an Arabic clause is delimited by ؟ ؛ ، and the full stop ۔/.
+ * as much as by '.'. A stray early dot (an abbreviation, a digit) then truncates the
+ * gloss to nothing; a missing dot leaves the whole article as the "concise" sense.
+ *
+ * Instead: take the first STRONG clause boundary (. ۔ ؛ !) that falls in a sensible
+ * window (not so early it's an abbreviation, not past `maxChars`); failing that the
+ * first WEAK boundary (، ;); failing that a hard WORD cap so the result is never a
+ * mid-word slice. Returns the trimmed core sense (never empty if `prose` is non-empty). */
+const STRONG_BOUNDARY = /[.۔؛!]/g;
+const WEAK_BOUNDARY = /[،;]/g;
+export function conciseGloss(prose, { minChars = 10, maxChars = 240, maxWords = 28 } = {}) {
+  const s = (prose || "").trim();
+  if (!s) return s;
+  const pick = (re) => {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      if (m.index > maxChars) break;
+      if (m.index >= minChars) return s.slice(0, m.index).trim();
+    }
+    return null;
+  };
+  const byBoundary = pick(STRONG_BOUNDARY) || pick(WEAK_BOUNDARY);
+  if (byBoundary) return byBoundary;
+  const words = s.split(/\s+/);
+  return (words.length <= maxWords ? s : words.slice(0, maxWords).join(" ")).trim();
+}
+
 /* Turn the body lines of one Maqayis entry (the lines after a
  * `### | (root)` header, up to the next header) into { c, f, full }:
  *   c    = concise core sense (first sentence)
@@ -223,8 +255,7 @@ export function parseMaqayisEntry(lines, maxFull = 600) {
 
   const opening = cleanProse(para.join(" "));
   if (!opening) return null;
-  const dot = opening.indexOf(".");
-  const c = dot > 0 ? opening.slice(0, dot).trim() : opening;
+  const c = conciseGloss(opening);
   const f = capAtSentence(opening, maxFull);
 
   // The complete article: all content + continuation lines (skipping page /
@@ -251,8 +282,7 @@ function cleanLex(s) {
 function pack(rootText, bodyLines, maxFull) {
   const full = cleanLex(bodyLines.join(" "));
   if (!full || full.length < 4) return null;
-  const dot = full.indexOf(".");
-  const c = dot > 0 && dot < 240 ? full.slice(0, dot).trim() : capAtSentence(full, 160);
+  const c = conciseGloss(full);
   const f = capAtSentence(full, maxFull);
   return { root: rootText, c, f, full };
 }

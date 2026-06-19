@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText, parseLexMeta, parsePageMarker, parseSpacedRoot } from "./parse.js";
+import { parseMorphologyRoot, parseMorphology, aggregateWord, collapseGeminate, matchNorm, matchRoot, parseMaqayisEntry, parseLexiconText, parseLexMeta, parsePageMarker, parseSpacedRoot, conciseGloss } from "./parse.js";
 
 describe("parseMorphologyRoot", () => {
   it("extracts ROOT when present", () => {
@@ -218,5 +218,32 @@ describe("parseLexMeta", () => {
     expect(m.year).toBe("1414هـ");
     expect(m.vols).toBe(15);
     expect(m.editor).toBeUndefined(); // NODATA dropped, and nothing read past Header#End#
+  });
+});
+
+describe("conciseGloss", () => {
+  it("takes the first sentence at a period (the common case)", () => {
+    expect(conciseGloss("الأرض المعروفة. وقد تطلق على غيرها")).toBe("الأرض المعروفة");
+  });
+  it("uses the Arabic semicolon ؛ as a clause boundary", () => {
+    expect(conciseGloss("أصل صحيح يدل على ثبات؛ ثم يتفرع")).toBe("أصل صحيح يدل على ثبات");
+  });
+  it("ignores a boundary that falls before minChars (stray early dot)", () => {
+    // The '.' after 'م' is too early to be a real sentence end; fall through.
+    expect(conciseGloss("م. الكلمة الأصلية تعني الشيء العظيم")).toBe("م. الكلمة الأصلية تعني الشيء العظيم");
+  });
+  it("falls back to a word cap when there is no boundary at all", () => {
+    const long = Array.from({ length: 40 }, (_, i) => `ك${i}`).join(" ");
+    const out = conciseGloss(long);
+    expect(out.split(/\s+/).length).toBe(28);
+    expect(long.startsWith(out)).toBe(true);
+  });
+  it("returns short boundary-free prose unchanged", () => {
+    expect(conciseGloss("الماء")).toBe("الماء");
+    expect(conciseGloss("")).toBe("");
+  });
+  it("does not truncate mid-word on the fallback path", () => {
+    const out = conciseGloss(Array.from({ length: 40 }, () => "كلمةطويلة").join(" "));
+    expect(out.endsWith("كلمةطويلة")).toBe(true); // ends on a whole token
   });
 });

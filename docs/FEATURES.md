@@ -28,7 +28,9 @@ translation.
 | **Overflow** (`+N`) | dashed aggregate | the verses the per-word cap hid — click to open the full occurrences list |
 
 Edges are **rarity-weighted**: a rarer shared word draws a stronger, brighter
-edge (it's a more meaningful link than sharing a very common word).
+edge (it's a more meaningful link than sharing a very common word). Rarity is also
+carried by stroke **width** and, for the high-signal tiers, a **dash** texture — so the
+encoding reads without relying on colour.
 
 ---
 
@@ -264,8 +266,10 @@ Everything is stored locally in your browser — nothing is ever uploaded.
 
 - **Copy link** encodes the entire state — centre verse, mode, precision, theme,
   lexicon, toggles, morphology filter, stop-word edits, the expanded set, the
-  selection, the view transform, and (on small enough graphs) the **exact node
-  positions** — into the URL hash. Open it elsewhere to reproduce the view.
+  selection, the view transform, any **open analysis view** (a distribution, compare,
+  lab, or explorer — so "distribution of ق-و-ل" is itself shareable), and (on small
+  enough graphs) the **exact node positions** — into the URL hash. Open it elsewhere to
+  reproduce the view. Saving a graph to the workspace captures the open analysis too.
 - **Undo / redo** covers discrete exploration steps (centre, selection,
   expand/collapse) — `Ctrl/⌘+Z` / `Ctrl+Y`. Pan/zoom/hover are deliberately not
   recorded.
@@ -276,4 +280,7 @@ Everything is stored locally in your browser — nothing is ever uploaded.
 
 Modals trap focus and close on Escape; nodes carry descriptive screen-reader
 labels (in both renderers); the UI is fully keyboard-navigable and respects the
-active language's direction.
+active language's direction. The long occurrence/context lists are reachable
+end-to-end by keyboard (arrow/Home/End/PageUp·Down move a roving cursor through the
+virtualized rows), and on very large canvas graphs a filter box lets keyboard and
+screen-reader users find any node by name.

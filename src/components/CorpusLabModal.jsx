@@ -49,7 +49,7 @@ export function CorpusLabModal({ open, verseData, r2v, w2v, precision, morph, re
   const m = detail?.match;
 
   return (
-    <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("corpus.title")}
+    <ModalShell open={open} share onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("corpus.title")}
       title={<>
         {detail && <button type="button" className="ag-btn" title={t("corpus.back")} onClick={() => { setDetail(null); setPreview(null); }} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("corpus.badge")}</span>

@@ -169,7 +169,12 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
 
   const handleEvent = useCallback((data) => {
     const { type, status, action, index } = data;
-    if ((type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED) && !endedRef.current) {
+    // End on finish/skip AND on the card's ✕ (action CLOSE). CLOSE arrives as a STEP_AFTER
+    // event, so without this it fell through to the advance branch below — the tour didn't
+    // actually close, its overlay stayed up, and clicks on a later-opened modal (e.g. the
+    // share button) were swallowed. Treat ✕ as "dismiss the tour", like Skip.
+    const ending = type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED || action === ACTIONS.CLOSE;
+    if (ending && !endedRef.current) {
       endedRef.current = true;
       onEnd(dontShowRef.current);
       return;

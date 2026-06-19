@@ -54,6 +54,18 @@ describe("URL state round-trip", () => {
     expect(back2.activeLexicon).toBe("lisan");
   });
 
+  it("round-trips an open analysis VIEW so a deep link reproduces the lens", () => {
+    const dist = decodeState(encodeState({ surah: 2, ayah: 1, view: { t: "dist", k: "قول", l: "قَالَ", m: "root" } }));
+    expect(dist.view).toEqual({ t: "dist", k: "قول", l: "قَالَ", m: "root" });
+    const cmp = decodeState(encodeState({ surah: 2, ayah: 1, view: { t: "cmp", a: { k: "نور", l: "نور", m: "root" }, b: null } }));
+    expect(cmp.view).toEqual({ t: "cmp", a: { k: "نور", l: "نور", m: "root" }, b: null });
+  });
+
+  it("omits the view when none is open, and rejects a malformed descriptor", () => {
+    expect(decodeState(encodeState({ surah: 2, ayah: 1 })).view).toBe(null);
+    expect(decodeState(encodeState({ surah: 2, ayah: 1, view: { nope: 1 } })).view).toBe(null); // no `t`
+  });
+
   it("returns null on garbage", () => {
     expect(decodeState("")).toBe(null);
     expect(decodeState("#s=not%20json")).toBe(null);

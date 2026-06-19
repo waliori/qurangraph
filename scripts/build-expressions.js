@@ -19,8 +19,7 @@ import { parseMorphology, aggregateWord } from "./lib/parse.js";
  *   - compounds : إضافة — noun + genitive noun, ranked by log-likelihood so fixed
  *                 constructs rise above incidental adjacencies.
  *   - idioms    : a human-curated seed (data/idioms.json, non-compositional) with its
- *                 verses attached, plus a small clearly-labelled statistical set of
- *                 high-LL content bigrams.
+ *                 verses attached — authoritative, precision-first, not mined.
  *
  * Word indices in the corpus align 1:1 with the app's space-split verse words (verified
  * against quran-hafs.json), so occurrences store [verseKey, …wordIndex] for highlighting.

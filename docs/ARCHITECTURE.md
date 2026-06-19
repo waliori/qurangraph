@@ -203,6 +203,7 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
 
 | Hook | Role |
 |------|------|
+| `useCorpusIndices` | the derived data layer: builds `verseData` + the inverted indices (`w2v`/`r2v`/`l2v`), `searchAlias`, `compareIndices`, `orderedKeys`, and `stopSet` from the loaded corpus. Pure memos, lifted out of QuranGraph (first slice of the R3.1 decomposition). |
 | `usePersistedState` | localStorage state with a sanitizer; corrupt-/quota-safe. |
 | `useUrlState` | encode/decode the full app state to the URL hash (compact keys, only non-defaults, sorted Sets, optional node positions). `readUrlState`/`writeUrlState` (debounced `replaceState`). |
 | `useExplorationHistory` | undo/redo of discrete exploration steps (≤120), keyboard-bound. |

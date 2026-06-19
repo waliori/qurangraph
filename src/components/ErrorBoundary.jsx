@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { translate } from "../i18n/index.js";
+import { logCrash } from "../errorLog.js";
 
 /* Catches render/runtime errors in the graph so a single bad node or NaN
  * coordinate shows a recoverable message instead of unmounting to a blank page.
@@ -21,6 +22,7 @@ export class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error("QuranGraph crashed:", error, info);
+    logCrash(error, { source: "react", info }); // local-only record (never uploaded)
   }
 
   reset = () => this.setState({ error: null });

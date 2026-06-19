@@ -24,7 +24,7 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
     [ctx, suraKeys]
   );
   const n = ctx ? suraKeys.length : 0;
-  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom } =
+  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, listProps, rowProps } =
     useVirtualRows({ count: n, est: 110, overscan: 8, resetKey: ctx?.centerKey, initialIndex: centerIndex });
 
   if (!ctx) return null;
@@ -38,7 +38,7 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
     rows.push(
       <li key={key} ref={rowRef(i)}>
         {i === 0 && <div className="ag-ctx-surahead">{v.s}. {v.sn}</div>}
-        <button type="button" className={"ag-ctx-aya" + (isCenter ? " is-center" : "")}
+        <button type="button" {...rowProps(i)} className={"ag-ctx-aya" + (isCenter ? " is-center" : "")}
           onClick={() => onNavigate(v.s, v.a)} title={t("ctx.makeCenter")}>
           <span className="ag-ctx-num">{v.a}</span>
           <span className="ag-ctx-text">{v.text}</span>
@@ -48,13 +48,14 @@ export function ContextModal({ ctx, orderedKeys, verseData, onNavigate, onClose 
   }
 
   return (
-    <ModalShell open={!!ctx} onClose={onClose} closeLabel={t("ctx.close")}
+    <ModalShell open={!!ctx} share onClose={onClose} closeLabel={t("ctx.close")}
       ariaLabel={t("ctx.ariaLabel", { ref: center ? center.sn + " " + center.a : "" })}
       title={<>
         <span className="ag-badge t-verse">{t("ctx.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{center ? `${center.sn} ${center.a}` : ""}</h2>
       </>}>
-      <ul className="ag-modal-list ag-ctx-list" ref={scrollRef} onScroll={onScroll} dir="rtl">
+      <ul className="ag-modal-list ag-ctx-list" ref={scrollRef} onScroll={onScroll} dir="rtl"
+        {...listProps} aria-label={t("ctx.ariaLabel", { ref: center ? center.sn + " " + center.a : "" })}>
         <li className="ag-vspace" aria-hidden="true" style={{ height: padTop }} />
         {rows}
         <li className="ag-vspace" aria-hidden="true" style={{ height: padBottom }} />

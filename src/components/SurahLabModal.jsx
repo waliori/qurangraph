@@ -112,7 +112,7 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
   };
 
   return (
-    <ModalShell open={!!surah} onClose={onClose} closeLabel={t("surah.close")}
+    <ModalShell open={!!surah} share onClose={onClose} closeLabel={t("surah.close")}
       ariaLabel={t("surah.title", { name: profile.name })}
       title={<>
         {back && <button type="button" className="ag-btn" title={t("surah.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}

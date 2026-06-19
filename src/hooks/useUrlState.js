@@ -33,6 +33,12 @@ export function encodeState(s) {
   if (s.morphFilter && (s.morphFilter.pos?.length || s.morphFilter.form?.length || s.morphFilter.aspect?.length || s.morphFilter.voice?.length)) o.mf = s.morphFilter;
   const sx = arr(s.stopExtra); if (sx.length) o.sx = sx.sort();
   const sd = arr(s.stopDisabled); if (sd.length) o.sd = sd.sort();
+  // The currently-open ANALYSIS view (distribution / compare / a lab / the corpus or
+  // expressions explorer …) as a small descriptor, so a deep link reproduces not just the
+  // graph but the lens the user was reading. Shape is owned by QuranGraph (openView); we
+  // only round-trip the compact object. Heavy payloads (occurrence key lists) are left out
+  // — the reopener recomputes them — so the URL stays short.
+  if (s.view && typeof s.view === "object" && s.view.t) o.vw = s.view;
   // Node positions (flat [x0,y0,x1,y1,…] in sorted-node-id order) so a shared graph
   // reproduces the exact arrangement, not just which nodes are expanded.
   if (Array.isArray(s.pos) && s.pos.length) o.pp = s.pos;
@@ -67,6 +73,7 @@ export function decodeState(str) {
   out.stopExtra = Array.isArray(o.sx) ? o.sx : [];
   out.stopDisabled = Array.isArray(o.sd) ? o.sd : [];
   out.pos = Array.isArray(o.pp) ? o.pp : null;
+  out.view = o.vw && typeof o.vw === "object" && o.vw.t ? o.vw : null;
   return out;
 }
 

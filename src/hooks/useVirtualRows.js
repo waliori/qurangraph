@@ -12,15 +12,23 @@ import { useState, useRef, useCallback, useLayoutEffect, useEffect } from "react
  * Usage: spread `scrollRef`/`onScroll` on the scroll container; render
  * `padTop`/`padBottom` spacer rows around items [start,end); give each rendered
  * row `ref={rowRef(i)}`.
+ *
+ * Keyboard reach: because only the windowed rows exist in the DOM, a keyboard/SR user
+ * couldn't reach a row past the rendered window. So the hook also drives a roving-tabindex
+ * listbox — spread `listProps` on the scroll container and `rowProps(i)` on each row's
+ * focusable element; Arrow/Home/End/PageUp/Down then scroll the target row into the window
+ * and move focus to it (focusing a freshly-rendered row finishes scrolling it into view).
  */
 export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initialIndex = 0 }) {
   const scrollRef = useRef(null);
   const sizes = useRef(new Map());     // row index → measured height
   const rowEls = useRef(new Map());    // row index → DOM node (current window)
   const pendingIndex = useRef(null);   // row to keep pinned-to-top until heights settle
+  const focusPending = useRef(false);  // a keyboard move asked to focus the active row once it renders
   const [offsets, setOffsets] = useState(() => new Float64Array(1));
   const [scrollTop, setScrollTop] = useState(0);
   const [vh, setVh] = useState(560);
+  const [activeIndex, setActiveIndex] = useState(-1); // roving-tabindex cursor (-1 = none yet)
 
   const rebuild = useCallback(() => {
     const o = new Float64Array(count + 1);
@@ -40,6 +48,8 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
     setVh(scrollRef.current?.clientHeight || 560);
     setScrollTop(top);
     setOffsets(o);
+    setActiveIndex(-1); // new dataset → drop the keyboard cursor
+    focusPending.current = false;
   }, [resetKey, rebuild, initialIndex, count]);
 
   // After each paint: measure rendered rows and refine offsets; while an open-at
@@ -83,6 +93,62 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
   }, []);
   const rowRef = useCallback((i) => (el) => { if (el) rowEls.current.set(i, el); else rowEls.current.delete(i); }, []);
 
+  // After a keyboard move: once the (now in-window) active row has rendered, move focus to
+  // its focusable child — which also finishes scrolling it fully into view. Runs each paint
+  // but is a no-op unless a move is pending. (Shares the every-render cadence above.)
+  useLayoutEffect(() => {
+    if (!focusPending.current || activeIndex < 0) return;
+    const li = rowEls.current.get(activeIndex);
+    const f = li && li.querySelector("button, a, input, [tabindex]");
+    if (f) { f.focus(); focusPending.current = false; }
+  });
+
+  // Move the roving cursor to row `i`, bringing it into the rendered window (focus() then
+  // completes the scroll). Clamped to [0, count-1].
+  const moveTo = useCallback((i) => {
+    if (!count) return;
+    const ni = Math.max(0, Math.min(count - 1, i));
+    setActiveIndex(ni);
+    focusPending.current = true;
+    const el = scrollRef.current;
+    if (el && offsets.length === count + 1) {
+      const top = offsets[ni], bot = offsets[ni + 1];
+      const h = el.clientHeight || vh;
+      let st = el.scrollTop;
+      if (top < st) st = Math.max(0, top - 4);
+      else if (bot > st + h) st = bot - h + 4;
+      if (st !== el.scrollTop) { el.scrollTop = st; setScrollTop(st); }
+    }
+  }, [count, offsets, vh]);
+
+  // Container key handler (listbox semantics) — wired via `listProps`.
+  const onKeyDown = useCallback((e) => {
+    if (!count) return;
+    const cur = activeIndex;
+    const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight || vh) / est) - 1);
+    let ni = null;
+    switch (e.key) {
+      case "ArrowDown": ni = cur < 0 ? 0 : cur + 1; break;
+      case "ArrowUp": ni = cur < 0 ? 0 : cur - 1; break;
+      case "Home": ni = 0; break;
+      case "End": ni = count - 1; break;
+      case "PageDown": ni = (cur < 0 ? 0 : cur) + page; break;
+      case "PageUp": ni = (cur < 0 ? 0 : cur) - page; break;
+      default: return;
+    }
+    e.preventDefault();
+    moveTo(ni);
+  }, [count, activeIndex, est, vh, moveTo]);
+
+  // Spread on the scroll container; it's the listbox and becomes focusable only while no
+  // row holds the roving tabindex (so Tab lands here, then Arrow keys enter the rows).
+  const listProps = { role: "listbox", onKeyDown, tabIndex: count && activeIndex < 0 ? 0 : -1 };
+  // Spread on each row's focusable element: option semantics + roving tabindex + position.
+  const rowProps = useCallback(
+    (i) => ({ role: "option", "aria-setsize": count, "aria-posinset": i + 1, tabIndex: i === activeIndex ? 0 : -1 }),
+    [count, activeIndex],
+  );
+
   const ready = offsets.length === count + 1;
   const total = ready && count ? offsets[count] : 0;
   let start = 0, end = 0;
@@ -96,5 +162,5 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
   const padTop = ready ? offsets[start] : 0;
   const padBottom = Math.max(0, total - (ready ? offsets[end] : 0));
 
-  return { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, ready };
+  return { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, ready, listProps, rowProps, activeIndex };
 }

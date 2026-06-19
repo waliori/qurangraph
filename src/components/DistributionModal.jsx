@@ -52,10 +52,10 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   const nbrCount = (n) => (nbrSide === "before" ? n.before : nbrSide === "after" ? n.after : n.total);
 
   return (
-    <ModalShell open={!!dist} onClose={onClose} closeLabel={t("dist.close")}
+    <ModalShell open={!!dist} share onClose={onClose} closeLabel={t("dist.close")}
       ariaLabel={t("dist.title", { label: dist.label })}
       title={<>
-        <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{t("dist.badge." + dist.mode)}</span>
+        <span className={"ag-badge " + (dist.mode === "root" ? "t-root" : dist.mode === "lemma" ? "t-lemma" : "t-word")}>{t("dist.badge." + (dist.mode === "exact" ? "word" : dist.mode))}</span>
         <h2 className="ag-modal-word">{dist.label}</h2>
         <span className="ag-modal-count"><b>{total}</b> {t("dist.in")} <b>{distribution.length}</b> {t("dist.surahs")}</span>
       </>}

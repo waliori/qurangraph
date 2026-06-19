@@ -1,5 +1,5 @@
 import { norm } from "../arabic-utils.js";
-import { fColor, dColor, eColor, eWidth } from "../theme.js";
+import { fColor, dColor, eColor, eWidth, eDashArr } from "../theme.js";
 
 /* ═══ Canvas graph renderer ═══
  *
@@ -63,11 +63,15 @@ export function drawScene(ctx, scene) {
     ctx.globalAlpha = bright ? 0.7 : baseOp;
     ctx.strokeStyle = bright ? (onA ? (L ? "#b45309" : "#fcd34d") : isC ? T.linkCenter : T.link) : baseStroke;
     ctx.lineWidth = bright ? (isC ? 1.8 : 1) : baseWidth;
+    // Colour-blind-safe rarity texture, mirroring the SVG renderer (solid bulk; rare
+    // tiers dashed). Bright edges stay solid. Dash units are world-space (scale with k).
+    ctx.setLineDash(!bright && rarity ? eDashArr(l.weight) : []);
     ctx.beginPath();
     ctx.moveTo(sp.x, sp.y);
     ctx.lineTo(tp.x, tp.y);
     ctx.stroke();
   });
+  ctx.setLineDash([]);
 
   // ── Loop links (shared-verse back-edges) ──
   if (showLoops) {
