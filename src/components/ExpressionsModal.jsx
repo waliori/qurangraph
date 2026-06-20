@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { indexExpressions, headRows, expressionsForRoot, occVerses, distBySura, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
+import { useEffect, useMemo, useState, useDeferredValue } from "react";
+import { norm } from "../arabic-utils.js";
+import { indexExpressions, headRows, expressionsForRoot, occVerses, distBySura, matchPhrase, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
+import { useMyExpressions } from "../hooks/useMyExpressions.js";
 import { useI18n } from "../i18n/index.js";
+
+// Highlight span for a stored expression record by its kind: government/collocation mark two
+// non-adjacent words; idioms/compounds mark a contiguous run.
+const spanOf = (it) => (it.spanKind === "frame" ? FRAME_SPAN : spanRun(it.len || (it.skeleton ? it.skeleton.split(" ").length : 1)));
 
 /* ═══ Expressions explorer (كشّاف التعابير) ═══
  *
@@ -23,8 +29,18 @@ const CAP = 200;
 
 export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
+  const myExpr = useMyExpressions();
+  const { mine: myMine, isHidden, has: myHas, toggle: myToggle, removeMine, hideCurated } = myExpr;
   const [tab, setTab] = useState("frames");
   const [query, setQuery] = useState("");
+  // In the Idioms tab the top search box doubles as the add/discovery field. Validate "add as
+  // exact phrase" off the typed text — LEMMA-aware (catches every form), deferred so the
+  // per-keystroke corpus scan never janks the input. Only multi-word inputs are phrases.
+  const dQuery = useDeferredValue(query);
+  const phraseResult = useMemo(() => {
+    const qq = dQuery.trim();
+    return qq && qq.split(/\s+/).length >= 2 ? matchPhrase(qq, verseData) : null;
+  }, [dQuery, verseData]);
   const [focus, setFocus] = useState(focusRoot || null); // root-scoped view
   const [detail, setDetail] = useState(null); // { label, verses:[{vk,hi}] }
   const [preview, setPreview] = useState(null); // vk in the sticky foot
@@ -68,7 +84,9 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
     </ModalShell>
   );
 
-  const showOcc = (label, occ, span, extra) => { setDetail({ label, verses: occVerses(occ, verseData, span), components: extra?.components || null, related: extra?.related || null }); setPreview(null); setDistSura(null); setDistHover(null); };
+  // `extra.promo` (when present) is the descriptor for adding this expression to "my expressions";
+  // `extra.curated` marks a shipped idiom (managed via the tab's delete, not the leaf +/−).
+  const showOcc = (label, occ, span, extra) => { setDetail({ label, verses: occVerses(occ, verseData, span), components: extra?.components || null, related: extra?.related || null, promo: extra?.promo || null, curated: !!extra?.curated }); setPreview(null); setDistSura(null); setDistHover(null); };
   // A collocation's rich leaf: its verses, component roots, and the BIDIRECTIONAL contrast —
   // the other verbs that take the same noun (idx.colByRoot is keyed by both roots).
   const openColloc = (c) => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN, {
@@ -77,8 +95,12 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
       label: t("expr.verbsTaking", { noun: c.noun }),
       items: (idx.colByRoot.get(c.nounRoot) || []).filter((x) => x.nounRoot === c.nounRoot && x.verb !== c.verb).sort((a, b) => b.count - a.count).slice(0, 16),
     },
+    promo: { kind: "colloc", display: `${c.verb} ${c.noun}`, occ: c.occ, count: c.count, spanKind: "frame" },
   });
-  const openCompound = (c) => showOcc(c.words.join(" "), c.occ, spanRun(c.len), { components: c.words.map((w, i) => ({ label: w, root: c.roots?.[i] })) });
+  const openCompound = (c) => showOcc(c.words.join(" "), c.occ, spanRun(c.len), {
+    components: c.words.map((w, i) => ({ label: w, root: c.roots?.[i] })),
+    promo: { kind: "compound", display: c.words.join(" "), occ: c.occ, count: c.count, spanKind: "run", len: c.len ?? c.words.length },
+  });
   const pv = preview ? verseData[preview] : null;
   const pvHi = pv && detail ? detail.verses.find((v) => v.vk === preview)?.hi : null;
   // Interactive distribution: bars per sūra, hover → readout, click → filter the verse list.
@@ -115,7 +137,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                   {PREP_COLS.map((pk) => {
                     const p = by.get(pk); const c = p ? p.count : 0; const pct = c ? shade(c) : 0;
                     return (
-                      <td key={pk} onClick={c ? () => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN, { components: [{ label: h.head, root: h.root }] }) : undefined}
+                      <td key={pk} onClick={c ? () => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN, { components: [{ label: h.head, root: h.root }], promo: { kind: "frame", display: `${h.head} ${p.disp}`, occ: p.occ, count: c, spanKind: "frame" } }) : undefined}
                         title={c ? `${h.head} ${p.disp} · ${t("expr.occN", { n: c })}` : undefined}
                         style={{ textAlign: "center", minWidth: 30, height: 26, padding: 0, cursor: c ? "pointer" : "default",
                           background: c ? `color-mix(in oklab, var(--gold-500) ${pct}%, transparent)` : "transparent",
@@ -145,6 +167,12 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
       <div className="ag-dist-body">
         {detail ? (
           <div className="ag-dist-sec">
+            {detail.promo && !detail.curated && (() => { const added = myHas(detail.promo.kind, detail.promo.display); return (
+              <button type="button" className={"ag-btn" + (added ? " is-gold" : "")} style={{ marginBlockEnd: "var(--space-2)" }}
+                title={added ? t("expr.removeMineTitle") : t("expr.addMineTitle")} onClick={() => myToggle(detail.promo)}>
+                {added ? `− ${t("expr.removeMine")}` : `+ ${t("expr.addMine")}`}
+              </button>
+            ); })()}
             {detail.components?.length > 0 && (
               <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
                 {detail.components.map((cp, i) => cp.root ? (
@@ -230,7 +258,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
           <div className="ag-seg ag-seg-sm" role="tablist" aria-label={t("expr.title")} style={{ marginBlockEnd: "var(--space-2)" }}>
             {TABS.map((id) => <button type="button" key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>{t(`expr.tab.${id}`)}</button>)}
           </div>
-          <input className="ag-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("expr.searchPh")} aria-label={t("expr.searchPh")} style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} />
+          <input className="ag-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tab === "idioms" ? t("expr.addPh") : t("expr.searchPh")} aria-label={tab === "idioms" ? t("expr.addPh") : t("expr.searchPh")} style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} />
 
           {tab === "frames" && (() => { const hs = heads.filter(matchHead); return (
             <div className="ag-dist-sec">
@@ -284,24 +312,81 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
             );
           })()}
 
-          {tab === "idioms" && (
-            <div className="ag-dist-sec">
-              <p className="ag-hint">{t("expr.idiomsHint")}</p>
-              <ul className="ag-phrase-list">
-                {(expr.idioms || []).filter(matchIdiom).slice(0, CAP).map((it, i) => (
-                  <li key={i}>
-                    <button type="button" className="ag-modal-row" disabled={it.count === 0}
-                      style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline", opacity: it.count === 0 ? 0.5 : 1 }}
-                      title={t("expr.occN", { n: it.count })}
-                      onClick={() => showOcc(it.display, it.occ, spanRun(it.len || it.skeleton.split(" ").length))}>
-                      <span style={{ fontFamily: "var(--font-quran)", flex: 1 }}>{it.display}</span>
-                      <span className="ag-dist-num" style={{ color: "var(--gold-400)", flexShrink: 0 }}>{fmtNum(it.count)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {tab === "idioms" && (() => {
+            // A user-added phrase can also be one of our curated idioms (e.g. الصراط المستقيم): show it
+            // ONCE, as "mine". Mine listed first; curated minus any the reader added or hid.
+            const mineDisplays = new Set(myMine.map((it) => it.display));
+            const curated = (expr.idioms || []).filter((it) => !isHidden(it.display) && !mineDisplays.has(it.display)).map((it) => ({
+              kind: "idiom", display: it.display, occ: it.occ, count: it.count, spanKind: "run",
+              len: it.len || it.skeleton.split(" ").length, source: "curated",
+            }));
+            const rows = [...myMine.map((it) => ({ ...it, source: "mine" })), ...curated].filter(matchIdiom);
+            const addPhrase = () => { if (phraseResult?.count) { myExpr.add({ kind: "idiom", display: phraseResult.display, len: phraseResult.len, occ: phraseResult.occ, count: phraseResult.count, spanKind: "run" }); setQuery(""); } };
+            // Discovery: real Qurʾanic expressions (collocations · iḍāfa · government) whose head/root
+            // or text contains the typed term — so the reader picks one to keep instead of guessing.
+            const discover = [];
+            if (q.length >= 2) {
+              const nq = norm(q); // match a bare query against the diacritized lemma strings
+              const seen = new Set(), push = (r) => { const k = r.kind + ":" + r.display; if (!seen.has(k)) { seen.add(k); discover.push(r); } };
+              for (const c of expr.collocations || []) if (c.verbRoot === q || c.nounRoot === q || norm(`${c.verb} ${c.noun}`).includes(nq)) push({ kind: "colloc", display: `${c.verb} ${c.noun}`, occ: c.occ, count: c.count, spanKind: "frame" });
+              for (const c of expr.compounds || []) if ((c.roots || []).includes(q) || norm(c.words.join(" ")).includes(nq)) push({ kind: "compound", display: c.words.join(" "), occ: c.occ, count: c.count, spanKind: "run", len: c.len ?? c.words.length });
+              for (const f of expr.frames || []) if (f.root === q || norm(f.head).includes(nq)) push({ kind: "frame", display: `${f.head} ${expr.prepDisp?.[f.prep] || f.prep}`, occ: f.occ, count: f.count, spanKind: "frame" });
+              discover.sort((a, b) => b.count - a.count);
+            }
+            const onImport = (e) => { const f = e.target.files?.[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { myExpr.importData(JSON.parse(rd.result)); } catch { /* bad file */ } }; rd.readAsText(f); e.target.value = ""; };
+            return (
+              <div className="ag-dist-sec">
+                <p className="ag-hint">{t("expr.idiomsHint2")}</p>
+                {q.length >= 2 && (
+                  <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 6, marginBlockEnd: "var(--space-2)", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {phraseResult?.count > 0 && (
+                      <button type="button" className="ag-btn is-gold" style={{ alignSelf: "flex-start" }} onClick={addPhrase}>
+                        + {t("expr.addAsPhrase", { q: phraseResult.display, n: fmtNum(phraseResult.count) })}
+                      </button>
+                    )}
+                    {discover.length > 0 && <span className="ag-hint" style={{ margin: 0 }}>{t("expr.discoverHint", { q })}</span>}
+                    {discover.slice(0, 20).map((rec) => { const added = myHas(rec.kind, rec.display); return (
+                      <div key={rec.kind + ":" + rec.display} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button type="button" className="ag-tag ag-tag-btn" style={{ flex: 1, justifyContent: "space-between", display: "flex", fontFamily: "var(--font-quran)" }}
+                          onClick={() => showOcc(rec.display, rec.occ, spanOf(rec), { promo: rec })}>
+                          <span>{rec.display}</span><b style={{ color: "var(--gold-400)" }}>{fmtNum(rec.count)}</b>
+                        </button>
+                        <button type="button" className="ag-iconbtn" style={{ width: 26, height: 26, fontSize: 13, color: added ? "var(--viridian-400)" : "var(--gold-400)" }}
+                          title={added ? t("expr.removeMineTitle") : t("expr.addMineTitle")} onClick={() => myToggle(rec)}>{added ? "−" : "+"}</button>
+                      </div>
+                    ); })}
+                    {discover.length === 0 && !(phraseResult?.count > 0) && <span className="ag-hint" style={{ margin: 0, color: "var(--rubric-400)" }}>{t("expr.discoverNone", { q })}</span>}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 6, marginBlockEnd: "var(--space-2)" }}>
+                  <button type="button" className="ag-btn" disabled={!myMine.length} onClick={() => exportJsonFile(myExpr.exportData(), "my-expressions.json")}>⤓ {t("expr.exportMine")}</button>
+                  <label className="ag-btn" style={{ cursor: "pointer" }}>⤒ {t("expr.importMine")}<input type="file" accept="application/json,.json" onChange={onImport} style={{ display: "none" }} /></label>
+                </div>
+                <ul className="ag-phrase-list">
+                  {rows.slice(0, CAP).map((it) => { const mineFlag = it.source === "mine"; return (
+                    <li key={it.kind + ":" + it.display} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button type="button" className="ag-modal-row" disabled={it.count === 0}
+                        style={{ flex: 1, textAlign: "start", display: "flex", gap: 8, alignItems: "center", opacity: it.count === 0 ? 0.5 : 1 }}
+                        title={t("expr.occN", { n: it.count })}
+                        onClick={() => showOcc(it.display, it.occ, spanOf(it), { promo: mineFlag ? it : null, curated: !mineFlag })}>
+                        <span className={"ag-badge " + (mineFlag ? "t-lemma" : "t-verse")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px", flexShrink: 0 }}>{mineFlag ? t("expr.mine") : t("expr.curated")}</span>
+                        <span style={{ fontFamily: "var(--font-quran)", flex: 1, color: mineFlag ? "var(--viridian-400)" : undefined }}>{it.display}</span>
+                        <span className="ag-dist-num" style={{ color: "var(--gold-400)", flexShrink: 0 }}>{fmtNum(it.count)}</span>
+                      </button>
+                      <button type="button" className="ag-iconbtn" style={{ width: 28, height: 28, fontSize: 13, flexShrink: 0 }}
+                        title={mineFlag ? t("expr.removeMineTitle") : t("expr.hideCuratedTitle")} aria-label={mineFlag ? t("expr.removeMine") : t("expr.hideCurated")}
+                        onClick={() => (mineFlag ? removeMine(it.kind, it.display) : hideCurated(it.display))}>✕</button>
+                    </li>
+                  ); })}
+                </ul>
+                {myExpr.hiddenCount > 0 && (
+                  <p className="ag-hint">{t("expr.hiddenN", { n: myExpr.hiddenCount })}{" "}
+                    <button type="button" className="ag-btn" style={{ padding: "1px 8px" }} onClick={() => myExpr.hidden.forEach((d) => myExpr.unhide(d))}>{t("expr.unhideAll")}</button>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </>)}
 
         {pv && (

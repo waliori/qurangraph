@@ -26,7 +26,18 @@
  * aggressive — two different matching problems, hence two different rules.
  */
 export function norm(w, { fold = true } = {}) {
-  let s = w
+  let s = (w || "")
+    // NFKC first: fold presentation-form ligatures (ﻻ→لا) and isolated/medial letter
+    // forms (U+FBxx/U+FExx) back to their base letters, so text pasted from a PDF or a
+    // non-Arabic layout doesn't silently lose characters at the [^ء-ي] strip below.
+    .normalize("NFKC")
+    // Persian/Urdu keyboard look-alikes → Arabic equivalents. These code points sit
+    // OUTSIDE the basic block, so without this they'd be deleted whole — typing مِیکَائِیل
+    // on a Farsi layout (ی U+06CC, ک U+06A9) used to normalise to "مايل" and find nothing.
+    .replace(/[یۍېے]/g, "ي") // Persian/Urdu yeh variants → Arabic yeh
+    .replace(/[کڪ]/g, "ك")    // Persian/Sindhi kaf → Arabic kaf
+    .replace(/[گڭ]/g, "ك")    // gaf / ng-kaf → kaf (closest Arabic consonant)
+    .replace(/[ھہۀ]/g, "ه")   // heh look-alikes → Arabic heh
     // intentionally matches individual combining marks (harakat / annotation)
     // eslint-disable-next-line no-misleading-character-class
     .replace(/[ً-ٰٟۖ-ۭࣔ-ࣰ࣡-ࣲؗ-ؚۢ-ۦ۪ۨ-۬]/g, "")
@@ -133,12 +144,22 @@ export function setStopSet(set) { STOP = set instanceof Set ? set : new Set(set 
  * query. Shared by the corpus-index builder and the toolbar search. */
 const DAGGER = "ٰ";
 const HAMZA = /[ءئؤ]/g;
+// The dagger alef rides on a SEAT — usually و (صَلَوٰة) but also the alif-maqṣūra ى, which
+// the muṣḥaf uses for a medial long-ā: مِيكَىٰل, مُوسَىٰ, عِيسَىٰ. norm() folds ى→ي, so without
+// collapsing the whole ىٰ seat to a single ا the word is keyed as ميكيل (mi-KI-l) and the
+// conventional alif spelling ميكال can never line up. Both seats fold here; bare daggers too.
 export const searchAlef = (raw) =>
-  norm(raw.replace(new RegExp("و" + DAGGER, "g"), "ا").replace(new RegExp(DAGGER, "g"), "ا")).replace(/ا{2,}/g, "ا");
-// STRONG keys: the loose norm + the dagger/waw→alef (imlāʾī) form. These are real spellings —
-// safe to index a word under AND to expand a prefix search over.
+  norm((raw || "").normalize("NFKC").replace(new RegExp("[وى]" + DAGGER, "g"), "ا").replace(new RegExp(DAGGER, "g"), "ا")).replace(/ا{2,}/g, "ا");
+// HAMZA-SEAT key: unify every hamza form (ء ؤ ئ) to a bare ء IN PLACE, length-preserving.
+// Unlike the hamza-DROP fuzzy key (which deletes the consonant and so leaks جِئْنَا→جنا into a
+// جن search), this only merges words that differ SOLELY by hamza seat: a carrier query
+// (رؤيا، يستهزئون) meets the corpus bare-ء form (رءيا، يستهزءون) without changing length, so it
+// is safe to index AND to suggest. norm() keeps ء, so ماء stays ماء (never merges into ما).
+export const hamzaSeatKey = (raw) => searchAlef((raw || "").replace(/[ؤئ]/g, "ء"));
+// STRONG keys: the loose norm + the dagger/seat→alef (imlāʾī) form + the hamza-seat-unified
+// form. All real, length-stable spellings — safe to index a word under AND to expand a search.
 export const strongKeys = (raw) =>
-  [...new Set([norm(raw), searchAlef(raw)].filter((k) => k && k.length >= 2))];
+  [...new Set([norm(raw), searchAlef(raw), hamzaSeatKey(raw)].filter((k) => k && k.length >= 2))];
 // ALL keys, strong PLUS the hamza-carrier-dropped form. The dropped-hamza key lets a query
 // whose seat differs (ـئـ vs ـءـ) still RESOLVE to the corpus word — but it's a degraded form
 // (جِئْنَا → "جنا") that collides with unrelated stems as a prefix, so it must be used only for

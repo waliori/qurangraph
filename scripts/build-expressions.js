@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { norm } from "../src/arabic-utils.js";
+import { matchPhrase } from "../src/analytics/expressions.js";
 import { parseMorphology, aggregateWord } from "./lib/parse.js";
 
 /* ═══ Multi-word expression inventory (build step) ═══
@@ -155,39 +155,24 @@ const collocList = [...colloc.values()]
 /* ── Frames: keep meaningful recurrence, drop hapax noise ─────────────────────── */
 const frameList = [...frames.values()].filter((f) => f.count >= 2).sort((a, b) => b.count - a.count);
 
-/* ── Idioms: curated seed (any length), with their verses attached ─────────────── */
-// Consonantal skeleton for phrase matching. norm() deletes the Uthmani dagger-alif
-// (صِرَٰط → صرط), which a plain ا spelling keeps; map it to a real alif first so both sides
-// agree. Multi-word contiguity keeps false positives away.
-const skel = (w) => norm(w.replace(/ٰ/g, "ا"));
-// The first idiom word may carry a proclitic (بِحبل for حبل): accept the verse word if removing
-// up to two leading proclitic letters yields the target exactly. Precise (equality after a
-// controlled strip), unlike a bare suffix test which over-matches 1-letter skeletons (أم→م).
-const PROCLITIC = new Set(["و", "ف", "ب", "ل", "ك", "س"]);
-const firstMatch = (vw, target) => {
-  let s = vw;
-  for (let n = 0; n <= 2; n++) { if (s === target) return true; if (!s.length || !PROCLITIC.has(s[0])) break; s = s.slice(1); }
-  return false;
-};
+/* ── Idioms: curated seed, matched LEMMA-aware so generic forms are caught ────────
+ * Each idiom word resolves to its LEMMA (from lemmas.json) so ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ also matches
+ * صِرَٰطًا مُّسْتَقِيمًا / صِرَٰطِى مُسْتَقِيمًا — the same form-awareness the collocation/frame lenses have.
+ * Words with no lemma (pronouns/particles) fall back to a surface skeleton. matchPhrase is the
+ * SAME function the in-app "add your own" uses, so offline and runtime agree exactly. */
 const hafs = JSON.parse(readFileSync(HAFS, "utf8"));
-const verseSkel = {}; // vk → [skelWord,…]
-for (const s of hafs) for (const v of s.verses) verseSkel[`${s.id}:${v.id}`] = v.text.trim().split(/\s+/).map(skel);
+const LEMMAS_F = "public/data/lemmas.json";
+const lemmasMap = existsSync(LEMMAS_F) ? JSON.parse(readFileSync(LEMMAS_F, "utf8")) : {};
+const lemmaFn = (n) => lemmasMap[n] || null;
+const verseTexts = {}; // vk → { text }  (matchPhrase splits + indexes it like the app)
+for (const s of hafs) for (const v of s.verses) verseTexts[`${s.id}:${v.id}`] = { text: v.text };
 
 const idioms = [];
 if (existsSync(IDIOMS)) {
   const curated = JSON.parse(readFileSync(IDIOMS, "utf8")).entries || [];
   for (const it of curated) {
-    const sk = it.ar.trim().split(/\s+/).map(skel);
-    const occ = [];
-    for (const vk in verseSkel) {
-      const ws = verseSkel[vk];
-      for (let i = 0; i + sk.length <= ws.length; i++) {
-        if (!sk[0] || (sk.length === 1 && sk[0].length < 2) || !firstMatch(ws[i], sk[0])) continue;
-        let ok = true; for (let j = 1; j < sk.length; j++) if (ws[i + j] !== sk[j]) { ok = false; break; }
-        if (ok) occ.push([vk, i]);
-      }
-    }
-    idioms.push({ display: it.ar, skeleton: sk.join(" "), len: sk.length, type: "curated", count: occ.length, occ });
+    const r = matchPhrase(it.ar, verseTexts, lemmaFn);
+    idioms.push({ display: it.ar, len: r.len, type: "curated", count: r.count, occ: r.occ });
   }
 }
 

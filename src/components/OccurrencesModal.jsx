@@ -33,7 +33,11 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             <span className="ag-ayah-num">{v.a}</span>
           </span>
           <span className="ag-modal-text">
-            <HighlightedAyah text={v.text} primaryWord={primary} searchMode={searchMode} precision={precision} theme={theme} />
+            {/* Multi-word expressions pass per-verse highlight indices (every member word);
+                everything else highlights the single search term. */}
+            {occ.hi && occ.hi[keys[i]]
+              ? <HighlightedAyah text={v.text} highlightIndices={new Set(occ.hi[keys[i]])} theme={theme} />
+              : <HighlightedAyah text={v.text} primaryWord={primary} searchMode={searchMode} precision={precision} theme={theme} />}
           </span>
         </button>
       </li>

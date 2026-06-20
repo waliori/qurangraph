@@ -1,3 +1,5 @@
+import { norm, lemmaOf } from "../arabic-utils.js";
+
 /* ═══ Multi-word expressions (التعابير) — in-browser analysis ═══
  *
  * The heavy mining is done offline (scripts/build-expressions.js → public/data/expressions.json):
@@ -104,6 +106,61 @@ export function indexByVerse(expr) {
   for (const c of expr?.compounds || []) for (const o of c.occ) push(o[0], { type: "compound", label: c.words.join(" "), span: spanRun(c.len)(o), count: c.count, root: c.roots?.[0] });
   for (const it of expr?.idioms || []) for (const o of it.occ) push(o[0], { type: "idiom", label: it.display, span: spanRun(it.len || it.skeleton.split(" ").length)(o), count: it.count });
   return m;
+}
+
+/* ═══ Contiguous phrase matching — LEMMA-aware (shared with the offline idiom build) ═══
+ *
+ * `phraseSkel` reconciles the Uthmani long-ā spellings before norm() so a modern typed phrase
+ * matches the muṣḥaf (ٱلْحَيَوٰة↔الحياة, ٱلْمَأْوَىٰ↔المأوى, ٱلصِّرَٰط↔الصراط).
+ *
+ * `matchPhrase` finds every verse where a contiguous run matches the phrase — but each word is
+ * resolved to its LEMMA when one is known (so ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ also catches صِرَٰطًا مُّسْتَقِيمًا,
+ * صِرَٰطِى مُسْتَقِيمًا … just like the collocation/frame lenses, which are lemma-based). Words with no
+ * lemma (pronouns/particles — إِيَّاكَ) fall back to a surface skeleton so fixed liturgical phrases
+ * still match. The lemma resolver is injectable so the offline build can pass its own map; at
+ * runtime it uses the loaded lemma map (degrading to pure-surface matching until it loads).
+ * Returns occurrences as [verseKey, startIdx] — the SAME shape the offline build emits. */
+export const phraseSkel = (w) => norm((w || "").replace(/وٰ/g, "ا").replace(/ىٰ/g, "ى").replace(/ٰ/g, "ا"));
+const PHRASE_PROCLITIC = new Set(["و", "ف", "ب", "ل", "ك", "س"]);
+const firstWordMatch = (vw, target) => {
+  let s = vw;
+  for (let n = 0; n <= 2; n++) { if (s === target) return true; if (!s.length || !PHRASE_PROCLITIC.has(s[0])) break; s = s.slice(1); }
+  return false;
+};
+export function matchPhrase(text, verseData, lemmaFn = lemmaOf) {
+  const display = (text || "").trim();
+  // skeleton → lemma, built from the corpus. Keying by phraseSkel (not norm) is what makes a typed
+  // modern spelling resolve: the lemma map's key is the dagger-stripped norm (ٱلصِّرَٰط→الصرط), which
+  // a typed الصراط (full alif) would miss — but both share the phraseSkel الصراط, so they meet here.
+  const skelLemma = new Map();
+  for (const vk in verseData) {
+    for (const tk of (verseData[vk].text || "").trim().split(/\s+/)) {
+      const sk = phraseSkel(tk);
+      if (sk && !skelLemma.has(sk)) { const l = lemmaFn(norm(tk)); if (l) skelLemma.set(sk, l); }
+    }
+  }
+  const lemOf = (tk) => skelLemma.get(phraseSkel(tk)) || null;
+  // Each phrase word → its lemma (form-aware) when one exists, else its surface skeleton (pronouns
+  // / particles like إِيَّاك keep fixed phrases working).
+  const tg = display.split(/\s+/)
+    .map((w) => { const lem = lemOf(w); return lem ? { lemma: lem } : { surf: phraseSkel(w) }; })
+    .filter((t) => t.lemma || (t.surf && t.surf.length >= 2));
+  if (!tg.length) return { display, len: 0, occ: [], count: 0 };
+  const occ = [];
+  for (const vk in verseData) {
+    const toks = (verseData[vk].text || "").trim().split(/\s+/); // full token split = the build's indexing
+    for (let i = 0; i + tg.length <= toks.length; i++) {
+      let ok = true;
+      for (let j = 0; j < tg.length; j++) {
+        const t = tg[j], tok = toks[i + j];
+        const m = t.lemma ? lemOf(tok) === t.lemma
+          : (j === 0 ? firstWordMatch(phraseSkel(tok), t.surf) : phraseSkel(tok) === t.surf);
+        if (!m) { ok = false; break; }
+      }
+      if (ok) occ.push([vk, i]);
+    }
+  }
+  return { display, len: tg.length, occ, count: occ.length };
 }
 
 /* Distribution of a verse-key list across sūras → [{ s, count }] in sūra order. */

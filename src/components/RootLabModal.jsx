@@ -4,8 +4,9 @@ import { radicalKin } from "../analytics/kinship.js";
 import { oppositesOf, candidatesOf } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
-import { expressionsForRoot } from "../analytics/expressions.js";
+import { expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { useMyExpressions } from "../hooks/useMyExpressions.js";
 import { useI18n } from "../i18n/index.js";
 
 /* ═══ Root analysis lab ═══
@@ -20,13 +21,29 @@ import { useI18n } from "../i18n/index.js";
  * precomputed neighbour map (null while it's still loading).
  */
 const TABS = ["deriv", "kin", "opp", "lex", "sem", "expr"];
-const vks = (occ) => [...new Set((occ || []).map((o) => o[0]))];
 
 export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, expr, exprIndex, back, onRetarget, onVerses, onExpressions, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
   const root = lab?.root;
   const exprData = useMemo(() => (expr && exprIndex && root ? expressionsForRoot(expr, exprIndex, root) : null), [expr, exprIndex, root]);
+  // Open an expression's āyāt with EVERY member word highlighted (not just the root): the occ
+  // tuples carry each word's index, so map them through `span` and hand the per-verse highlight
+  // set to the occurrences modal. Fixes "only the chosen word lit up" for collocations/compounds.
+  const openExpr = (label, occ, span) => {
+    const ov = occVerses(occ, verseData, span);
+    onVerses?.(label, ov.map((x) => x.vk), Object.fromEntries(ov.map((x) => [x.vk, x.hi])));
+  };
+  // "+ add to my expressions" toggle, shared with the explorer (same local store).
+  const myExpr = useMyExpressions();
+  const promoBtn = (rec) => {
+    const added = myExpr.has(rec.kind, rec.display);
+    return (
+      <button type="button" className="ag-iconbtn" style={{ width: 22, height: 22, fontSize: 12, color: added ? "var(--viridian-400)" : "var(--text-faint)" }}
+        title={added ? t("expr.removeMineTitle") : t("expr.addMineTitle")} aria-label={added ? t("expr.removeMine") : t("expr.addMine")}
+        onClick={(e) => { e.stopPropagation(); myExpr.toggle(rec); }}>{added ? "−" : "+"}</button>
+    );
+  };
 
   const deriv = useMemo(() => (root ? derivationFamily(root, r2v, verseData, morph) : []), [root, r2v, verseData, morph]);
   const kin = useMemo(() => (root ? radicalKin(root, Object.keys(r2v), (r) => (r2v[r] || []).length) : { anagrams: [], shared: [] }), [root, r2v]);
@@ -289,8 +306,11 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
                         <span className="ag-dist-name" style={{ fontFamily: "var(--font-quran)" }}>{h.head}</span>
                         <span style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1 }}>
                           {h.preps.map((p) => { const disp = expr.prepDisp?.[p.prep] || p.prep; return (
-                            <button type="button" className="ag-tag ag-tag-btn" key={p.prep} style={{ fontFamily: "var(--font-quran)" }}
-                              onClick={() => onVerses?.(`${h.head} ${disp}`, vks(p.occ))}>{disp} <b style={{ color: "var(--gold-400)" }}>{p.count}</b></button>
+                            <span key={p.prep} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                              <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }}
+                                onClick={() => openExpr(`${h.head} ${disp}`, p.occ, FRAME_SPAN)}>{disp} <b style={{ color: "var(--gold-400)" }}>{p.count}</b></button>
+                              {promoBtn({ kind: "frame", display: `${h.head} ${disp}`, occ: p.occ, count: p.count, spanKind: "frame" })}
+                            </span>
                           ); })}
                         </span>
                       </div>
@@ -301,8 +321,11 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
                   <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.collocations")}</span></div>
                   <div className="ag-dist-tags">
                     {exprData.collocations.map((c, i) => (
-                      <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                        onClick={() => onVerses?.(`${c.verb} ${c.noun}`, vks(c.occ))}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                        <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }}
+                          onClick={() => openExpr(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                        {promoBtn({ kind: "colloc", display: `${c.verb} ${c.noun}`, occ: c.occ, count: c.count, spanKind: "frame" })}
+                      </span>
                     ))}
                   </div>
                 </>}
@@ -310,8 +333,11 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
                   <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.compounds")}</span></div>
                   <div className="ag-dist-tags">
                     {exprData.compounds.map((c, i) => (
-                      <button type="button" className="ag-tag ag-tag-btn" key={i} style={{ fontFamily: "var(--font-quran)" }}
-                        onClick={() => onVerses?.(c.words.join(" "), vks(c.occ))}>{c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                        <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }}
+                          onClick={() => openExpr(c.words.join(" "), c.occ, spanRun(c.len ?? c.words.length))}>{c.words.join(" ")} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                        {promoBtn({ kind: "compound", display: c.words.join(" "), occ: c.occ, count: c.count, spanKind: "run", len: c.len ?? c.words.length })}
+                      </span>
                     ))}
                   </div>
                 </>}

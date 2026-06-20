@@ -1,5 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { indexExpressions, frameContrast, headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "./expressions.js";
+import { indexExpressions, frameContrast, headRows, expressionsForRoot, occVerses, matchPhrase, phraseSkel, FRAME_SPAN, spanRun } from "./expressions.js";
+
+describe("matchPhrase", () => {
+  const verseData = {
+    "1:1": { text: "بسم الله الرحمن الرحيم" },
+    "2:255": { text: "الله لا اله الا هو الحي القيوم" },
+    "112:1": { text: "قل هو الله احد" },
+  };
+  it("finds a contiguous phrase and returns [verseKey, startIndex]", () => {
+    const r = matchPhrase("هو الله", verseData); // only 112:1: «قل [هو الله] احد»
+    expect(r.count).toBe(1);
+    expect(r.occ).toContainEqual(["112:1", 1]);
+  });
+  it("reconciles Uthmani long-ā (ٱلْحَيَوٰة ↔ الحياة) via phraseSkel", () => {
+    expect(phraseSkel("ٱلْحَيَوٰة")).toBe(phraseSkel("الحياة"));
+    expect(phraseSkel("ٱلْمَأْوَىٰ")).toBe(phraseSkel("المأوى"));
+  });
+  it("tolerates up to two leading proclitics on the first word", () => {
+    const vd = { "5:1": { text: "واعتصموا بحبل الله جميعا" } };
+    expect(matchPhrase("حبل الله", vd).count).toBe(1); // بحبل → حبل
+  });
+  it("returns zero for a run that does not occur", () => {
+    expect(matchPhrase("زيد عمرو", verseData).count).toBe(0);
+  });
+});
 
 // A tiny inventory shaped like public/data/expressions.json.
 const expr = {

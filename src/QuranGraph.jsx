@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useDeferredValue, useRef, lazy, Suspense } from "react";
-import { looseResolve } from "./search.js";
+import { looseResolve, resolvePhrase } from "./search.js";
 import { norm, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 import { useCorpusIndices } from "./hooks/useCorpusIndices.js";
 import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions } from "./data-loader.js";
@@ -370,8 +370,8 @@ export default function QuranGraph() {
   // (≥2 chars): both offer Lemma results, which are dead without the lemma index (l2v) — so a
   // forgiving "did you mean جِنّ?" can't resolve.
   useEffect(() => {
-    if ((searchMode === "lemma" || cmp || query.trim().length >= 2) && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
-  }, [searchMode, cmp, query, lemmaMap, retryTick]);
+    if ((searchMode === "lemma" || cmp || exprOpen || query.trim().length >= 2) && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
+  }, [searchMode, cmp, exprOpen, query, lemmaMap, retryTick]);
 
   // Lazy-load per-token morphology when the filter is active (graph filtering), a
   // node is selected (inspector morphology card), or root/lemma mode is active (so
@@ -1007,9 +1007,24 @@ export default function QuranGraph() {
         out.push({ ...c, mode });
       }
     }
-    // Exact-sense matches (the word IS the query, e.g. جِنّ from الجن) lead; then by frequency.
-    out.sort((a, b) => (b.exact ? 1 : 0) - (a.exact ? 1 : 0) || b.count - a.count);
-    return out.slice(0, 10);
+    // Best tier first (exact › prefix › infix › fuzzy-typo), then nearest edit, then frequency.
+    out.sort((a, b) => (b.tier ?? 0) - (a.tier ?? 0) || (a.dist ?? 0) - (b.dist ?? 0) || b.count - a.count);
+    const terms = out.slice(0, 10);
+    // Multi-word: lead with a co-occurrence "go to" row to the first āya containing every token
+    // (حبل الله → 3:103). Reuses the verse-ref navigation; degrades to plain term rows if no overlap.
+    if (/\s/.test(raw)) {
+      const ph = resolvePhrase(raw, indices, searchAlias, searchAliasFuzzy);
+      if (ph) {
+        const first = ph.keys.reduce((m, k) => {
+          const [s, a] = k.split(":").map(Number), [ms, ma] = m.split(":").map(Number);
+          return s < ms || (s === ms && a < ma) ? k : m;
+        });
+        const [s, a] = first.split(":").map(Number);
+        const sur = quranRaw?.find((x) => x.id === s);
+        if (sur) return [{ ref: true, phrase: true, s, a, lookup: first, label: `${sur.name} ${a} · ${ph.keys.length}` }, ...terms].slice(0, 10);
+      }
+    }
+    return terms;
   }, [deferredQuery, w2v, r2v, l2v, searchAlias, searchAliasFuzzy, quranRaw]);
 
   // Act on a chosen suggestion: a verse-ref row navigates; a term row switches to that
@@ -2072,7 +2087,7 @@ export default function QuranGraph() {
       {lab && (() => { const self = { t: "lab", root: lab.root, label: lab.label, back: lab.back }; return (
         <RootLabModal lab={lab} r2v={r2v} verseData={verseData} morph={morph} semantic={semantic} relations={relations} lexAll={lexAll} lexMeta={lexicons} expr={expr} exprIndex={exprIndex} back={lab.back}
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
-          onVerses={(label, keys) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, back: self }); }}
+          onVerses={(label, keys, hi) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, hi, back: self }); }}
           onExpressions={(r) => { setLab(null); setExprFocus(r); setExprOpen(true); }}
           onBack={() => reopenLab(lab.back)}
           onClose={() => setLab(null)} />); })()}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { norm, normStrict, setRootMap, setLemmaMap, rootOf, rootKey, lemmaOf, lemmaKey, groupKey, wordGroupKey, extractRoot, STOP, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
+import { norm, normStrict, searchAlef, strongKeys, hamzaSeatKey, setRootMap, setLemmaMap, rootOf, rootKey, lemmaOf, lemmaKey, groupKey, wordGroupKey, extractRoot, STOP, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 
 describe("norm", () => {
   it("strips diacritics to a consonantal skeleton", () => {
@@ -18,6 +18,33 @@ describe("norm", () => {
   it("drops non-Arabic characters and whitespace", () => {
     expect(norm("  word123 ")).toBe("");
     expect(norm("الله!")).toBe("الله");
+  });
+  it("maps Persian/Urdu keyboard look-alikes to Arabic instead of deleting them", () => {
+    expect(norm("میکائیل")).toBe("ميكاييل"); // Farsi yeh U+06CC + kaf U+06A9 — was "مايل"
+    expect(norm("کتاب")).toBe("كتاب");        // Farsi kaf
+    expect(norm("گل")).toBe("كل");            // gaf → kaf
+  });
+  it("folds presentation-form ligatures via NFKC (ﻻ → لا)", () => {
+    expect(norm("ﻻ")).toBe("لا");
+    expect(norm("ﷲ")).toBe("الله"); // Allah ligature
+  });
+});
+
+describe("forgiving search keys (imlāʾī tolerance)", () => {
+  it("collapses an alif-maqṣūra-as-ā seat to a single alif (searchAlef)", () => {
+    expect(searchAlef("وَمِيكَىٰلَ")).toBe("وميكال"); // ىٰ → ا, not the ميكيل that norm yields
+    expect(searchAlef("مُوسَىٰ")).toBe("موسا");
+    expect(searchAlef("ٱلصَّلَوٰةِ")).toBe("الصلاه"); // the existing waw-seat case still holds
+  });
+  it("unifies every hamza seat to a bare ء in place, length-preserving (hamzaSeatKey)", () => {
+    expect(hamzaSeatKey("رؤيا")).toBe("رءيا");      // carrier ؤ → ء
+    expect(hamzaSeatKey("رُءْيَا")).toBe("رءيا");     // bare ء unchanged → they meet
+    expect(hamzaSeatKey("يستهزئون")).toBe("يستهزءون");
+    expect(hamzaSeatKey("جِئْنَا")).toBe("جءنا");     // NOT جنا — no consonant dropped, no leak
+    expect(hamzaSeatKey("ماء")).toBe("ماء");        // ء kept, never merges into ما
+  });
+  it("strongKeys includes the seat-unified form so a hamza variant can be suggested", () => {
+    expect(strongKeys("رؤيا")).toContain("رءيا");
   });
 });
 
