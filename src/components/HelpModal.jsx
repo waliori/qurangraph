@@ -104,7 +104,7 @@ const sec = (title, illo, items) => (
   </section>
 );
 
-export function HelpModal({ open, onClose, onStartTour }) {
+export function HelpModal({ open, onClose, onStartTour, onWatchIntro }) {
   const { t } = useI18n();
   // Lazy-load the build's source-provenance manifest the first time Help opens; null
   // when the build didn't emit one (older builds), in which case the section is hidden.
@@ -114,7 +114,10 @@ export function HelpModal({ open, onClose, onStartTour }) {
   return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("help.close")} ariaLabel={t("help.dialogAria")}
       title={<><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></>}
-      actions={onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}>
+      actions={<>
+        {onWatchIntro && <button type="button" className="ag-btn" onClick={onWatchIntro}>▶ {t("intro.watch")}</button>}
+        {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
+      </>}>
         <div className="ag-help-body">
           {hero(t)}
 

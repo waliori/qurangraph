@@ -672,6 +672,23 @@ body {
   .ag-modal-text { font-size: var(--text-base); }
 }
 
+/* ═══════════ Intro / presentation video ═══════════ */
+.ag-intro { width: min(960px, 100%); }
+.ag-intro-lang { white-space: nowrap; }
+.ag-intro-body { padding: var(--space-4) var(--space-5) var(--space-5); overflow-y: auto; min-height: 0;
+  display: flex; flex-direction: column; gap: var(--space-3); }
+.ag-intro-sub { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+/* 16:9 stage; the poster fills it until play, then the stream takes over. */
+.ag-intro-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #05070d;
+  border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
+.ag-intro-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  background: #05070d; }
+.ag-intro-dont { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
+  color: var(--text-muted); cursor: pointer; user-select: none; }
+.ag-intro-dont input { accent-color: var(--gold-500); inline-size: 16px; block-size: 16px; cursor: pointer; }
+.ag-intro-nav { display: flex; align-items: center; gap: var(--space-2); }
+.ag-intro-spacer { flex: 1 1 auto; }
+
 /* ═══════════ Loading / error ═══════════ */
 .ag-boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: var(--space-4); background: var(--canvas); color: var(--text-muted);

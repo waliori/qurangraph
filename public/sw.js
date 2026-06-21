@@ -35,6 +35,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // let cross-origin (fonts CDN) pass through
 
+  // The intro videos stream via HTTP range requests; let the browser handle them
+  // natively. Caching them would choke on 206 partial responses and bloat the
+  // cache with tens of MB the user may only watch once.
+  if (url.pathname.endsWith(".mp4")) return;
+
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).catch(() => caches.match(SHELL)));
     return;

@@ -44,6 +44,7 @@ const ExpressionsModal = lazyNamed(() => import("./components/ExpressionsModal.j
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
+const IntroVideoModal = lazyNamed(() => import("./components/IntroVideoModal.jsx"), "IntroVideoModal");
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
 import { useI18n } from "./i18n/index.js";
@@ -1191,6 +1192,11 @@ export default function QuranGraph() {
    * "don't show on startup" (qg.tourHide). */
   const [tourRun, setTourRun] = useState(false);
   const [tourIndex, setTourIndex] = useState(0);
+  // First-run presentation video (qg.introHide), independent of the tour's flag.
+  // `introAutoRef` distinguishes the auto first-run open (which hands off to the
+  // tour on close) from a manual replay opened from Help (which just closes).
+  const [introOpen, setIntroOpen] = useState(false);
+  const introAutoRef = useRef(false);
   // The example's target words resolved to live graph nodes (only when we're on
   // the example verse) — matched by their position in the verse (word nodes carry
   // wordIndex), so steps can spotlight & select them precisely.
@@ -1417,17 +1423,43 @@ export default function QuranGraph() {
     if (dontShow) { try { localStorage.setItem("qg.tourHide", "1"); } catch { /* private mode */ } }
   };
 
-  // Auto-open once, after data is ready, unless the user dismissed it for good.
+  const tourHidden = () => { try { return localStorage.getItem("qg.tourHide") === "1"; } catch { return false; } };
+  const persistIntroHide = (dontShow) => { if (dontShow) { try { localStorage.setItem("qg.introHide", "1"); } catch { /* private mode */ } } };
+  // Dismiss the intro video. On the auto first-run open this hands off to the
+  // interactive tour (the chosen "video → tour" flow) unless the tour is disabled;
+  // when replayed from Help it just closes.
+  const closeIntro = (dontShow) => {
+    setIntroOpen(false);
+    persistIntroHide(dontShow);
+    const auto = introAutoRef.current; introAutoRef.current = false;
+    if (auto && !tourHidden()) startTour();
+  };
+  // "Start the interactive tour" button inside the video — always launches it.
+  const startTourFromIntro = (dontShow) => {
+    setIntroOpen(false);
+    persistIntroHide(dontShow);
+    introAutoRef.current = false;
+    startTour();
+  };
+  // Replay the intro from Help (manual; closing won't auto-start the tour).
+  const openIntro = () => { introAutoRef.current = false; setShowHelp(false); setIntroOpen(true); };
+
+  // Auto-open once, after data is ready, unless dismissed for good. The intro
+  // video comes first; the tour follows when the video closes (see closeIntro).
   const autoTourRef = useRef(false);
   useEffect(() => {
     if (autoTourRef.current || loading || error || !currentVerse) return;
     autoTourRef.current = true;
-    let hidden = false;
-    try { hidden = localStorage.getItem("qg.tourHide") === "1"; } catch { /* ignore */ }
-    // Arrived via a shared link that opens an analysis view? Don't auto-run the tour — it
-    // would tourReset() the just-restored dialog away (the "shared link works only when the
+    // Arrived via a shared link that opens an analysis view? Don't auto-run the intro/tour —
+    // it would tourReset() the just-restored dialog away (the "shared link works only when the
     // tour is disabled" bug). The user came for that view, not the walkthrough.
-    if (!hidden && !arrivedViaViewRef.current) startTour();
+    if (arrivedViaViewRef.current) return;
+    let introHidden = false;
+    try { introHidden = localStorage.getItem("qg.introHide") === "1"; } catch { /* ignore */ }
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!introHidden) { introAutoRef.current = true; setIntroOpen(true); }
+    else if (!tourHidden()) startTour();
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, error, currentVerse]);
 
@@ -2178,7 +2210,11 @@ export default function QuranGraph() {
         onRoot={(r) => { setExprOpen(false); setExprInitial(null); setLab({ root: r, label: r }); }}
         onClose={() => { setExprOpen(false); setExprInitial(null); }} />}
 
-      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
+      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)}
+        onStartTour={() => { setShowHelp(false); startTour(); }} onWatchIntro={openIntro} />}
+
+      {/* First-run presentation video (language-aware; switchable mid-play). */}
+      {introOpen && <IntroVideoModal open={introOpen} onClose={closeIntro} onStartTour={startTourFromIntro} />}
 
       {/* Getting-started tour (interactive; waits for the user on action steps). */}
       {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour}
