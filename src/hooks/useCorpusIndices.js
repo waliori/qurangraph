@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { norm, normStrict, wordGroupKey, strongKeys, fuzzyKeys, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "../arabic-utils.js";
+import { buildRomanIndex } from "../search.js";
 import { verseGroupingKeys } from "../morphology.js";
 
 /* ═══ Derived corpus indices ═══
@@ -23,10 +24,13 @@ import { verseGroupingKeys } from "../morphology.js";
  *   stopSet    — the effective hidden-word set the graph applies.
  */
 export function useCorpusIndices({ quranRaw, precision, morph, lemmaMap, hideStop, stopExtra, stopDisabled }) {
-  const { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy } = useMemo(() => {
-    if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [], searchAlias: {}, searchAliasFuzzy: {} };
+  const { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy, exDisplay } = useMemo(() => {
+    if (!quranRaw) return { w2v: {}, r2v: {}, verseData: {}, surahList: [], searchAlias: {}, searchAliasFuzzy: {}, exDisplay: {} };
     const strict = precision === "strict";
     const w2v = {}, r2v = {}, vd = {}, sl = [];
+    // exact key → its prettiest (most frequent) vocalized surface form, so the toolbar can show
+    // مِيكَال / ٱلصَّلَاة in suggestions instead of the bare consonantal skeleton وميكيل / الصلاه.
+    const disp = new Map();
     // imlāʾī-tolerant alias → canonical exact key, for forgiving search. Two tiers: `searchAlias`
     // holds STRONG keys (real spellings) used for resolution AND prefix suggestions; `searchAliasFuzzy`
     // holds only the degraded hamza-dropped keys — used to RESOLVE a hamza-variant query but kept out
@@ -56,6 +60,9 @@ export function useCorpusIndices({ quranRaw, precision, morph, lemmaMap, hideSto
           const w = { orig: raw, norm: n, exact: ex, proot: gk?.[wi]?.proot, plemma: gk?.[wi]?.plemma };
           words.push(w);
           wi++;
+          // Track the most frequent original spelling per exact key (for vocalized suggestion labels).
+          let dm = disp.get(ex); if (!dm) disp.set(ex, (dm = new Map()));
+          dm.set(raw, (dm.get(raw) || 0) + 1);
           if (!seenN.has(ex)) { seenN.add(ex); (w2v[ex] ||= []).push(vk); }
           // Index under the strong keys (loose norm + imlāʾī) for resolution & suggestions, and
           // under the degraded hamza-dropped keys in the fuzzy tier for resolution only — so a
@@ -70,8 +77,19 @@ export function useCorpusIndices({ quranRaw, precision, morph, lemmaMap, hideSto
         vd[vk] = { text: v.text, s: s.id, a: v.id, sn: s.name, words };
       }
     }
-    return { w2v, r2v, verseData: vd, surahList: sl, searchAlias, searchAliasFuzzy };
+    // Reduce each exact key's spelling tally to the single most common surface form.
+    const exDisplay = {};
+    for (const [ex, dm] of disp) {
+      let bestForm = ex, bestN = -1;
+      for (const [form, n] of dm) if (n > bestN) { bestN = n; bestForm = form; }
+      exDisplay[ex] = bestForm;
+    }
+    return { w2v, r2v, verseData: vd, surahList: sl, searchAlias, searchAliasFuzzy, exDisplay };
   }, [quranRaw, precision, morph]);
+
+  // Romanization skeleton → exact norm keys, for Latin ("rahman", "ibrahim") search. Built once
+  // over the corpus norms; null until the corpus loads so the toolbar skips the Latin path.
+  const romanIndex = useMemo(() => (quranRaw ? buildRomanIndex(Object.keys(w2v)) : null), [quranRaw, w2v]);
 
   // Lemma → verses index, built only once lemmas are loaded (lemma mode). Mirrors
   // the r2v block but keyed by lemma; null until the map arrives so the graph waits.
@@ -112,5 +130,5 @@ export function useCorpusIndices({ quranRaw, precision, morph, lemmaMap, hideSto
     return s;
   }, [hideStop, stopExtra, stopDisabled]);
 
-  return { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy, l2v, compareIndices, orderedKeys, stopSet };
+  return { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy, l2v, compareIndices, orderedKeys, stopSet, romanIndex, exDisplay };
 }

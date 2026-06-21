@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useDeferredValue, useRef, lazy, Suspense } from "react";
-import { looseResolve, resolvePhrase } from "./search.js";
+import { looseResolve, resolvePhrase, romanResolve } from "./search.js";
+import { latinSkeleton, isLatinQuery, arabicSkeletons } from "./romanize.js";
 import { norm, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 import { useCorpusIndices } from "./hooks/useCorpusIndices.js";
 import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions } from "./data-loader.js";
@@ -170,6 +171,7 @@ export default function QuranGraph() {
   const [expr, setExpr] = useState(null); // multi-word expression inventory (lazy, on first explorer open)
   const [exprOpen, setExprOpen] = useState(false); // expressions explorer { } | false
   const [exprFocus, setExprFocus] = useState(null); // root the explorer opened scoped to (cross-link)
+  const [exprInitial, setExprInitial] = useState(null); // saved-expression record to reopen the explorer straight into its detail
   const [relations, setRelations] = useState(null); // lexical opposition (طباق) + affinity map (lazy)
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
@@ -441,7 +443,7 @@ export default function QuranGraph() {
   // Derived corpus indices (verseData spine, inverted indices, search alias, stop set …)
   // live in their own hook — the first slice of the QuranGraph decomposition. Pure
   // derivations from the loaded corpus + a few prefs; no interaction state involved.
-  const { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy, l2v, compareIndices, orderedKeys, stopSet } =
+  const { w2v, r2v, verseData, surahList, searchAlias, searchAliasFuzzy, l2v, compareIndices, orderedKeys, stopSet, romanIndex, exDisplay } =
     useCorpusIndices({ quranRaw, precision, morph, lemmaMap, hideStop, stopExtra, stopDisabled });
 
   // Toggle any word's hidden state directly (used by the editor chips): hide a
@@ -930,7 +932,7 @@ export default function QuranGraph() {
   // reopened view starts from a clean slate (the setters are stable useState dispatchers).
   const closeAllViews = useCallback(() => {
     setDist(null); setCmp(null); setOcc(null); setLab(null); setAya(null); setSurahLab(null);
-    setRhyme(null); setExprOpen(false); setExprFocus(null); setCorpusOpen(false); setCtx(null); setPhrase(null); setDef(null);
+    setRhyme(null); setExprOpen(false); setExprFocus(null); setExprInitial(null); setCorpusOpen(false); setCtx(null); setPhrase(null); setDef(null);
   }, []);
 
   // Reopen an analysis view from its compact descriptor (the inverse of `currentView`).
@@ -998,45 +1000,90 @@ export default function QuranGraph() {
       return sur && a >= 1 && a <= sur.total_verses ? [{ ref: true, s, a, lookup: `${s}:${a}`, label: `${sur.name} ${a}` }] : [];
     }
     const indices = { exact: w2v, root: r2v, lemma: l2v || {} };
+    const mushafFirst = (keys) => keys.reduce((m, k) => {
+      const [s, a] = k.split(":").map(Number), [ms, ma] = m.split(":").map(Number);
+      return s < ms || (s === ms && a < ma) ? k : m;
+    });
+    const snippetOf = (vk) => { const t = verseData[vk]?.text || ""; return t.length > 64 ? t.slice(0, 64) + "…" : t; };
+    const head = []; // surah-nav + phrase rows lead the list
+
+    // ── Surah-name navigation: "Baqarah", "البقرة", "Fatiha 6" (Arabic name or romanized) ──
+    {
+      const m = raw.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).match(/^(.+?)(?:\s+(\d{1,3}))?$/);
+      const namePart = (m ? m[1] : raw).trim();
+      const verseNo = m && m[2] ? +m[2] : null;
+      const qN = norm(namePart).replace(/^ال/, ""); // de-article: بقرة matches البقرة
+      const qL = isLatinQuery(namePart) ? latinSkeleton(namePart) : "";
+      if (qN.length >= 2 || qL.length >= 3) {
+        const rows = [];
+        for (const su of surahList) {
+          const nm = norm(su.name).replace(/^ال/, "");
+          const sk = arabicSkeletons(nm)[0] || "";
+          const tier = Math.max(
+            qN.length >= 2 ? (nm === qN ? 3 : nm.startsWith(qN) ? 2 : 0) : 0,
+            qL.length >= 3 ? (sk === qL ? 3 : sk.startsWith(qL) ? 2 : 0) : 0,
+          );
+          if (tier) rows.push({ ref: true, surah: true, s: su.id, a: verseNo && verseNo <= su.count ? verseNo : 1, lookup: `surah:${su.id}`, label: `${su.id}. ${su.name}${verseNo ? " " + verseNo : ""}`, tier });
+        }
+        rows.sort((a, b) => b.tier - a.tier || a.s - b.s);
+        head.push(...rows.slice(0, verseNo ? 1 : 2));
+      }
+    }
+
+    // ── Arabic morphological terms (word · lemma · root), each with a vocalized label + snippet ──
     const seen = new Set(), out = [];
     for (const mode of ["exact", "lemma", "root"]) {
       for (const c of looseResolve(raw, mode, "loose", indices, searchAlias, searchAliasFuzzy).candidates) {
         const key = mode + ":" + c.lookup;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({ ...c, mode });
+        const first = indices[mode][c.lookup]?.[0];
+        out.push({ ...c, mode, display: mode === "exact" ? (exDisplay[c.lookup] || c.lookup) : c.lookup, snippet: first ? snippetOf(first) : "" });
       }
     }
+
+    // ── Romanized (Latin) fallback: "rahman", "ibrahim", "musa" → the Arabic word ──
+    if (isLatinQuery(raw) && romanIndex) {
+      for (const c of romanResolve(raw, romanIndex, w2v)) {
+        const key = "exact:" + c.lookup;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const first = w2v[c.lookup]?.[0];
+        out.push({ ...c, display: exDisplay[c.lookup] || c.lookup, snippet: first ? snippetOf(first) : "" });
+      }
+    }
+
     // Best tier first (exact › prefix › infix › fuzzy-typo), then nearest edit, then frequency.
     out.sort((a, b) => (b.tier ?? 0) - (a.tier ?? 0) || (a.dist ?? 0) - (b.dist ?? 0) || b.count - a.count);
+    for (const c of out) if (c.tier === 0) c.didYouMean = true; // edit-distance rows are guesses
     const terms = out.slice(0, 10);
-    // Multi-word: lead with a co-occurrence "go to" row to the first āya containing every token
-    // (حبل الله → 3:103). Reuses the verse-ref navigation; degrades to plain term rows if no overlap.
+
+    // ── Multi-word phrase: lead with the first āya where the tokens are ADJACENT (a true phrase),
+    //    else where they merely co-occur (حبل الله → 3:103). Reuses verse-ref navigation. ──
     if (/\s/.test(raw)) {
-      const ph = resolvePhrase(raw, indices, searchAlias, searchAliasFuzzy);
+      const ph = resolvePhrase(raw, indices, searchAlias, searchAliasFuzzy, verseData);
       if (ph) {
-        const first = ph.keys.reduce((m, k) => {
-          const [s, a] = k.split(":").map(Number), [ms, ma] = m.split(":").map(Number);
-          return s < ms || (s === ms && a < ma) ? k : m;
-        });
-        const [s, a] = first.split(":").map(Number);
+        const pool = ph.adjacent.length ? ph.adjacent : ph.keys;
+        const first = mushafFirst(pool), [s, a] = first.split(":").map(Number);
         const sur = quranRaw?.find((x) => x.id === s);
-        if (sur) return [{ ref: true, phrase: true, s, a, lookup: first, label: `${sur.name} ${a} · ${ph.keys.length}` }, ...terms].slice(0, 10);
+        if (sur) head.unshift({ ref: true, phrase: true, adjacent: ph.adjacent.length > 0, s, a, lookup: first, label: `${sur.name} ${a}`, count: pool.length, snippet: snippetOf(first) });
       }
     }
-    return terms;
-  }, [deferredQuery, w2v, r2v, l2v, searchAlias, searchAliasFuzzy, quranRaw]);
+
+    const list = [...head, ...terms].slice(0, 10);
+    return list.length ? list : [{ noResult: true, lookup: raw, label: raw }];
+  }, [deferredQuery, w2v, r2v, l2v, searchAlias, searchAliasFuzzy, quranRaw, surahList, verseData, romanIndex, exDisplay]);
 
   // Act on a chosen suggestion: a verse-ref row navigates; a term row switches to that
   // suggestion's mode (so the graph now links by it) and opens its occurrences.
   const acceptSearch = useCallback((item) => {
     setSugOpen(false); setSugIndex(-1); setToolsOpen(false);
-    if (!item) { setSearchMiss(true); return; }
+    if (!item || item.noResult) { setSearchMiss(true); return; }
     setSearchMiss(false);
     if (item.ref) { navigate(item.s, item.a); setQuery(""); return; }
     if (item.mode !== searchMode) { setSearchMode(item.mode); reset(); }
     setActiveWord(item.lookup);
-    openOcc(item.lookup, item.label, item.mode);
+    openOcc(item.lookup, item.display || item.label, item.mode);
   }, [searchMode, setSearchMode, reset, openOcc, navigate]);
 
   const runSearch = useCallback((e) => {
@@ -1073,6 +1120,7 @@ export default function QuranGraph() {
       case "dist": setDist({ lookup: p.lookup, label: p.label, mode: p.mode }); break;
       case "lexicon": setDef({ root: p.root, lexicon: p.lexicon }); break;
       case "phrase": if (p.surah) { navigate(p.surah, p.ayah); openPhrases(`${p.surah}:${p.ayah}`); } break;
+      case "expr": setExprFocus(null); setExprInitial(p); setExprOpen(true); break;
       case "verse": case "word": if (p.surah) navigate(p.surah, p.ayah); break;
       default: break;
     }
@@ -1447,16 +1495,24 @@ export default function QuranGraph() {
             onFocus={() => setSugOpen(true)} onBlur={() => setSugOpen(false)} onKeyDown={onSearchKey} />
           {sugOpen && !tourLockSearch && searchSuggestions.length > 0 && (
             <div id="ag-search-listbox" role="listbox" aria-label={t("common.search.suggestions")}
-              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto", minWidth: 230 }}>
+              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
               {searchSuggestions.map((item, i) => (
-                <button type="button" key={(item.mode || "ref") + ":" + item.lookup} role="option" aria-selected={i === sugIndex} className="ag-search-suggest"
+                <button type="button" key={(item.mode || "ref") + ":" + item.lookup + ":" + i} role="option" aria-selected={i === sugIndex} className="ag-search-suggest"
                   onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setSugIndex(i)} onClick={() => acceptSearch(item)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, background: i === sugIndex ? "var(--surface-4, #243049)" : "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%" }}>
-                  <span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)", fontSize: "var(--text-base)" }}>{item.label || item.lookup}</span>
-                  <span style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                    {!item.ref && <span className={"ag-badge " + (item.mode === "root" ? "t-root" : item.mode === "lemma" ? "t-lemma" : "t-word")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{item.mode === "root" ? t("common.graphMode.root") : item.mode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}</span>}
-                    <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", minWidth: 18, textAlign: "end" }}>{item.ref ? "→" : item.count}</span>
+                  style={{ display: "flex", flexDirection: "column", gap: 2, background: i === sugIndex ? "var(--surface-4, #243049)" : "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: item.noResult ? "default" : "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%", opacity: item.noResult ? 0.65 : 1 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                    <span style={{ fontFamily: item.noResult ? "inherit" : "var(--font-quran)", color: item.noResult ? "var(--text-faint)" : item.didYouMean ? "var(--text-muted, #9aa3b2)" : "var(--gold-400)", fontSize: "var(--text-base)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.didYouMean ? "≈ " : ""}{item.noResult ? t("common.search.noResults") + " · " + item.label : (item.display || item.label || item.lookup)}
+                    </span>
+                    <span style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      {item.surah && <span className="ag-badge t-word" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{t("common.search.surahBadge")}</span>}
+                      {item.phrase && <span className="ag-badge t-lemma" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{t("common.search.phraseBadge")}</span>}
+                      {item.roman && <span className="ag-badge t-root" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }} title={t("common.search.latinBadge")}>𝐀</span>}
+                      {!item.ref && !item.noResult && <span className={"ag-badge " + (item.mode === "root" ? "t-root" : item.mode === "lemma" ? "t-lemma" : "t-word")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{item.mode === "root" ? t("common.graphMode.root") : item.mode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}</span>}
+                      {!item.noResult && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", minWidth: 18, textAlign: "end" }}>{item.ref ? "→" : item.count}</span>}
+                    </span>
                   </span>
+                  {item.snippet && <span dir="rtl" style={{ fontFamily: "var(--font-quran)", color: "var(--text-faint)", fontSize: "var(--text-xs)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{item.snippet}</span>}
                 </button>
               ))}
             </div>
@@ -1568,7 +1624,7 @@ export default function QuranGraph() {
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
           <button type="button" data-tour="exprBtn" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
-            aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprOpen((o) => !o); }}>⛓</button>
+            aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprInitial(null); setExprOpen((o) => !o); }}>⛓</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
             onClick={() => setShowHelp(true)}>؟</button>
           <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
@@ -2117,10 +2173,10 @@ export default function QuranGraph() {
         onNavigate={(s, a) => { setCorpusOpen(false); navigate(s, a); }}
         onClose={() => setCorpusOpen(false)} />}
 
-      {exprOpen && <ExpressionsModal open={exprOpen} verseData={verseData} expr={expr} theme={theme} focusRoot={exprFocus}
-        onNavigate={(s, a) => { setExprOpen(false); navigate(s, a); }}
-        onRoot={(r) => { setExprOpen(false); setLab({ root: r, label: r }); }}
-        onClose={() => setExprOpen(false)} />}
+      {exprOpen && <ExpressionsModal open={exprOpen} verseData={verseData} expr={expr} theme={theme} focusRoot={exprFocus} initialDetail={exprInitial}
+        onNavigate={(s, a) => { setExprOpen(false); setExprInitial(null); navigate(s, a); }}
+        onRoot={(r) => { setExprOpen(false); setExprInitial(null); setLab({ root: r, label: r }); }}
+        onClose={() => { setExprOpen(false); setExprInitial(null); }} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} onStartTour={() => { setShowHelp(false); startTour(); }} />}
 

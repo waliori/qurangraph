@@ -24,6 +24,15 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   for (let i = start; i < end; i++) {
     const v = verseData[keys[i]];
     if (!v) continue;
+    // For lemma/root the grouping is morphological (per-occurrence plemma/proot), so highlight
+    // by word POSITION via wordGroupKey — the same authoritative key the verse list was built
+    // from. Re-deriving the key from the surface text (HighlightedAyah's primaryWord path) misses
+    // forms whose voted reading differs from this occurrence's, leaving the word un-highlighted.
+    let hiIdx = null;
+    if (!occ.hi && v.words && (occ.mode === "lemma" || occ.mode === "root")) {
+      hiIdx = new Set();
+      for (let wi = 0; wi < v.words.length; wi++) if (wordGroupKey(v.words[wi], occ.mode) === primary) hiIdx.add(wi);
+    }
     rows.push(
       <li key={keys[i]} ref={rowRef(i)}>
         <button type="button" {...rowProps(i)} className={"ag-modal-row" + (i === 0 ? " is-current" : "")}
@@ -37,7 +46,9 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
                 everything else highlights the single search term. */}
             {occ.hi && occ.hi[keys[i]]
               ? <HighlightedAyah text={v.text} highlightIndices={new Set(occ.hi[keys[i]])} theme={theme} />
-              : <HighlightedAyah text={v.text} primaryWord={primary} searchMode={searchMode} precision={precision} theme={theme} />}
+              : hiIdx
+                ? <HighlightedAyah text={v.text} highlightIndices={hiIdx} theme={theme} />
+                : <HighlightedAyah text={v.text} primaryWord={primary} searchMode={searchMode} precision={precision} theme={theme} />}
           </span>
         </button>
       </li>

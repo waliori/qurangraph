@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setRootMap, setLemmaMap } from "./arabic-utils.js";
-import { looseResolve, resolvePhrase } from "./search.js";
+import { looseResolve, resolvePhrase, buildRomanIndex, romanResolve } from "./search.js";
 
 // The جنن family: bare جن is the VERB (6:76); jinn-the-noun lives under ٱلْجِنّ (الجن).
 const LEMMAS = { "جن": "جَنَّ", "الجن": "جِنّ", "جنه": "جَنَّة", "جان": "جانّ" };
@@ -189,5 +189,37 @@ describe("resolvePhrase (multi-word)", () => {
     const idx = { exact: { "نور": ["24:35"], "ظلمات": ["2:17"] }, lemma: {}, root: {} };
     expect(resolvePhrase("نور ظلمات", idx, alias)).toBe(null); // disjoint
     expect(resolvePhrase("نور", idx, alias)).toBe(null);       // single token
+  });
+
+  it("separates a contiguous phrase from mere co-occurrence when verseData is given", () => {
+    const alias = { "بحبل": "بحبل", "الله": "الله" };
+    const idx = { exact: { "بحبل": ["3:103", "2:1"], "الله": ["3:103", "2:1"] }, lemma: {}, root: {} };
+    // 3:103 has them adjacent (بِحَبْلِ ٱللَّه); 2:1 has both words but apart.
+    const verseData = {
+      "3:103": { words: [{ norm: "واعتصموا" }, { norm: "بحبل" }, { norm: "الله" }] },
+      "2:1": { words: [{ norm: "بحبل" }, { norm: "كان" }, { norm: "الله" }] },
+    };
+    const r = resolvePhrase("بحبل الله", idx, alias, {}, verseData);
+    expect(r.keys.sort()).toEqual(["2:1", "3:103"]); // both co-occur
+    expect(r.adjacent).toEqual(["3:103"]);           // only one is the real phrase
+  });
+});
+
+describe("romanResolve (Latin search)", () => {
+  const ALIASR = { "الرحمن": "الرحمن", "موسي": "موسي", "كتب": "كتب" };
+  const W2V = { "الرحمن": new Array(45).fill("x"), "موسي": new Array(136).fill("x"), "كتب": new Array(67).fill("x") };
+  const idx = buildRomanIndex(Object.keys(W2V));
+
+  it("resolves a romanized query to the Arabic word (de-articled prefix)", () => {
+    const top = romanResolve("rahman", idx, W2V)[0];
+    expect(top.lookup).toBe("الرحمن"); // skeleton rhmn matches الرحمن via the stripped article
+    expect(top.roman).toBe(true);
+  });
+  it("matches a name whose long vowels the user spells out (musa → موسي)", () => {
+    expect(romanResolve("musa", idx, W2V).map((c) => c.lookup)).toContain("موسي");
+    expect(romanResolve("kitab", idx, W2V).map((c) => c.lookup)).toContain("كتب");
+  });
+  it("returns nothing for Arabic input — the Latin path must never run on Arabic", () => {
+    expect(romanResolve("الرحمن", idx, W2V)).toEqual([]);
   });
 });

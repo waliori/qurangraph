@@ -1,4 +1,5 @@
-import { norm, normStrict, groupKey, looseKeys, strongKeys } from "./arabic-utils.js";
+import { norm, normStrict, groupKey, looseKeys, strongKeys, STOP_PARTICLES } from "./arabic-utils.js";
+import { arabicSkeletons, latinSkeleton, isLatinQuery } from "./romanize.js";
 
 /* ═══ Forgiving term resolution ═══
  *
@@ -42,7 +43,7 @@ import { norm, normStrict, groupKey, looseKeys, strongKeys } from "./arabic-util
 // stems. WITHOUT the noise a blind substring match brings (which would catch سجن via a جن bigram);
 // stems are kept ≥2 chars.
 const PROCLITIC = new Set(["و", "ف", "ب", "ك", "ل", "س"]);
-function deAffix(k) {
+export function deAffix(k) {
   const stems = [];
   const peelArticle = (s) => { if (s.startsWith("ال") && s.length >= 4) stems.push(s.slice(2)); };
   let s = k;
@@ -178,17 +179,21 @@ export function looseResolve(query, mode, precision, indices, searchAlias = {}, 
 /* ═══ Multi-word (phrase / compound-name) resolution ═══
  *
  * The toolbar resolves a single term; a space-separated query (ذو القرنين, حبل الله) is a
- * different question — "which āyāt contain ALL of these?". Resolve each token to its best
- * verse set (preferring the exact surface index, then lemma, then root), intersect, and return
- * the co-occurrence verse keys. Returns null unless every token resolves and the sets overlap,
- * so the caller can fall back to single-term behaviour cleanly. Pure + index-only, so it unit-tests.
+ * different question — "which āyāt contain ALL of these?". Resolve each token to its best verse
+ * set (preferring the exact surface index, then lemma, then root) and intersect → co-occurrence
+ * verses. When `verseData` is supplied, also detect verses where the tokens occur CONTIGUOUSLY in
+ * order (a true phrase: ٱلْحَمْدُ لِلَّه adjacent, not just both present), returned separately so the
+ * caller can lead with exact-phrase matches. Returns null unless every token resolves and the sets
+ * overlap, so single-term fallback stays clean. Pure → unit-tests.
+ *
+ * → { keys: [co-occurrence verses], adjacent: [contiguous-phrase verses ⊆ keys] }
  */
-export function resolvePhrase(query, indices, searchAlias = {}, searchAliasFuzzy = {}) {
+export function resolvePhrase(query, indices, searchAlias = {}, searchAliasFuzzy = {}, verseData = null) {
   const parts = (query || "").trim().split(/\s+/).filter((p) => norm(p).length >= 2);
   if (parts.length < 2) return null;
-  let acc = null;
+  const tokens = []; // per token: { verses: Set, forms: Set<normKey> } (forms only for exact-mode adjacency)
   for (const p of parts) {
-    let set = null;
+    let resolved = null;
     for (const mode of ["exact", "lemma", "root"]) {
       const { direct, candidates } = looseResolve(p, mode, "loose", indices, searchAlias, searchAliasFuzzy);
       // Union EVERY surface form of the token, not just the top one — حبل occurs only as
@@ -197,13 +202,84 @@ export function resolvePhrase(query, indices, searchAlias = {}, searchAliasFuzzy
       const exactPicks = candidates.filter((c) => c.tier === 3);
       const lookups = (exactPicks.length ? exactPicks : candidates.slice(0, 1)).map((c) => c.lookup);
       if (direct) lookups.push(direct.lookup);
-      const u = new Set();
-      for (const lp of lookups) for (const vk of (indices[mode] || {})[lp] || []) u.add(vk);
-      if (u.size) { set = u; break; }
+      const verses = new Set(), forms = new Set();
+      for (const lp of lookups) { for (const vk of (indices[mode] || {})[lp] || []) verses.add(vk); if (mode === "exact") forms.add(lp); }
+      if (verses.size) { resolved = { verses, forms }; break; }
     }
-    if (!set) return null; // a token that resolves to nothing → no phrase
-    acc = acc ? new Set([...acc].filter((k) => set.has(k))) : set;
-    if (!acc.size) return null;
+    if (!resolved) return null; // a token that resolves to nothing → no phrase
+    tokens.push(resolved);
   }
-  return acc && acc.size ? { keys: [...acc] } : null;
+  let acc = tokens[0].verses;
+  for (let i = 1; i < tokens.length; i++) acc = new Set([...acc].filter((k) => tokens[i].verses.has(k)));
+  if (!acc.size) return null;
+
+  // Contiguity: scan each co-occurrence verse for a run where word i+j matches token j's surface
+  // forms (directly, or once either side is de-affixed — so بِحَبْلِ ٱللَّه counts as adjacent).
+  const adjacent = [];
+  if (verseData && tokens.every((t) => t.forms.size)) {
+    const matches = (wn, forms) => forms.has(wn) || deAffix(wn).some((s) => forms.has(s)) || [...forms].some((f) => deAffix(f).includes(wn));
+    for (const vk of acc) {
+      const words = verseData[vk]?.words;
+      if (!words) continue;
+      for (let i = 0; i + tokens.length <= words.length; i++) {
+        if (tokens.every((t, j) => matches(words[i + j].norm, t.forms))) { adjacent.push(vk); break; }
+      }
+    }
+  }
+  return { keys: [...acc], adjacent };
+}
+
+/* ═══ Romanized (Latin) search ═══
+ *
+ * buildRomanIndex maps every romanization SKELETON → the set of exact norm keys that reduce
+ * to it. A word is indexed under its own skeleton AND those of its de-affixed stems, so a
+ * bare Latin query reaches a word that only ever occurs with a proclitic (الشيطن from
+ * "shaytan", لجبريل from "jibril"). Built once over the corpus norms by useCorpusIndices.
+ */
+export function buildRomanIndex(normKeys) {
+  const index = new Map();
+  for (const n of normKeys) {
+    const forms = new Set([n, ...deAffix(n)]);
+    for (const form of forms) for (const sk of arabicSkeletons(form)) {
+      if (sk.length < 2) continue;
+      let set = index.get(sk);
+      if (!set) index.set(sk, (set = new Set()));
+      set.add(n);
+    }
+  }
+  return index;
+}
+
+// A word is "particle-ish" (rarely a search target, so demoted in romanized ranking) if it
+// IS a stop particle or de-affixes to one. The length≥3 guard stops a content word from being
+// mistaken for a particle by an over-eager peel — الله must not look like ٱل+له (له is a
+// particle), so its 2-letter stem is ignored while والذين → الذين (5 letters) is still caught.
+const particleish = (n) => STOP_PARTICLES.has(n) || deAffix(n).some((s) => s.length >= 3 && STOP_PARTICLES.has(s));
+
+/* Resolve a Latin query to Arabic exact norm-key candidates via the romanization index.
+ * Skeleton-exact (tier 3) ranks above prefix (2) above bounded-edit (1); within a tier,
+ * content words rank above particles, then by corpus frequency. `freq` is norm → occurrence
+ * count (pass the w2v index; its array lengths are the counts). Returns [] for Arabic input. */
+export function romanResolve(query, romanIndex, freq = {}) {
+  if (!isLatinQuery(query)) return [];
+  const q = latinSkeleton(query);
+  if (q.length < 2 || !romanIndex) return [];
+  const maxD = q.length <= 4 ? 1 : 2;
+  const best = new Map(); // normKey → { tier, dist }
+  const consider = (n, tier, dist) => {
+    const prev = best.get(n);
+    if (!prev || tier > prev.tier || (tier === prev.tier && dist < prev.dist)) best.set(n, { tier, dist });
+  };
+  for (const [sk, set] of romanIndex) {
+    let tier = 0, dist = 0;
+    if (sk === q) tier = 3;
+    else if (sk.startsWith(q) && sk.length - q.length <= 3) tier = 2;
+    else { const d = editLE(sk, q, maxD); if (d <= maxD) { tier = 1; dist = d; } }
+    if (tier) for (const n of set) consider(n, tier, dist);
+  }
+  const cnt = (n) => (freq[n] ? freq[n].length : 0);
+  return [...best.entries()]
+    .map(([lookup, m]) => ({ lookup, label: lookup, mode: "exact", count: cnt(lookup), tier: m.tier, dist: m.dist, roman: true }))
+    .sort((a, b) => b.tier - a.tier || a.dist - b.dist || (particleish(a.lookup) ? 1 : 0) - (particleish(b.lookup) ? 1 : 0) || b.count - a.count)
+    .slice(0, 8);
 }

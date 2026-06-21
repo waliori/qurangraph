@@ -5,6 +5,7 @@ import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { useMyExpressions } from "../hooks/useMyExpressions.js";
+import { useWorkspace } from "../hooks/useWorkspace.js";
 import { useI18n } from "../i18n/index.js";
 
 // Highlight span for a stored expression record by its kind: government/collocation mark two
@@ -27,8 +28,9 @@ const spanOf = (it) => (it.spanKind === "frame" ? FRAME_SPAN : spanRun(it.len ||
 const TABS = ["frames", "collocations", "compounds", "idioms"];
 const CAP = 200;
 
-export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNavigate, onRoot, onClose }) {
+export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, initialDetail, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
+  const ws = useWorkspace();
   const myExpr = useMyExpressions();
   const { mine: myMine, isHidden, has: myHas, toggle: myToggle, removeMine, hideCurated } = myExpr;
   const [tab, setTab] = useState("frames");
@@ -42,12 +44,23 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
     return qq && qq.split(/\s+/).length >= 2 ? matchPhrase(qq, verseData) : null;
   }, [dQuery, verseData]);
   const [focus, setFocus] = useState(focusRoot || null); // root-scoped view
-  const [detail, setDetail] = useState(null); // { label, verses:[{vk,hi}] }
+  // { label, verses:[{vk,hi}] } — lazily seeded when reopened from the workspace so the detail
+  // paints on the first frame, before the heavy `expr` index has finished loading.
+  const [detail, setDetail] = useState(() => (initialDetail
+    ? { label: initialDetail.display, verses: occVerses(initialDetail.occ, verseData, spanOf(initialDetail)), components: null, related: null, promo: initialDetail, curated: false }
+    : null));
   const [preview, setPreview] = useState(null); // vk in the sticky foot
   const [distSura, setDistSura] = useState(null); // distribution bar clicked → filter list to this sūra
   const [distHover, setDistHover] = useState(null); // sūra under the cursor on the distribution
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { setFocus(focusRoot || null); setDetail(null); setPreview(null); }, [focusRoot]);
+  // Reopened from the workspace: a saved expression record carries its own occurrences, so the
+  // detail view reconstructs without the full `expr` index (which may still be loading).
+  useEffect(() => {
+    if (!initialDetail) return;
+    setDetail({ label: initialDetail.display, verses: occVerses(initialDetail.occ, verseData, spanOf(initialDetail)), components: null, related: null, promo: initialDetail, curated: false });
+    setPreview(null); setDistSura(null); setDistHover(null);
+  }, [initialDetail, verseData]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const idx = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
@@ -77,7 +90,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   const matchIdiom = (i) => !q || i.display.includes(q);
 
   if (!open) return null;
-  if (!expr) return (
+  if (!expr && !detail) return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
       title={<><span className="ag-badge t-verse">{t("expr.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("expr.title")}</h2></>}>
       <div className="ag-dist-body"><p className="ag-dist-name">{t("expr.unavailable")}</p></div>
@@ -87,6 +100,9 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   // `extra.promo` (when present) is the descriptor for adding this expression to "my expressions";
   // `extra.curated` marks a shipped idiom (managed via the tab's delete, not the leaf +/−).
   const showOcc = (label, occ, span, extra) => { setDetail({ label, verses: occVerses(occ, verseData, span), components: extra?.components || null, related: extra?.related || null, promo: extra?.promo || null, curated: !!extra?.curated }); setPreview(null); setDistSura(null); setDistHover(null); };
+  // Persist the open expression to the workspace. The promo descriptor is self-contained
+  // (its own occurrences) so reopening rebuilds this exact detail view without the expr index.
+  const saveExpr = () => { const r = detail?.promo; if (!r) return; ws.saveItem({ type: "expr", title: r.display, payload: { kind: r.kind, display: r.display, occ: r.occ, count: r.count, spanKind: r.spanKind, len: r.len } }); ws.toast(t("ws.saved")); };
   // A collocation's rich leaf: its verses, component roots, and the BIDIRECTIONAL contrast —
   // the other verbs that take the same noun (idx.colByRoot is keyed by both roots).
   const openColloc = (c) => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN, {
@@ -111,7 +127,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
   // The government CONTRAST as a matrix: rows = heads, fixed columns = the ḥurūf al-jarr (+ a
   // bare column), cells shaded by how often that head takes that preposition. A column scan shows
   // every verb that takes بـ; a row shows one head's whole government profile. Click a cell → āyāt.
-  const PREP_COLS = expr.prepDisp ? Object.keys(expr.prepDisp) : [];
+  const PREP_COLS = expr?.prepDisp ? Object.keys(expr.prepDisp) : [];
   const renderMatrix = (rows) => {
     if (!rows.length) return <span className="ag-dist-name">{t("expr.none")}</span>;
     const max = rows.reduce((m, h) => Math.max(m, ...h.preps.map((p) => p.count)), 1);
@@ -163,7 +179,9 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
         {detail ? <span className="ag-modal-count">{fmtNum(detail.verses.length)} {t("expr.ayat")}</span>
           : !focus && <span className="ag-modal-count">{fmtNum((expr.frames || []).length + (expr.compounds || []).length + (expr.idioms || []).length)}</span>}
       </>}
-      actions={!detail && !focus && <button type="button" className="ag-btn" onClick={() => exportJsonFile({ frames: expr.frames, compounds: expr.compounds, idioms: expr.idioms }, "expressions.json")}>⤓ JSON</button>}>
+      actions={detail
+        ? (detail.promo && <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={saveExpr}>✶ {t("ws.save")}</button>)
+        : (!focus && <button type="button" className="ag-btn" onClick={() => exportJsonFile({ frames: expr.frames, compounds: expr.compounds, idioms: expr.idioms }, "expressions.json")}>⤓ JSON</button>)}>
       <div className="ag-dist-body">
         {detail ? (
           <div className="ag-dist-sec">
@@ -368,7 +386,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, onNa
                       <button type="button" className="ag-modal-row" disabled={it.count === 0}
                         style={{ flex: 1, textAlign: "start", display: "flex", gap: 8, alignItems: "center", opacity: it.count === 0 ? 0.5 : 1 }}
                         title={t("expr.occN", { n: it.count })}
-                        onClick={() => showOcc(it.display, it.occ, spanOf(it), { promo: mineFlag ? it : null, curated: !mineFlag })}>
+                        onClick={() => showOcc(it.display, it.occ, spanOf(it), { promo: it, curated: !mineFlag })}>
                         <span className={"ag-badge " + (mineFlag ? "t-lemma" : "t-verse")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px", flexShrink: 0 }}>{mineFlag ? t("expr.mine") : t("expr.curated")}</span>
                         <span style={{ fontFamily: "var(--font-quran)", flex: 1, color: mineFlag ? "var(--viridian-400)" : undefined }}>{it.display}</span>
                         <span className="ag-dist-num" style={{ color: "var(--gold-400)", flexShrink: 0 }}>{fmtNum(it.count)}</span>
