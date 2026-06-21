@@ -84,35 +84,34 @@ export function ArabicKeyboard({ open, onClose }) {
   };
   const onBksp = () => { const el = targetEl(); if (el) { backspace(el); el.focus(); } };
 
-  // Drag from the header. Capture only engages AFTER the pointer actually moves past a
-  // small threshold — a plain press never captures, so clicks/double-clicks on the header
-  // (collapse toggle, ✕) fire normally instead of being retargeted away.
+  // Drag from the header. The pointer is captured on press so every move is delivered to the
+  // header even when the cursor races ahead of the panel — without that, a fast drag escapes
+  // the header element and the panel "drops" mid-move. Actual repositioning still waits for a
+  // small movement threshold, so plain clicks/double-clicks (collapse toggle, ✕) fire normally.
   const onDragDown = (e) => {
     if (e.target.closest(".ag-kb-x")) return;
     const rect = e.currentTarget.parentElement.getBoundingClientRect();
     const base = pos || { left: rect.left, top: rect.top };
-    drag.current = { startX: e.clientX, startY: e.clientY, dx: e.clientX - base.left, dy: e.clientY - base.top, captured: false };
+    drag.current = { startX: e.clientX, startY: e.clientY, dx: e.clientX - base.left, dy: e.clientY - base.top, moved: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ }
   };
   const onDragMove = (e) => {
     const d = drag.current;
     if (!d) return;
-    if (!d.captured) {
-      if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 4) return; // still a click
-      d.captured = true;
-      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ }
-    }
+    if (!d.moved && Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 4) return; // still a click
+    d.moved = true;
     setPos({ left: e.clientX - d.dx, top: e.clientY - d.dy });
   };
   const onDragUp = (e) => {
-    const d = drag.current;
+    if (!drag.current) return;
     drag.current = null;
-    if (d?.captured) { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ } }
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
   };
 
   const style = pos ? { left: pos.left, top: pos.top, right: "auto", bottom: "auto", transform: "none" } : undefined;
 
   return createPortal(
-    <div className="ag-keyboard" role="group" aria-label={t("keyboard.title")} style={style}
+    <div className={"ag-keyboard" + (collapsed ? " is-collapsed" : "")} role="group" aria-label={t("keyboard.title")} style={style}
       onMouseDown={(e) => e.preventDefault() /* never steal focus from the input */}>
       <div className="ag-kb-head" onPointerDown={onDragDown} onPointerMove={onDragMove} onPointerUp={onDragUp} onPointerCancel={onDragUp}
         onDoubleClick={(e) => { if (!e.target.closest(".ag-kb-x")) setCollapsed((c) => !c); }}>

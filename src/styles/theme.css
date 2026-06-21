@@ -207,6 +207,44 @@ body {
 }
 .ag-select.is-ayah select { width: 64px; text-align: center; padding-inline: var(--space-2) var(--space-5); }
 
+/* Searchable surah combobox (mirrors the native select trigger, adds a filter panel) */
+.ag-combo { display: inline-block; }
+.ag-combo-btn {
+  appearance: none; -webkit-appearance: none;
+  height: 36px; max-width: 200px; padding-inline: var(--space-3) var(--space-6);
+  background: var(--ink-850); color: var(--text-body);
+  border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md);
+  font-family: var(--font-ui); font-size: var(--text-sm); cursor: pointer; outline: none; direction: inherit;
+  text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.ag-combo-btn:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
+.ag-combo-btn:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-500) 16%, transparent); }
+.ag-combo-pop {
+  position: absolute; z-index: 90; inset-block-start: calc(100% + 4px); inset-inline-start: 0;
+  width: max(220px, 100%);
+  background: var(--ink-850); border: var(--bw-hair) solid var(--border-strong);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-2, 0 12px 32px rgba(0,0,0,.45));
+  padding: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2);
+}
+.ag-combo-input {
+  height: 32px; padding-inline: var(--space-3); box-sizing: border-box; width: 100%;
+  background: var(--ink-900); color: var(--text-body);
+  border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-sm);
+  font-family: var(--font-ui); font-size: var(--text-sm); outline: none;
+}
+.ag-combo-input:focus { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent); }
+.ag-combo-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.ag-combo-opt {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 6px var(--space-2); border-radius: var(--radius-sm); cursor: pointer;
+  font-family: var(--font-ui); font-size: var(--text-sm); color: var(--text-body); white-space: nowrap;
+}
+.ag-combo-opt.is-active { background: color-mix(in oklab, var(--gold-500) 16%, transparent); }
+.ag-combo-opt.is-current { color: var(--gold-400); font-weight: var(--fw-semibold); }
+.ag-combo-num { display: inline-block; min-width: 1.8em; text-align: end; color: var(--text-faint); font-size: var(--text-xs); }
+.ag-combo-empty { padding: 8px var(--space-2); color: var(--text-faint); font-family: var(--font-ui); font-size: var(--text-sm); }
+
 /* Segmented (word / root) */
 .ag-seg { display: inline-flex; background: var(--ink-850); border: var(--bw-hair) solid var(--border-default);
   border-radius: var(--radius-md); padding: 2px; gap: 2px; }
@@ -907,6 +945,11 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
   animation: ag-kb-rise var(--dur-base, 240ms) var(--ease-out, cubic-bezier(.16,1,.3,1));
 }
 @keyframes ag-kb-rise { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; } }
+
+/* Collapsed → shrink to just the header bar so it tucks away in a corner; full width returns
+ * the moment it's expanded again. */
+.ag-keyboard.is-collapsed { width: auto; min-width: 180px; padding-block-end: clamp(5px, 1.2vw, 8px); }
+.ag-keyboard.is-collapsed .ag-kb-head { padding-block-end: 2px; }
 
 .ag-kb-head {
   display: flex; align-items: center; gap: 8px;

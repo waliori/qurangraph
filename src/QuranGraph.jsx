@@ -21,6 +21,7 @@ import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { ArabicKeyboard } from "./components/ArabicKeyboard.jsx";
+import { SurahSelect } from "./components/SurahSelect.jsx";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
 import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
@@ -1563,11 +1564,8 @@ export default function QuranGraph() {
 
           {/* Both selects wrapped so the tour can spotlight the whole picker. */}
           <span data-tour="picker" className="ag-picker">
-            <div className="ag-select">
-              <select aria-label={t("common.select.surah")} value={surah} onChange={(e) => { setSurah(+e.target.value); setAyah(1); reset(); }}>
-                {surahList.map((s) => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
-              </select>
-            </div>
+            <SurahSelect value={surah} surahList={surahList}
+              onChange={(id) => { setSurah(id); setAyah(1); reset(); }} />
             <div className="ag-select is-ayah">
               <select aria-label={t("common.select.ayah")} value={safeAyah} onChange={(e) => { setAyah(+e.target.value); reset(); }}>
                 {Array.from({ length: ayahCount }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}

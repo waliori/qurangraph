@@ -34,6 +34,8 @@ export const ar = {
   // Selects
   "common.select.surah": "السورة",
   "common.select.ayah": "الآية",
+  "common.select.searchSurah": "ابحث عن سورة…",
+  "common.select.noResults": "لا توجد نتائج",
 
   // Tools popover
   "common.tools.title": "أدوات الرسم",
@@ -288,6 +290,8 @@ export const en = {
   // Selects
   "common.select.surah": "Surah",
   "common.select.ayah": "Ayah",
+  "common.select.searchSurah": "Search surah…",
+  "common.select.noResults": "No matches",
 
   // Tools popover
   "common.tools.title": "Graph tools",
