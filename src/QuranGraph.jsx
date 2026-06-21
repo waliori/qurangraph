@@ -82,6 +82,7 @@ export default function QuranGraph() {
   const { t, lang, setLang, numerals, setNumerals } = useI18n();
   const ws = useWorkspace();
   const [wsOpen, setWsOpen] = useState(false); // workspace drawer
+  const [pendingOpen, setPendingOpen] = useState(null); // a saved item waiting on a lazy index (l2v) to load
   const [quranRaw, setQuranRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1114,6 +1115,15 @@ export default function QuranGraph() {
   };
   const openWorkspaceItem = useCallback((item) => {
     const p = item.payload || {};
+    // Occurrence/distribution items in lemma mode read the lemma index (l2v), which is
+    // lazy-loaded — on a fresh load (exact mode, no query) it isn't fetched yet, so the
+    // open would silently no-op. Kick off the load and retry once it lands.
+    if ((item.type === "occ" || item.type === "dist") && p.mode === "lemma" && !l2v) {
+      if (!lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
+      setPendingOpen(item);
+      setWsOpen(false);
+      return;
+    }
     setWsOpen(false);
     switch (item.type) {
       case "graph": { const u = decodeState(p.code); if (u) { closeAllViews(); applyState(u); if (u.view) openView(u.view); } break; }
@@ -1126,7 +1136,13 @@ export default function QuranGraph() {
       case "verse": case "word": if (p.surah) navigate(p.surah, p.ayah); break;
       default: break;
     }
-  }, [applyState, openOcc, navigate, openPhrases, closeAllViews, openView]);
+  }, [applyState, openOcc, navigate, openPhrases, closeAllViews, openView, l2v, lemmaMap]);
+  // Complete a deferred open once the lemma index it was waiting on has loaded.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (pendingOpen && l2v) { const it = pendingOpen; setPendingOpen(null); openWorkspaceItem(it); }
+  }, [pendingOpen, l2v, openWorkspaceItem]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   // Pin a note onto the current graph (anchored to the selected node, else the centre).
   const pinNote = useCallback((id) => {
     const nodeId = (selected && nmap[selected]) ? selected : "v:" + currentKey;

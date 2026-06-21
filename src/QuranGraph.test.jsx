@@ -41,7 +41,8 @@ describe("QuranGraph", () => {
     render(<QuranGraph />);
     // Loading screen first, then the verse text (in the top ayah panel + centre node).
     expect(await screen.findAllByText("الحمد")).not.toHaveLength(0);
-    expect(screen.getByLabelText("السورة").value).toBe("1");
+    // The surah picker is a combobox button labelled with the current surah ("1. الفاتحة").
+    expect(screen.getByLabelText("السورة").textContent).toMatch(/^1\./);
   });
 
   it("clamps an out-of-range persisted surah to the fallback", async () => {
@@ -49,7 +50,7 @@ describe("QuranGraph", () => {
     localStorage.setItem("qg.ayah", JSON.stringify(1));
     render(<QuranGraph />);
     await screen.findByLabelText("السورة");
-    expect(screen.getByLabelText("السورة").value).toBe("2");
+    expect(screen.getByLabelText("السورة").textContent).toMatch(/^2\./);
   });
 
   it("expands a word when its verse-text token is clicked", async () => {
