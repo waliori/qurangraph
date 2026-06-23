@@ -123,6 +123,16 @@ writeFileSync("public/data/roots.json", JSON.stringify(roots));
 writeFileSync("public/data/lemmas.json", JSON.stringify(lemmas));
 writeFileSync("public/data/morphology.json", JSON.stringify(morphology));
 
+/* Coverage manifest — so the app can disclose, on every root-based aggregate, what
+ * fraction of tokens it actually covers (the rest — particles, proper nouns, rare
+ * words — carry no root and are silently excluded otherwise). */
+writeFileSync("public/data/coverage.json", JSON.stringify({
+  contentTokens, rootedTokens, lemmatizedTokens,
+  rootCoverage: contentTokens ? +(rootedTokens / contentTokens).toFixed(4) : 0,
+  lemmaCoverage: contentTokens ? +(lemmatizedTokens / contentTokens).toFixed(4) : 0,
+  distinctRoots: presentRoots.size, mismatchVerses,
+}, null, 2));
+
 /* ── Report ── */
 const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : "0") + "%";
 console.log(`Surface forms with a root: ${Object.keys(roots).length}`);

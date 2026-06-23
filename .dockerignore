@@ -15,5 +15,10 @@ public/data/morphology.json
 public/data/lexicons/
 public/data/semantic-neighbours.json
 public/data/relations.json
+public/data/expressions.json
+public/data/coverage.json
+public/data/mutashabihat.json
+public/data/munasabat.json
+public/data/iltifat.json
 public/data/surah-meta.json
 public/data/sources.json

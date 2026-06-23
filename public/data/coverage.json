@@ -1,0 +1,9 @@
+{
+  "contentTokens": 77427,
+  "rootedTokens": 50268,
+  "lemmatizedTokens": 74121,
+  "rootCoverage": 0.6492,
+  "lemmaCoverage": 0.9573,
+  "distinctRoots": 1646,
+  "mismatchVerses": 1
+}

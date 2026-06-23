@@ -33,6 +33,30 @@ export function loadRoots() {
   return fetchJSON("data/roots.json");
 }
 
+// Coverage manifest { contentTokens, rootedTokens, rootCoverage, … } so root-based
+// aggregates can disclose what fraction of tokens they cover. Optional → null.
+export function loadCoverage() {
+  return fetchJSON("data/coverage.json").catch(() => null);
+}
+
+// Near-identical verse pairs { note, count, byVerse, pairs } — the mutashābihāt discovery
+// (verses differing by ≤2 words). Optional → null.
+export function loadMutashabihat() {
+  return fetchJSON("data/mutashabihat.json").catch(() => null);
+}
+
+// Inter-sūra coherence { note, pairs, bySura } — the munāsabāt (shared distinctive roots +
+// opening/closing seam roots per consecutive sūra pair). Optional → null.
+export function loadMunasabat() {
+  return fetchJSON("data/munasabat.json").catch(() => null);
+}
+
+// Iltifāt — grammatical register shifts per sūra { note, bySura:{ s:{contour,shifts} } },
+// precomputed from segment-level morphology (accurate, incl. attached pronouns). Optional → null.
+export function loadIltifat() {
+  return fetchJSON("data/iltifat.json").catch(() => null);
+}
+
 // Precomputed normForm → lemma map (lazy — only when lemma mode is first used).
 export function loadLemmas() {
   return fetchJSON("data/lemmas.json");

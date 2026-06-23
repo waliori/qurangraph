@@ -17,8 +17,11 @@
     "data:semantic": "node scripts/build-semantic.js",
     "data:relations": "node scripts/build-antithesis.js",
     "data:expressions": "node scripts/build-expressions.js",
+    "data:mutashabihat": "node scripts/build-mutashabihat.js",
+    "data:munasabat": "node scripts/build-munasabat.js",
+    "data:iltifat": "node scripts/build-iltifat.js",
     "data:manifest": "node scripts/build-sources-manifest.js",
-    "data:build": "npm run data:download && npm run data:transform && npm run data:roots && npm run data:lexicons && npm run data:semantic && npm run data:relations && npm run data:expressions && npm run data:manifest"
+    "data:build": "npm run data:download && npm run data:transform && npm run data:roots && npm run data:lexicons && npm run data:semantic && npm run data:relations && npm run data:expressions && npm run data:mutashabihat && npm run data:munasabat && npm run data:iltifat && npm run data:manifest"
   },
   "dependencies": {
     "react": "^19.1.0",
