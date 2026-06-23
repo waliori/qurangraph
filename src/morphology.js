@@ -53,11 +53,16 @@ export function verseGroupingKeys(M, verseKey) {
   });
 }
 
-/* Empty filter shape. Each category is a list of allowed codes; [] = no constraint. */
-export const EMPTY_MORPH_FILTER = { pos: [], form: [], aspect: [], voice: [] };
+/* Empty filter shape. Each category is a list of allowed codes; [] = no constraint.
+ * pos/form/aspect/voice are the core grammatical axes; person/number/mood/gcase are the
+ * agreement + inflection axes (already decoded per token) that power person/number shift,
+ * oath/conditional and valency queries. */
+export const EMPTY_MORPH_FILTER = { pos: [], form: [], aspect: [], voice: [], person: [], number: [], mood: [], gcase: [] };
+
+const MORPH_AXES = ["pos", "form", "aspect", "voice", "person", "number", "mood", "gcase"];
 
 export function morphFilterActive(f) {
-  return !!f && (f.pos?.length || f.form?.length || f.aspect?.length || f.voice?.length);
+  return !!f && MORPH_AXES.some((k) => f[k]?.length);
 }
 
 /* Does a decoded morphology record satisfy the filter? A word with no morphology
@@ -65,10 +70,14 @@ export function morphFilterActive(f) {
 export function passesMorphFilter(m, f) {
   if (!morphFilterActive(f)) return true;
   if (!m) return false;
-  if (f.pos.length && !f.pos.includes(m.pos)) return false;
-  if (f.form.length && !f.form.includes(m.vf)) return false;
-  if (f.aspect.length && !f.aspect.includes(m.aspect)) return false;
-  if (f.voice.length && !f.voice.includes(m.voice)) return false;
+  if (f.pos?.length && !f.pos.includes(m.pos)) return false;
+  if (f.form?.length && !f.form.includes(m.vf)) return false;
+  if (f.aspect?.length && !f.aspect.includes(m.aspect)) return false;
+  if (f.voice?.length && !f.voice.includes(m.voice)) return false;
+  if (f.person?.length && !f.person.includes(m.person)) return false;
+  if (f.number?.length && !f.number.includes(m.number)) return false;
+  if (f.mood?.length && !f.mood.includes(m.mood)) return false;
+  if (f.gcase?.length && !f.gcase.includes(m.gcase)) return false;
   return true;
 }
 
@@ -86,6 +95,10 @@ export function formRoman(vf) { return vf > 0 && vf < ROMAN.length ? ROMAN[vf] :
 const POS_AR = { noun: "اسم", verb: "فعل", particle: "حرف", pn: "علم", pron: "ضمير", adj: "صفة", actpcpl: "اسم فاعل", passpcpl: "اسم مفعول" };
 const ASPECT_AR = { perf: "ماضٍ", impf: "مضارع", impv: "أمر" };
 const VOICE_AR = { act: "معلوم", pass: "مجهول" };
+const PERSON_AR = { 1: "متكلم", 2: "مخاطب", 3: "غائب" };
+const NUMBER_AR = { s: "مفرد", d: "مثنى", p: "جمع" };
+const MOOD_AR = { ind: "مرفوع", subj: "منصوب", jus: "مجزوم" };
+const CASE_AR = { nom: "مرفوع", acc: "منصوب", gen: "مجرور" };
 
 /* A short human summary of the active filter, e.g. "فعل · الصيغة II · مجهول". */
 export function morphFilterSummary(f) {
@@ -95,6 +108,10 @@ export function morphFilterSummary(f) {
   if (f.form?.length) parts.push("الصيغة " + f.form.map((v) => formRoman(v)).join("/"));
   if (f.aspect?.length) parts.push(f.aspect.map((a) => ASPECT_AR[a] || a).join("/"));
   if (f.voice?.length) parts.push(f.voice.map((v) => VOICE_AR[v] || v).join("/"));
+  if (f.person?.length) parts.push(f.person.map((p) => PERSON_AR[p] || p).join("/"));
+  if (f.number?.length) parts.push(f.number.map((n) => NUMBER_AR[n] || n).join("/"));
+  if (f.mood?.length) parts.push(f.mood.map((m) => MOOD_AR[m] || m).join("/"));
+  if (f.gcase?.length) parts.push(f.gcase.map((c) => CASE_AR[c] || c).join("/"));
   return parts.join(" · ");
 }
 

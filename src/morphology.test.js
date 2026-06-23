@@ -65,4 +65,22 @@ describe("passesMorphFilter sanity", () => {
     expect(passesMorphFilter(null, { pos: ["verb"], form: [], aspect: [], voice: [] })).toBe(false);
     expect(passesMorphFilter(null, { pos: [], form: [], aspect: [], voice: [] })).toBe(true);
   });
+  it("constrains on the advanced axes (person / number / mood / case)", () => {
+    const m = { pos: "verb", vf: 4, aspect: "impf", voice: "act", person: 2, number: "p", mood: "jus", gcase: null };
+    expect(passesMorphFilter(m, { person: [2] })).toBe(true);
+    expect(passesMorphFilter(m, { person: [3] })).toBe(false);
+    expect(passesMorphFilter(m, { number: ["p"], mood: ["jus"] })).toBe(true);
+    expect(passesMorphFilter(m, { number: ["s"] })).toBe(false);
+    const noun = { pos: "noun", gcase: "gen", number: "s" };
+    expect(passesMorphFilter(noun, { gcase: ["gen"] })).toBe(true);
+    expect(passesMorphFilter(noun, { gcase: ["nom"] })).toBe(false);
+  });
+});
+
+describe("morphFilterSummary advanced axes", () => {
+  it("renders person / number / mood / case in the summary", () => {
+    expect(morphFilterSummary({ person: [2], number: ["p"] })).toBe("مخاطب · جمع");
+    expect(morphFilterSummary({ mood: ["jus"] })).toBe("مجزوم");
+    expect(morphFilterSummary({ gcase: ["gen"] })).toBe("مجرور");
+  });
 });

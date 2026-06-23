@@ -30,7 +30,7 @@ export function encodeState(s) {
   const ev = arr(s.expandedVerses); if (ev.length) o.ev = ev.sort();
   if (s.selected) o.sel = s.selected;
   if (s.transform) o.t = [r(s.transform.x), r(s.transform.y), r(s.transform.k, 3)];
-  if (s.morphFilter && (s.morphFilter.pos?.length || s.morphFilter.form?.length || s.morphFilter.aspect?.length || s.morphFilter.voice?.length)) o.mf = s.morphFilter;
+  if (s.morphFilter && ["pos", "form", "aspect", "voice", "person", "number", "mood", "gcase"].some((k) => s.morphFilter[k]?.length)) o.mf = s.morphFilter;
   const sx = arr(s.stopExtra); if (sx.length) o.sx = sx.sort();
   const sd = arr(s.stopDisabled); if (sd.length) o.sd = sd.sort();
   // The currently-open ANALYSIS view (distribution / compare / a lab / the corpus or
