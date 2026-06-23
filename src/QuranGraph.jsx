@@ -1,16 +1,16 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useDeferredValue, useRef, lazy, Suspense } from "react";
-import { looseResolve, resolvePhrase, romanResolve } from "./search.js";
+import { looseResolve, verseSearch, buildContentIndex, romanResolve } from "./search.js";
 import { latinSkeleton, isLatinQuery, arabicSkeletons } from "./romanize.js";
 import { norm, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
 import { useCorpusIndices } from "./hooks/useCorpusIndices.js";
-import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions } from "./data-loader.js";
+import { loadHafsData, loadRoots, loadLemmas, loadMorphology, loadLexiconManifest, loadLexicon, loadLexiconFullShard, loadSemanticNeighbors, loadRelations, loadExpressions, loadSources } from "./data-loader.js";
 import { shardOf } from "./lexiconShard.js";
 import { THEMES, fColor } from "./theme.js";
 import { buildLazyGraph, buildChildMap, getDescendants, getPathToCenter } from "./graph/buildGraph.js";
 import { createSimClient } from "./graph/simClient.js";
 import { applyPositions } from "./graph/applyPositions.js";
 import { morphAt, formRoman, morphFilterActive, morphFilterSummary, filterOccurrencesByMorph, EMPTY_MORPH_FILTER } from "./morphology.js";
-import { serializeSvg, exportSvgFile, exportPngFile, buildBibtex, exportTextFile } from "./graph/exportGraph.js";
+import { serializeSvg, exportSvgFile, exportPngFile, buildBibtex, exportTextFile, setExportCorpusVersion } from "./graph/exportGraph.js";
 import { readUrlState, writeUrlState, encodeState, decodeState } from "./hooks/useUrlState.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { StickyNotes } from "./components/StickyNotes.jsx";
@@ -19,6 +19,7 @@ import { GraphLayer } from "./components/GraphLayer.jsx";
 import { GraphCanvas } from "./components/GraphCanvas.jsx";
 import { buildSpatialIndex, hitTest } from "./graph/spatialIndex.js";
 import { MorphologyFilter } from "./components/MorphologyFilter.jsx";
+import { SaveButton } from "./components/SaveButton.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { ArabicKeyboard } from "./components/ArabicKeyboard.jsx";
 import { SurahSelect } from "./components/SurahSelect.jsx";
@@ -42,12 +43,16 @@ const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "Aya
 const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
 const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
 const ExpressionsModal = lazyNamed(() => import("./components/ExpressionsModal.jsx"), "ExpressionsModal");
+const ConstructionModal = lazyNamed(() => import("./components/ConstructionModal.jsx"), "ConstructionModal");
+const PairingModal = lazyNamed(() => import("./components/PairingModal.jsx"), "PairingModal");
+const ClaimBoard = lazyNamed(() => import("./components/ClaimBoard.jsx"), "ClaimBoard");
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
 const IntroVideoModal = lazyNamed(() => import("./components/IntroVideoModal.jsx"), "IntroVideoModal");
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
+import { useSearchHistory } from "./hooks/useSearchHistory.js";
 import { useI18n } from "./i18n/index.js";
 
 // Fixed virtual canvas the graph is laid out in. Decoupling layout from the
@@ -73,7 +78,8 @@ const TOUR_EX = { s: 2, a: 255, key: "2:255", earthWi: 18, kursWi: 41, kursPartn
 function sanitizeMorphFilter(v) {
   const a = (x) => (Array.isArray(x) ? x : []);
   return v && typeof v === "object"
-    ? { pos: a(v.pos), form: a(v.form).filter(isInt), aspect: a(v.aspect), voice: a(v.voice) }
+    ? { pos: a(v.pos), form: a(v.form).filter(isInt), aspect: a(v.aspect), voice: a(v.voice),
+        person: a(v.person).filter(isInt), number: a(v.number), mood: a(v.mood), gcase: a(v.gcase) }
     : { ...EMPTY_MORPH_FILTER };
 }
 
@@ -171,6 +177,9 @@ export default function QuranGraph() {
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
   const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
+  const [construction, setConstruction] = useState(null); // construction-query builder: { root, label }
+  const [pairing, setPairing] = useState(null); // pairing-matrix workbench: { open, seed, rows, cols } — config persists while closed so cell→verses→back round-trips
+  const [claimsOpen, setClaimsOpen] = useState(false); // claim board (ما يؤيد / ما يعارض)
   const [expr, setExpr] = useState(null); // multi-word expression inventory (lazy, on first explorer open)
   const [exprOpen, setExprOpen] = useState(false); // expressions explorer { } | false
   const [exprFocus, setExprFocus] = useState(null); // root the explorer opened scoped to (cross-link)
@@ -179,6 +188,7 @@ export default function QuranGraph() {
   const [seedIndex, setSeedIndex] = useState(null); // corpus trigram index (lazy, built on first phrase open)
   const seedVdRef = useRef(null); // verseData identity the current seedIndex was built from
   const [linkCopied, setLinkCopied] = useState(false); // share-link confirmation flash
+  const [graphSaved, setGraphSaved] = useState(false); // graph-snapshot save confirmation flash (a snapshot is unique each time, so no toggle)
   const [exportCount, setExportCount] = useState(0); // bumps on each image export (tour download gate)
   const svgRef = useRef(null); // live stage <svg>, for export
   const [hydrated, setHydrated] = useState(false); // URL state applied once after data load
@@ -257,6 +267,8 @@ export default function QuranGraph() {
     Promise.all([loadHafsData(), loadRoots()])
       .then(([hafs, roots]) => { setRootMap(roots); setQuranRaw(hafs); setLoading(false); })
       .catch((e) => { setError(e?.message || "Failed to load Quran data."); setLoading(false); });
+    // Record the corpus build version so reproducible exports can cite the snapshot.
+    loadSources().then((s) => setExportCorpusVersion(s?.builtAt)).catch(() => {});
   }, []);
   // Fetch the corpus on mount (external system — a legitimate effect).
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -375,8 +387,8 @@ export default function QuranGraph() {
   // (≥2 chars): both offer Lemma results, which are dead without the lemma index (l2v) — so a
   // forgiving "did you mean جِنّ?" can't resolve.
   useEffect(() => {
-    if ((searchMode === "lemma" || cmp || exprOpen || query.trim().length >= 2) && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
-  }, [searchMode, cmp, exprOpen, query, lemmaMap, retryTick]);
+    if ((searchMode === "lemma" || cmp || exprOpen || pairing?.open || construction || query.trim().length >= 2) && !lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
+  }, [searchMode, cmp, exprOpen, pairing, construction, query, lemmaMap, retryTick]);
 
   // Lazy-load per-token morphology when the filter is active (graph filtering), a
   // node is selected (inspector morphology card), or root/lemma mode is active (so
@@ -386,8 +398,8 @@ export default function QuranGraph() {
   useEffect(() => {
     // Also load when an āya/sūra lab is open: their POS breakdown and iltifāt (person-shift)
     // lens read per-token morphology, degrading gracefully until it lands.
-    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact" || aya || surahLab || corpusOpen) && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
-  }, [morphFilter, selected, searchMode, aya, surahLab, corpusOpen, morph, retryTick]);
+    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact" || aya || surahLab || corpusOpen || construction || pairing?.open) && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
+  }, [morphFilter, selected, searchMode, aya, surahLab, corpusOpen, construction, pairing, morph, retryTick]);
 
   // Lazy-load the distributional semantic-neighbour map the first time the root lab is
   // opened (it's only used by that modal's "semantic" tab). Best-effort: stays null on
@@ -406,8 +418,8 @@ export default function QuranGraph() {
   // a selected word (inline inspector section), or the root/āya labs all surface it now.
   // Best-effort: stays {} on failure so those surfaces just show nothing.
   useEffect(() => {
-    if ((exprOpen || selected != null || lab || aya) && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
-  }, [exprOpen, selected, lab, aya, expr]);
+    if ((exprOpen || selected != null || lab || aya || construction) && expr == null) loadExpressions().then((e) => setExpr(e || {})).catch(() => setExpr({}));
+  }, [exprOpen, selected, lab, aya, construction, expr]);
 
   // Load all six concise lexicons when the root lab opens — the dictionary↔corpus tab
   // juxtaposes what every dictionary says against the corpus behaviour. Best-effort.
@@ -457,6 +469,13 @@ export default function QuranGraph() {
     if (stopSet.has(nw)) { setStopDisabled((p) => (p.includes(nw) ? p : [...p, nw])); setStopExtra((p) => p.filter((x) => x !== nw)); }
     else { setStopDisabled((p) => p.filter((x) => x !== nw)); setStopExtra((p) => (p.includes(nw) ? p : [...p, nw])); }
   }, [stopSet, setStopDisabled, setStopExtra]);
+  // Show all: re-enable (un-hide) every hideable word — disabling the whole set. Persisted,
+  // so once clicked the words stay shown across sessions. Hide all: clear the re-enabled set
+  // (content + custom hide again) and turn the particle master toggle on.
+  const showAllStop = useCallback(() => {
+    setStopDisabled([...new Set([...STOP_PARTICLES, ...STOP_CONTENT_DEFAULT, ...stopExtra.map(norm)])]);
+  }, [stopExtra, setStopDisabled]);
+  const hideAllStop = useCallback(() => { setStopDisabled([]); setHideStop(true); }, [setStopDisabled, setHideStop]);
   // Mirror into arabic-utils so any module-level STOP consumer agrees with the UI.
   useEffect(() => { setStopSet(stopSet); }, [stopSet]);
 
@@ -936,6 +955,7 @@ export default function QuranGraph() {
   const closeAllViews = useCallback(() => {
     setDist(null); setCmp(null); setOcc(null); setLab(null); setAya(null); setSurahLab(null);
     setRhyme(null); setExprOpen(false); setExprFocus(null); setExprInitial(null); setCorpusOpen(false); setCtx(null); setPhrase(null); setDef(null);
+    setConstruction(null); setPairing(null); setClaimsOpen(false);
   }, []);
 
   // Reopen an analysis view from its compact descriptor (the inverse of `currentView`).
@@ -981,10 +1001,12 @@ export default function QuranGraph() {
       case "surah": setSurahLab({ surahId: d.surahId, back: d.back }); break;
       case "rhyme": setRhyme({ centerKey: d.centerKey, back: d.back }); break;
       case "dist": if (d.dist) setDist(d.dist); break;
+      case "pairing": setPairing((p) => (p ? { ...p, open: true } : { open: true, seed: null, rows: [], cols: [] })); break;
       default: break;
     }
   }, []);
 
+  const searchHistory = useSearchHistory();
   // ═══ Search typeahead (cross-mode) ═══
   // Live, ranked candidates as the user types — across ALL three modes at once (word ·
   // lemma · root), each labelled, so the user never has to pre-guess the mode and an
@@ -993,20 +1015,37 @@ export default function QuranGraph() {
   // always loose (ignores the precision toggle) and imlāʾī-tolerant via looseResolve.
   // Deferred so fast typing never blocks on the index scan.
   const deferredQuery = useDeferredValue(query);
+  // Full-text content index for phrase search. Built lazily (idle) on the first multi-word query and
+  // cached by verseData identity — the build is ~0.5s over the whole corpus, so it must never run on
+  // initial load nor block typing. Phrase rows appear once it lands (a render later).
+  const [contentIdx, setContentIdx] = useState(null); // { vd, idx } | null
+  useEffect(() => {
+    if (!verseData || !/\s/.test(deferredQuery.trim())) return undefined;
+    if (contentIdx && contentIdx.vd === verseData) return undefined;
+    const ric = window.requestIdleCallback || ((f) => setTimeout(f, 0));
+    const cic = window.cancelIdleCallback || clearTimeout;
+    const id = ric(() => setContentIdx({ vd: verseData, idx: buildContentIndex(verseData) }), { timeout: 500 });
+    return () => cic(id);
+  }, [deferredQuery, verseData, contentIdx]);
   const searchSuggestions = useMemo(() => {
     const raw = deferredQuery.trim();
     if (raw.length < 2) return [];
-    const ref = raw.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).match(/^(\d{1,3})\s*[:.،/\s-]\s*(\d{1,3})$/);
+    const western = raw.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+    const ref = western.match(/^(\d{1,3})\s*[:.،/\s-]\s*(\d{1,3})$/);
     if (ref) {
       const s = +ref[1], a = +ref[2];
       const sur = quranRaw?.find((x) => x.id === s);
       return sur && a >= 1 && a <= sur.total_verses ? [{ ref: true, s, a, lookup: `${s}:${a}`, label: `${sur.name} ${a}` }] : [];
     }
+    // A bare sūra NUMBER (1–114) jumps to that sūra — no āya required (the header's sūra picker
+    // doesn't force one either). āya defaults to 1; add an āya with "59 7" / "59:7" above.
+    const surNum = western.match(/^(\d{1,3})$/);
+    if (surNum) {
+      const s = +surNum[1];
+      const sur = quranRaw?.find((x) => x.id === s);
+      return sur ? [{ ref: true, surah: true, s, a: 1, lookup: `surah:${s}`, label: `${s}. ${sur.name}` }] : [];
+    }
     const indices = { exact: w2v, root: r2v, lemma: l2v || {} };
-    const mushafFirst = (keys) => keys.reduce((m, k) => {
-      const [s, a] = k.split(":").map(Number), [ms, ma] = m.split(":").map(Number);
-      return s < ms || (s === ms && a < ma) ? k : m;
-    });
     const snippetOf = (vk) => { const t = verseData[vk]?.text || ""; return t.length > 64 ? t.slice(0, 64) + "…" : t; };
     const head = []; // surah-nav + phrase rows lead the list
 
@@ -1061,21 +1100,24 @@ export default function QuranGraph() {
     for (const c of out) if (c.tier === 0) c.didYouMean = true; // edit-distance rows are guesses
     const terms = out.slice(0, 10);
 
-    // ── Multi-word phrase: lead with the first āya where the tokens are ADJACENT (a true phrase),
-    //    else where they merely co-occur (حبل الله → 3:103). Reuses verse-ref navigation. ──
-    if (/\s/.test(raw)) {
-      const ph = resolvePhrase(raw, indices, searchAlias, searchAliasFuzzy, verseData);
-      if (ph) {
-        const pool = ph.adjacent.length ? ph.adjacent : ph.keys;
-        const first = mushafFirst(pool), [s, a] = first.split(":").map(Number);
+    // ── Multi-word: full-text verse search over a content index. Any-order co-occurrence, broad
+    //    orthography (آتاكم ≈ ءَاتَىٰكُمُ, الربا ≈ ٱلرِّبَوٰا), ranked contiguous › in-order › any-order.
+    //    Lead with the top few āyāt; a "see all N" row opens the full list (savable/taggable). ──
+    if (/\s/.test(raw) && contentIdx?.vd === verseData) {
+      const vs = verseSearch(raw, contentIdx.idx, { limit: 300 });
+      const rows = [];
+      for (const r of vs.slice(0, 5)) {
+        const [s, a] = r.vk.split(":").map(Number);
         const sur = quranRaw?.find((x) => x.id === s);
-        if (sur) head.unshift({ ref: true, phrase: true, adjacent: ph.adjacent.length > 0, s, a, lookup: first, label: `${sur.name} ${a}`, count: pool.length, snippet: snippetOf(first) });
+        if (sur) rows.push({ ref: true, phrase: true, adjacent: r.contiguous, s, a, lookup: r.vk, label: `${sur.name} ${a}`, snippet: snippetOf(r.vk) });
       }
+      if (vs.length > rows.length) rows.push({ allResults: true, keys: vs.map((r) => r.vk), hi: Object.fromEntries(vs.map((r) => [r.vk, r.pos])), q: raw, lookup: `all:${raw}`, label: t("common.search.allResults", { n: vs.length }), count: vs.length });
+      head.unshift(...rows);
     }
 
     const list = [...head, ...terms].slice(0, 10);
     return list.length ? list : [{ noResult: true, lookup: raw, label: raw }];
-  }, [deferredQuery, w2v, r2v, l2v, searchAlias, searchAliasFuzzy, quranRaw, surahList, verseData, romanIndex, exDisplay]);
+  }, [deferredQuery, w2v, r2v, l2v, searchAlias, searchAliasFuzzy, quranRaw, surahList, verseData, romanIndex, exDisplay, contentIdx, t]);
 
   // Act on a chosen suggestion: a verse-ref row navigates; a term row switches to that
   // suggestion's mode (so the graph now links by it) and opens its occurrences.
@@ -1083,11 +1125,31 @@ export default function QuranGraph() {
     setSugOpen(false); setSugIndex(-1); setToolsOpen(false);
     if (!item || item.noResult) { setSearchMiss(true); return; }
     setSearchMiss(false);
+    // "See all N results" → open the full ranked match list (savable/taggable like any concordance).
+    if (item.allResults) {
+      searchHistory.record({ id: `p:${item.q}`, kind: "phrase", q: item.q, label: item.q }, Date.now());
+      setActiveWord(null); setOcc({ lookup: "", label: t("common.search.phraseResultsTitle", { q: item.q }), mode: "root", keys: item.keys, hi: item.hi }); setQuery(""); return;
+    }
     if (item.ref) { navigate(item.s, item.a); setQuery(""); return; }
+    searchHistory.record({ id: `t:${item.mode}:${item.lookup}`, kind: "term", mode: item.mode, lookup: item.lookup, label: item.display || item.label || item.lookup }, Date.now());
     if (item.mode !== searchMode) { setSearchMode(item.mode); reset(); }
     setActiveWord(item.lookup);
     openOcc(item.lookup, item.display || item.label, item.mode);
-  }, [searchMode, setSearchMode, reset, openOcc, navigate]);
+  }, [searchMode, setSearchMode, reset, openOcc, navigate, t, searchHistory]);
+
+  // Re-run a remembered search. A phrase re-executes the verse search; a term re-runs directly.
+  const acceptHistory = useCallback((h) => {
+    if (h.kind === "phrase" && contentIdx?.idx) {
+      const vs = verseSearch(h.q, contentIdx.idx, { limit: 300 });
+      if (vs.length) {
+        setSugOpen(false); setQuery(""); setActiveWord(null);
+        setOcc({ lookup: "", label: t("common.search.phraseResultsTitle", { q: h.q }), mode: "root", keys: vs.map((r) => r.vk), hi: Object.fromEntries(vs.map((r) => [r.vk, r.pos])) });
+        searchHistory.record({ id: `p:${h.q}`, kind: "phrase", q: h.q, label: h.q }, Date.now());
+      } else { setQuery(h.q); }
+    } else if (h.kind === "term") {
+      acceptSearch({ mode: h.mode, lookup: h.lookup, display: h.label });
+    }
+  }, [contentIdx, t, acceptSearch, searchHistory]);
 
   const runSearch = useCallback((e) => {
     e?.preventDefault?.();
@@ -1112,6 +1174,7 @@ export default function QuranGraph() {
     const title = `${t("ws.savedView")}: ${currentVerse?.sn || surah} ${safeAyah}`;
     ws.saveItem({ type: "graph", title, payload: { code, surah, ayah: safeAyah } });
     ws.toast(t("ws.saved"));
+    setGraphSaved(true); setTimeout(() => setGraphSaved(false), 1400); // on-button ✓ (toast can hide behind the keyboard)
   };
   const openWorkspaceItem = useCallback((item) => {
     const p = item.payload || {};
@@ -1119,6 +1182,14 @@ export default function QuranGraph() {
     // lazy-loaded — on a fresh load (exact mode, no query) it isn't fetched yet, so the
     // open would silently no-op. Kick off the load and retry once it lands.
     if ((item.type === "occ" || item.type === "dist") && p.mode === "lemma" && !l2v) {
+      if (!lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
+      setPendingOpen(item);
+      setWsOpen(false);
+      return;
+    }
+    // A saved pairing matrix recomputes each term's verses from the indices; lemma terms need
+    // l2v, which is lazy — defer until it lands (same retry path) so they don't reopen with 0.
+    if (item.type === "pairing" && !l2v && [...(p.rows || []), ...(p.cols || [])].some((tm) => tm.mode === "lemma")) {
       if (!lemmaMap) loadLemmas().then((m) => { setLemmaMap(m); setLemmaMapState(m); }).catch(() => setDataErr("lemma"));
       setPendingOpen(item);
       setWsOpen(false);
@@ -1133,10 +1204,15 @@ export default function QuranGraph() {
       case "lexicon": setDef({ root: p.root, lexicon: p.lexicon }); break;
       case "phrase": if (p.surah) { navigate(p.surah, p.ayah); openPhrases(`${p.surah}:${p.ayah}`); } break;
       case "expr": setExprFocus(null); setExprInitial(p); setExprOpen(true); break;
+      case "pairing": {
+        const rebuild = (arr) => (arr || []).map((tm) => ({ ...tm, keys: (compareIndices[tm.mode] || {})[tm.key] || [] }));
+        setPairing({ open: true, seed: null, rows: rebuild(p.rows), cols: rebuild(p.cols) });
+        break;
+      }
       case "verse": case "word": if (p.surah) navigate(p.surah, p.ayah); break;
       default: break;
     }
-  }, [applyState, openOcc, navigate, openPhrases, closeAllViews, openView, l2v, lemmaMap]);
+  }, [applyState, openOcc, navigate, openPhrases, closeAllViews, openView, l2v, lemmaMap, compareIndices]);
   // Complete a deferred open once the lemma index it was waiting on has loaded.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -1542,7 +1618,33 @@ export default function QuranGraph() {
             placeholder={searchMode === "root" ? t("common.search.phRoot") : searchMode === "lemma" ? t("common.search.phLemma") : t("common.search.phWord")}
             onChange={(e) => { setQuery(e.target.value); setSugIndex(-1); setSugOpen(true); if (searchMiss) setSearchMiss(false); }}
             onFocus={() => setSugOpen(true)} onBlur={() => setSugOpen(false)} onKeyDown={onSearchKey} />
-          {sugOpen && !tourLockSearch && searchSuggestions.length > 0 && (
+          {sugOpen && !tourLockSearch && !query.trim() && searchHistory.items.length > 0 && (
+            <div className="ag-search-recents" role="listbox" aria-label={t("common.search.recent")}
+              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 8px", color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>
+                <span>{t("common.search.recent")}</span>
+                <button type="button" className="ag-btn ag-btn-xs" onMouseDown={(e) => e.preventDefault()} onClick={() => searchHistory.clear()}>{t("common.search.clearHistory")}</button>
+              </div>
+              {[...searchHistory.items].sort((a, b) => b.at - a.at).slice(0, 8).map((h) => (
+                <button type="button" key={h.id} role="option" className="ag-search-suggest"
+                  onMouseDown={(e) => e.preventDefault()} onClick={() => acceptHistory(h)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%" }}>
+                  <span style={{ color: "var(--text-faint)" }} aria-hidden="true">↻</span>
+                  <span style={{ fontFamily: "var(--font-quran)", color: "var(--gold-400)", fontSize: "var(--text-base)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.label}</span>
+                  <span style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span className={"ag-badge " + (h.kind === "phrase" ? "t-lemma" : h.mode === "root" ? "t-root" : h.mode === "lemma" ? "t-lemma" : "t-word")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>
+                      {h.kind === "phrase" ? t("common.search.phraseBadge") : h.mode === "root" ? t("common.graphMode.root") : h.mode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}
+                    </span>
+                    <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }} title={t("common.search.timesSearched", { n: h.count })}>×{h.count}</span>
+                    <span role="button" tabIndex={-1} aria-label={t("common.search.removeHistory")} title={t("common.search.removeHistory")}
+                      onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); searchHistory.remove(h.id); }}
+                      style={{ cursor: "pointer", color: "var(--text-faint)" }}>✕</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {sugOpen && !tourLockSearch && query.trim() && searchSuggestions.length > 0 && (
             <div id="ag-search-listbox" role="listbox" aria-label={t("common.search.suggestions")}
               style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
               {searchSuggestions.map((item, i) => (
@@ -1557,8 +1659,8 @@ export default function QuranGraph() {
                       {item.surah && <span className="ag-badge t-word" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{t("common.search.surahBadge")}</span>}
                       {item.phrase && <span className="ag-badge t-lemma" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{t("common.search.phraseBadge")}</span>}
                       {item.roman && <span className="ag-badge t-root" style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }} title={t("common.search.latinBadge")}>𝐀</span>}
-                      {!item.ref && !item.noResult && <span className={"ag-badge " + (item.mode === "root" ? "t-root" : item.mode === "lemma" ? "t-lemma" : "t-word")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{item.mode === "root" ? t("common.graphMode.root") : item.mode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}</span>}
-                      {!item.noResult && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", minWidth: 18, textAlign: "end" }}>{item.ref ? "→" : item.count}</span>}
+                      {!item.ref && !item.noResult && !item.allResults && <span className={"ag-badge " + (item.mode === "root" ? "t-root" : item.mode === "lemma" ? "t-lemma" : "t-word")} style={{ fontSize: "var(--text-2xs, 10px)", padding: "1px 6px" }}>{item.mode === "root" ? t("common.graphMode.root") : item.mode === "lemma" ? t("common.graphMode.lemma") : t("common.graphMode.word")}</span>}
+                      {!item.noResult && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", minWidth: 18, textAlign: "end" }}>{item.allResults ? "≫" : item.ref ? "→" : item.count}</span>}
                     </span>
                   </span>
                   {item.snippet && <span dir="rtl" style={{ fontFamily: "var(--font-quran)", color: "var(--text-faint)", fontSize: "var(--text-xs)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{item.snippet}</span>}
@@ -1659,6 +1761,7 @@ export default function QuranGraph() {
                   particles={[...STOP_PARTICLES]} content={[...STOP_CONTENT_DEFAULT]}
                   hiddenSet={stopSet} extra={stopExtra}
                   onToggle={toggleStopWord}
+                  onShowAll={showAllStop} onHideAll={hideAllStop}
                   onAddExtra={(w) => setStopExtra((p) => (p.includes(w) ? p : [...p, w]))}
                   onRemoveExtra={(w) => setStopExtra((p) => p.filter((x) => x !== w))} />
               </div>
@@ -1669,6 +1772,10 @@ export default function QuranGraph() {
             aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
           <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
             aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
+          <button type="button" className={"ag-iconbtn" + (pairing?.open ? " is-active" : "")} title={t("work.tools.pairing")} aria-label={t("work.tools.pairing")}
+            aria-pressed={!!pairing?.open} onClick={() => setPairing((p) => (p?.open ? { ...p, open: false } : { seed: null, rows: [], cols: [], ...(p || {}), open: true }))}>⊞</button>
+          <button type="button" className={"ag-iconbtn" + (claimsOpen ? " is-active" : "")} title={t("work.tools.claims")} aria-label={t("work.tools.claims")}
+            aria-pressed={claimsOpen} onClick={() => setClaimsOpen((o) => !o)}>⚖{ws.claims.length > 0 ? <span className="ag-ws-badge">{ws.claims.length}</span> : null}</button>
           <button type="button" data-tour="exprBtn" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
             aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprInitial(null); setExprOpen((o) => !o); }}>⛓</button>
           <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
@@ -1740,7 +1847,7 @@ export default function QuranGraph() {
             {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
             {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
             {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
-            <button type="button" data-tour="saveViewBtn" className="ag-iconbtn" title={t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>✶</button>
+            <button type="button" data-tour="saveViewBtn" className={"ag-iconbtn" + (graphSaved ? " is-active" : "")} title={graphSaved ? t("ws.saved") : t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>{graphSaved ? "✓" : "✶"}</button>
             <button type="button" data-tour="copyLinkBtn" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
             <button type="button" data-tour="exportPngBtn" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
             <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
@@ -1921,10 +2028,8 @@ export default function QuranGraph() {
                           ⚛ {t("common.insp.analyze")}
                         </button>
                       )}
-                      <button type="button" data-tour="saveWordBtn" className="ag-btn" title={t("ws.saveTitle")}
-                        onClick={() => { ws.saveItem({ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }); ws.toast(t("ws.saved")); }}>
-                        ★ {t("ws.save")}
-                      </button>
+                      <SaveButton dataTour="saveWordBtn" label={t("ws.save")}
+                        item={{ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }} />
                     </div>
                   )}
                   {selExpr && (selExpr.heads.length || selExpr.collocations.length || selExpr.compounds.length) > 0 && (
@@ -1983,8 +2088,9 @@ export default function QuranGraph() {
                             <span style={{ color: "var(--text-faint)" }}>· {t("common.graphMode.root")} {sr}</span>
                           </span>
                           <span style={{ display: "flex", gap: 6 }}>
-                            {m && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
-                              onClick={() => { const lx = lexicons?.find((L) => L.id === activeLexicon); ws.saveItem({ type: "lexicon", title: `${sr} — ${lx?.label || activeLexicon}`, payload: { root: sr, lexicon: activeLexicon, gloss: m.c, cite: m.cite || null, surah: selNode.surahNum || surah, ayah: selNode.ayahNum || safeAyah } }); ws.toast(t("ws.saved")); }}>★</button>}
+                            {m && (() => { const lx = lexicons?.find((L) => L.id === activeLexicon); return (
+                              <SaveButton item={{ type: "lexicon", title: `${sr} — ${lx?.label || activeLexicon}`, payload: { root: sr, lexicon: activeLexicon, gloss: m.c, cite: m.cite || null, surah: selNode.surahNum || surah, ayah: selNode.ayahNum || safeAyah } }} />
+                            ); })()}
                             {hasMore && <button type="button" className="ag-btn is-gold" onClick={() => setMeaningOpen((o) => !o)}>{meaningOpen ? t("common.insp.less") : t("common.insp.more")}</button>}
                           </span>
                         </div>
@@ -2118,7 +2224,7 @@ export default function QuranGraph() {
                     <button type="button" className="ag-btn" title={t("common.insp.rhymeTitle")} onClick={() => setRhyme({ centerKey: selNode.verseKey })}>♪ {t("common.insp.rhyme")}</button>
                     <button type="button" className="ag-btn" title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: selNode.verseKey })}>⊞ {t("common.insp.ayaAnalyze")}</button>
                     <button type="button" className="ag-btn" title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} onClick={() => navigate(selNode.surahNum, selNode.ayahNum)}>⌖ {t("common.insp.makeCenter")}</button>
-                    <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "verse", title: selNode.label, payload: { surah: selNode.surahNum, ayah: selNode.ayahNum, label: selNode.label } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
+                    <SaveButton label={t("ws.save")} item={{ type: "verse", title: selNode.label, payload: { surah: selNode.surahNum, ayah: selNode.ayahNum, label: selNode.label } }} />
                   </div>
                 </div>
               </>
@@ -2130,7 +2236,7 @@ export default function QuranGraph() {
       {/* Lazy-loaded modals + tour: each chunk is fetched only when first opened. */}
       <Suspense fallback={null}>
       {/* Occurrences popup — every āyah a word/root occurs in, paginated */}
-      {occ && <OccurrencesModal occ={occ} verseData={verseData} searchMode={occ?.mode || searchMode} precision={precision} theme={theme}
+      {occ && <OccurrencesModal occ={occ} verseData={verseData} searchMode={occ?.mode || searchMode} precision={precision} morph={morph} theme={theme}
         onNavigate={(s, a) => { navigate(s, a); setOcc(null); }}
         onBack={() => { const d = occ?.back; setOcc(null); reopenLab(d ? (d.t ? d : { t: "dist", dist: d }) : null); }}
         onClose={() => setOcc(null)} />}
@@ -2191,8 +2297,30 @@ export default function QuranGraph() {
           onRetarget={(r) => setLab({ root: r, label: r, back: self })}
           onVerses={(label, keys, hi) => { setLab(null); setOcc({ lookup: lab.root, label, mode: "root", keys, hi, back: self }); }}
           onExpressions={(r) => { setLab(null); setExprFocus(r); setExprOpen(true); }}
+          onConstruct={(r, l) => { setLab(null); setConstruction({ root: r, label: l || r, back: self }); }}
+          onPairing={(r, l) => { setLab(null); setPairing({ open: true, seed: { root: r, label: l || r }, rows: [], cols: [] }); }}
           onBack={() => reopenLab(lab.back)}
           onClose={() => setLab(null)} />); })()}
+
+      {/* Construction query — pin a root to one Form/voice/governed-particle/object construction. */}
+      {construction && <ConstructionModal lab={construction} r2v={r2v} verseData={verseData} morph={morph} expr={expr}
+        onVerses={(label, keys, hi) => { const back = construction.back; setConstruction(null); setOcc({ lookup: construction.root, label, mode: "root", keys, hi, back }); }}
+        onBack={construction.back ? () => { const d = construction.back; setConstruction(null); reopenLab(d); } : null}
+        onClose={() => setConstruction(null)} />}
+
+      {/* Pairing matrix — co-occurrence grid over a chosen term set (the empty cell is the finding).
+          Config persists in `pairing` while the modal is closed, so a cell → shared verses → ← back
+          (and reopening from the toolbar, or from a saved item) restores the same matrix. */}
+      {pairing?.open && <PairingModal seed={pairing.seed} initialRows={pairing.rows} initialCols={pairing.cols}
+        indices={compareIndices} r2v={r2v} verseData={verseData} morph={morph} precision={precision}
+        searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy}
+        onChange={(rows, cols) => setPairing((p) => (p ? { ...p, rows, cols } : p))}
+        onOpen={(o) => { setPairing((p) => (p ? { ...p, open: false } : p)); setOcc({ ...o, back: { t: "pairing" } }); }}
+        onClose={() => setPairing((p) => (p ? { ...p, open: false } : null))} />}
+
+      {/* Claim board — the ما يؤيد / ما يعارض ledger; verses pinned from any concordance. */}
+      {claimsOpen && <ClaimBoard open={claimsOpen} verseData={verseData}
+        onNavigate={(s, a) => { setClaimsOpen(false); navigate(s, a); }} onClose={() => setClaimsOpen(false)} />}
 
       {/* Verse rhyme / cadence (fāṣila) — sūrah rhyme scheme + verses sharing the ending. */}
       {rhyme && <RhymeModal rhyme={rhyme} verseData={verseData} theme={theme}
@@ -2234,7 +2362,16 @@ export default function QuranGraph() {
       {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour}
         theme={theme} onToggleTheme={() => setTheme((th) => (th === "dark" ? "light" : "dark"))} />}
 
-      {wsOpen && <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote} canPin={!!currentVerse} />}
+      {wsOpen && <WorkspaceDrawer open={wsOpen} onClose={() => setWsOpen(false)} onOpen={openWorkspaceItem} onPinNote={pinNote}
+        onOpenTag={(tagId, label) => {
+          const keys = Object.entries(ws.tagAssign || {})
+            .filter(([, ids]) => ids.includes(tagId)).map(([vk]) => vk).filter((vk) => verseData[vk])
+            .sort((a, b) => { const [sa, aa] = a.split(":").map(Number), [sb, ab] = b.split(":").map(Number); return sa - sb || aa - ab; });
+          if (!keys.length) return;
+          setWsOpen(false);
+          setOcc({ lookup: "", label, mode: "root", keys });
+        }}
+        canPin={!!currentVerse} />}
       </Suspense>
 
       {/* One-click-save confirmation toast */}

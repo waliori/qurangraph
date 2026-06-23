@@ -10,12 +10,13 @@ import { useI18n } from "../i18n/index.js";
  * defaults (اللّٰه, رب…) and the user's own words apply regardless of the master
  * "hide particles" toggle; particles only hide while that toggle is on.
  */
-export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle, onAddExtra, onRemoveExtra }) {
+export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle, onAddExtra, onRemoveExtra, onShowAll, onHideAll }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const [showParticles, setShowParticles] = useState(false);
   const isHidden = (w) => hiddenSet.has(norm(w));
   const custom = extra; // show every word the user added, for confirmation
+  const hiddenCount = hiddenSet.size;
 
   const chip = (w, onClick, removable) => (
     <button key={w} type="button" className={"ag-morph-chip" + (isHidden(w) ? " is-on" : "")}
@@ -27,7 +28,13 @@ export function StopWordEditor({ particles, content, hiddenSet, extra, onToggle,
 
   return (
     <div className="ag-morph">
-      <h3 className="ag-pop-h" style={{ margin: 0 }}>{t("stop.title")}</h3>
+      <div className="ag-pop-h-row">
+        <h3 className="ag-pop-h" style={{ margin: 0 }}>{t("stop.title")}</h3>
+        <span style={{ display: "flex", gap: "var(--space-2)" }}>
+          <button type="button" className="ag-btn" onClick={onShowAll} disabled={hiddenCount === 0} title={t("stop.showAllTitle")}>{t("stop.showAll")}</button>
+          <button type="button" className="ag-btn" onClick={onHideAll} title={t("stop.hideAllTitle")}>{t("stop.hideAll")}</button>
+        </span>
+      </div>
       <p className="ag-hint">{t("stop.hint")}</p>
 
       <div className="ag-morph-grp">

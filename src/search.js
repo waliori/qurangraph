@@ -229,6 +229,119 @@ export function resolvePhrase(query, indices, searchAlias = {}, searchAliasFuzzy
   return { keys: [...acc], adjacent };
 }
 
+/* ═══ Full-text verse search (any subphrase, any order, broad orthography) ═══
+ *
+ * A reader typing a fragment of a long verse — مِنْ أَهْلِ ٱلْقُرَىٰ , وَمَآ ءَاتَىٰكُمُ ٱلرَّسُولُ — wants
+ * EVERY āya those words land in, ranked, regardless of order, and tolerant of spelling: آتاكم for the
+ * muṣḥaf's ءَاتَىٰكُمُ, الربا for ٱلرِّبَوٰا, موسى/موسا, hamza seats, the article and proclitics. Term
+ * resolution (looseResolve) is the wrong tool here — it disambiguates ONE word and would lock آتاكم
+ * onto the unrelated أتى. So this matches on an aggressive full-text skeleton instead.
+ *
+ * `ftKey` is that skeleton: searchAlef (dagger-alef / ـوٰ / ـىٰ → ا, alif family unified, collapse) PLUS
+ * dropping the standalone hamza ء — so آتاكم and ءَاتَىٰكُمُ both reduce to «اتاكم». `buildContentIndex`
+ * makes the inverted index ONCE (ftKey + de-affixed stems → verses, and each verse's word-skeleton row
+ * for adjacency). `verseSearch` then gathers verses by token, keeps those holding ALL the tokens (any
+ * order; relaxes to "all but one" only if a ≥3-word query finds none), and ranks:
+ *   contiguous phrase  ›  same order with gaps  ›  all present, any order.
+ * Returns ALL matches best-first, so the caller can lead with the top few and offer "see all N". Pure.
+ */
+const mushafCmp = (x, y) => { const [sa, aa] = x.split(":").map(Number), [sb, ab] = y.split(":").map(Number); return sa - sb || aa - ab; };
+// One orthography can't be reduced to a single skeleton: the muṣḥaf writes a long-ā sometimes WITH
+// a seat that modern spelling keeps as a letter (ٱلصَّلَوٰة → الصلاة, ٱلْقُرَىٰ → القرى) and sometimes with
+// a bare dagger that modern spelling OMITS (ٱلرَّحْمَٰن → الرحمن, not الرحمان). So a word is reduced to a
+// SET of skeleton variants and matched on intersection — the standard inverted-index trick:
+//   1) norm()                                  — strips the dagger, folds ى→ي  (gives الرحمن, القري)
+//   2) seats → ا  ([وى]ٰ and bare ٰ → ا)         — gives الصلاة, الربا, الرحمان
+//   3) (2) plus alif-maqṣūra ى → ا              — gives القرا, موسا  (meets a typed القرى/موسى)
+// each also in a hamza-dropped form, so آتاكم ≈ ءَاتَىٰكُمُ. Any shared variant = a match.
+export function ftKeys(raw) {
+  const s = (raw || "").normalize("NFKC");
+  const seat = s.replace(/[وى]ٰ/g, "ا").replace(/ٰ/g, "ا");
+  const base = [norm(s), norm(seat).replace(/ا{2,}/g, "ا"), norm(seat.replace(/ى/g, "ا")).replace(/ا{2,}/g, "ا")];
+  const out = new Set();
+  for (const k of base) { if (k.length >= 2) { out.add(k); const h = k.replace(/ء/g, ""); if (h.length >= 2) out.add(h); } }
+  // Fused vocative يَٰ (yā + dagger): the muṣḥaf glues the call onto its noun — يَٰٓأَيُّهَا, يَٰقَوْمِ,
+  // يَٰمُوسَىٰ. Also index the noun WITHOUT the particle so a split query (يا أيها / يا قوم) still hits.
+  // Gated on the dagger ٰ so an ordinary ي-initial word (يَعْلَمُونَ) is never peeled.
+  const voc = s.match(/^ي([ؐ-ًؚ-ٟۖ-ٰۭ]+)/);
+  if (voc && voc[1].includes("ٰ")) for (const k of ftKeys(s.slice(voc[0].length))) out.add(k);
+  return out;
+}
+// A word's full key set for indexing/adjacency: every skeleton variant PLUS its de-affixed stems
+// (so a bare query رسول reaches the affixed ٱلرَّسُول, and بِحَبْل reaches حبل).
+function ftVariants(raw) {
+  const out = new Set();
+  for (const k of ftKeys(raw)) { out.add(k); for (const stem of deAffix(k)) if (stem.length >= 2) out.add(stem); }
+  return [...out];
+}
+
+/* Build the full-text content index over verseData. Returns { inv, rows }:
+ *   inv  : Map variant → vk[]          — which āyāt contain a word reducing to this skeleton variant
+ *   rows : Map vk → string[][]         — per kept word, its variant list (for adjacency / order)
+ * Built once (memoised by the caller) so per-keystroke search is just lookups + a bounded scan. */
+export function buildContentIndex(verseData) {
+  const inv = new Map(), rows = new Map();
+  for (const vk in verseData) {
+    const words = verseData[vk].words || [];
+    const row = new Array(words.length);
+    const seen = new Set(); // a verse is listed once per variant
+    for (let i = 0; i < words.length; i++) {
+      const vs = ftVariants(words[i].orig);
+      row[i] = vs;
+      for (const v of vs) { if (seen.has(v)) continue; seen.add(v); let arr = inv.get(v); if (!arr) inv.set(v, (arr = [])); arr.push(vk); }
+    }
+    rows.set(vk, row);
+  }
+  return { inv, rows };
+}
+
+export function verseSearch(query, contentIndex, { limit = 200 } = {}) {
+  if (!contentIndex) return [];
+  const tokens = (query || "").trim().split(/\s+/).map((p) => new Set(ftVariants(p))).filter((set) => set.size);
+  if (tokens.length < 2) return [];
+  const total = tokens.length;
+  // Per-verse: which tokens it contains (any order). Track each token's document frequency too.
+  const hit = new Map(); // vk → Set(tokenIdx)
+  const df = new Array(total).fill(0); // tokenIdx → #distinct verses it occurs in
+  tokens.forEach((set, ti) => {
+    const once = new Set();
+    for (const k of set) for (const vk of contentIndex.inv.get(k) || []) {
+      if (once.has(vk)) continue; once.add(vk);
+      let s = hit.get(vk); if (!s) hit.set(vk, (s = new Set())); s.add(ti);
+    }
+    df[ti] = once.size;
+  });
+  // Keep verses with ALL tokens. Fallbacks when none: a ≥3-word query relaxes to "all but one"
+  // (near-phrase); a 2-word query relaxes to a single DISTINCTIVE token (df ≤ RARE) so a citation
+  // form whose partner declines/doesn't co-occur still surfaces (ذو القرنين → the ذِى/ذَا verses)
+  // without flooding on a common word.
+  const RARE = 60;
+  let cands = [...hit.entries()].filter(([, s]) => s.size === total).map(([vk, s]) => ({ vk, m: s.size }));
+  if (!cands.length && total >= 3) cands = [...hit.entries()].filter(([, s]) => s.size >= total - 1).map(([vk, s]) => ({ vk, m: s.size }));
+  if (!cands.length && total === 2) {
+    // Relax to the SINGLE rarest present token (not any token under the threshold) — so ذو القرنين
+    // yields the القرنين verses, not the far more common ذو ones, and there's no common-word flood.
+    let rare = -1;
+    for (let ti = 0; ti < total; ti++) if (df[ti] > 0 && (rare < 0 || df[ti] < df[rare])) rare = ti;
+    if (rare >= 0 && df[rare] <= RARE) cands = [...hit.entries()].filter(([, s]) => s.has(rare)).map(([vk, s]) => ({ vk, m: s.size }));
+  }
+  if (!cands.length) return [];
+
+  const wMatch = (wordVariants, tokenSet) => wordVariants.some((v) => tokenSet.has(v));
+  const scored = cands.map(({ vk, m }) => {
+    const row = contentIndex.rows.get(vk) || [];
+    let run = 0; // longest consecutive run of tokens (from token 0) over consecutive words = phrase
+    for (let i = 0; i < row.length; i++) { let r = 0; while (r < total && i + r < row.length && wMatch(row[i + r], tokens[r])) r++; if (r > run) run = r; }
+    let ti = 0; for (let i = 0; i < row.length && ti < total; i++) if (wMatch(row[i], tokens[ti])) ti++; // ordered subsequence
+    // Word positions any query token matches — for highlighting the hits in the results list.
+    const pos = [];
+    for (let i = 0; i < row.length; i++) for (let k = 0; k < total; k++) if (wMatch(row[i], tokens[k])) { pos.push(i); break; }
+    const score = run * 10000 + (ti === total ? 1000 : 0) + m * 10;
+    return { vk, score, run, matched: m, total, contiguous: run === total, pos };
+  });
+  return scored.sort((a, b) => b.score - a.score || mushafCmp(a.vk, b.vk)).slice(0, limit);
+}
+
 /* ═══ Romanized (Latin) search ═══
  *
  * buildRomanIndex maps every romanization SKELETON → the set of exact norm keys that reduce

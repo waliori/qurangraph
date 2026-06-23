@@ -9,6 +9,10 @@ export const ar = {
   "stop.inputPlaceholder": "كلمة…",
   "stop.addBtn": "إضافة",
   "stop.particlesToggle": "حروف المعاني ({count})",
+  "stop.showAll": "إظهار الكل",
+  "stop.showAllTitle": "أظهِر كل الكلمات المخفية (يبقى الإظهار محفوظًا).",
+  "stop.hideAll": "إخفاء الكل",
+  "stop.hideAllTitle": "أعِد إخفاء كلمات المحتوى والحروف.",
 };
 
 export const en = {
@@ -22,4 +26,8 @@ export const en = {
   "stop.inputPlaceholder": "Word…",
   "stop.addBtn": "Add",
   "stop.particlesToggle": "Particles ({count})",
+  "stop.showAll": "Show all",
+  "stop.showAllTitle": "Show every hidden word (the choice persists).",
+  "stop.hideAll": "Hide all",
+  "stop.hideAllTitle": "Re-hide content words and particles.",
 };

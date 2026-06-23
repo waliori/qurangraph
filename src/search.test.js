@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setRootMap, setLemmaMap } from "./arabic-utils.js";
-import { looseResolve, resolvePhrase, buildRomanIndex, romanResolve } from "./search.js";
+import { looseResolve, resolvePhrase, verseSearch, buildContentIndex, buildRomanIndex, romanResolve } from "./search.js";
 
 // The جنن family: bare جن is the VERB (6:76); jinn-the-noun lives under ٱلْجِنّ (الجن).
 const LEMMAS = { "جن": "جَنَّ", "الجن": "جِنّ", "جنه": "جَنَّة", "جان": "جانّ" };
@@ -221,5 +221,69 @@ describe("romanResolve (Latin search)", () => {
   });
   it("returns nothing for Arabic input — the Latin path must never run on Arabic", () => {
     expect(romanResolve("الرحمن", idx, W2V)).toEqual([]);
+  });
+});
+
+describe("verseSearch + buildContentIndex", () => {
+  const w = (s) => ({ norm: s, orig: s });
+  // 59:7 has the phrase contiguous; 6:92 has both words non-adjacent/reversed; 7:4 only one.
+  // Orthography spread: typed آتاكم / القرى vs the muṣḥaf's ءَاتَىٰكُمُ / ٱلْقُرَىٰ.
+  const VD = {
+    "59:7": { s: 59, a: 7, words: ["مَآ", "ءَاتَىٰكُمُ", "ٱلرَّسُولُ", "مِنْ", "أَهْلِ", "ٱلْقُرَىٰ"].map(w) },
+    "6:92":  { s: 6,  a: 92, words: ["ٱلْقُرَىٰ", "ثُمَّ", "أَهْلِ"].map(w) },
+    "7:4":   { s: 7,  a: 4, words: ["أَهْلِ", "شَيْء"].map(w) },
+  };
+  const CI = buildContentIndex(VD);
+
+  it("matches a contiguous subphrase across muṣḥaf orthography (آتاكم ≈ ءَاتَىٰكُمُ)", () => {
+    const r = verseSearch("اتاكم الرسول", CI);
+    expect(r[0].vk).toBe("59:7");
+    expect(r[0].contiguous).toBe(true);
+  });
+
+  it("matches a plain alif-maqṣūra query against the dagger spelling (القرى ≈ ٱلْقُرَىٰ)", () => {
+    const r = verseSearch("اهل القرى", CI);
+    expect(r[0].vk).toBe("59:7");            // contiguous أَهْلِ ٱلْقُرَىٰ
+    expect(r.map((x) => x.vk)).toContain("6:92"); // both words present, any order → still found
+    expect(r.findIndex((x) => x.vk === "59:7")).toBeLessThan(r.findIndex((x) => x.vk === "6:92"));
+  });
+
+  it("finds any-order co-occurrence regardless of adjacency", () => {
+    const r = verseSearch("القرى اهل", CI); // reversed
+    expect(r.map((x) => x.vk).sort()).toEqual(["59:7", "6:92"]);
+  });
+
+  it("tolerates one missing token (near-phrase) for 3+ word queries", () => {
+    const r = verseSearch("اهل القرى غير", CI); // غير absent everywhere
+    expect(r[0].vk).toBe("59:7");
+    expect(r[0].contiguous).toBe(false); // not all three present
+  });
+
+  it("returns nothing for a single token (that's term search, not phrase)", () => {
+    expect(verseSearch("اهل", CI)).toEqual([]);
+  });
+});
+
+describe("verseSearch — orthography & segmentation edge cases", () => {
+  const w = (s) => ({ norm: s, orig: s });
+  const VD = {
+    // fused vocative يَٰٓأَيُّهَا → a split query يا أيها must still match
+    "2:21": { s: 2, a: 21, words: ["يَٰٓأَيُّهَا", "ٱلنَّاسُ", "ٱعْبُدُوا۟", "رَبَّكُمُ"].map(w) },
+    // the five-noun declines: text has ذِى, not the citation form ذو; ٱلْقَرْنَيْنِ is rare (here only)
+    "18:83": { s: 18, a: 83, words: ["وَيَسْـَٔلُونَكَ", "عَن", "ذِى", "ٱلْقَرْنَيْنِ"].map(w) },
+    // ذو is common (3 verses) and must NOT flood the search vs the far rarer القرنين
+    "2:105": { s: 2, a: 105, words: ["وَٱللَّهُ", "ذُو", "ٱلْفَضْلِ", "ٱلْعَظِيمِ"].map(w) },
+    "2:243": { s: 2, a: 243, words: ["إِنَّ", "ٱللَّهَ", "ذُو", "فَضْلٍ"].map(w) },
+    "3:174": { s: 3, a: 174, words: ["وَٱللَّهُ", "ذُو", "فَضْلٍ", "عَظِيمٍ"].map(w) },
+  };
+  const CI = buildContentIndex(VD);
+
+  it("de-fuses the dagger-yā vocative (يا أيها ≈ يَٰٓأَيُّهَا)", () => {
+    expect(verseSearch("يا ايها الناس اعبدوا", CI)[0].vk).toBe("2:21");
+  });
+  it("finds a declined citation form via the rare partner (ذو القرنين → ذِى ٱلْقَرْنَيْنِ)", () => {
+    const r = verseSearch("ذو القرنين", CI);
+    expect(r.map((x) => x.vk)).toContain("18:83"); // القرنين is rare → its verse surfaces
+    expect(r.map((x) => x.vk)).not.toContain("2:105"); // the common ذو does NOT flood
   });
 });
