@@ -62,4 +62,51 @@ describe("useWorkspace", () => {
     const second = setup();
     expect(second.result.current.items).toHaveLength(1);
   });
+
+  it("codes verses with tags and tallies them", () => {
+    const { result } = setup();
+    let t1, t2;
+    act(() => { t1 = result.current.addTag("شرك في الملك"); });
+    act(() => { t2 = result.current.addTag("شرك في العبادة"); });
+    act(() => { result.current.toggleTag("17:111", t1); });
+    act(() => { result.current.toggleTag("10:18", t2); });
+    act(() => { result.current.toggleTag("6:100", t1); });
+    expect(result.current.tagsForVerse("17:111")).toEqual([t1]);
+    expect(result.current.tagCounts()[t1]).toBe(2);
+    act(() => { result.current.toggleTag("17:111", t1); }); // un-tag → drops the key
+    expect(result.current.tagsForVerse("17:111")).toEqual([]);
+    expect(result.current.tagCounts()[t1]).toBe(1);
+    act(() => { result.current.removeTag(t1); }); // removing a tag scrubs its assignments
+    expect(result.current.tagCounts()[t1]).toBeUndefined();
+    expect(result.current.tags).toHaveLength(1);
+  });
+
+  it("builds a claim with supporting/opposing verses", () => {
+    const { result } = setup();
+    let id;
+    act(() => { id = result.current.addClaim("الجنّ والجانّ جنس واحد"); });
+    act(() => { result.current.addClaimRef(id, "support", "55:39", "إنسٌ ولا جانّ"); });
+    act(() => { result.current.addClaimRef(id, "support", "55:39"); }); // dup → no-op
+    act(() => { result.current.addClaimRef(id, "oppose", "18:50", "كان من الجنّ ففسق"); });
+    const c = result.current.claims.find((x) => x.id === id);
+    expect(c.support).toHaveLength(1);
+    expect(c.support[0]).toMatchObject({ vk: "55:39", note: "إنسٌ ولا جانّ" });
+    expect(c.oppose).toHaveLength(1);
+    act(() => { result.current.removeClaimRef(id, "oppose", "18:50"); });
+    expect(result.current.claims.find((x) => x.id === id).oppose).toHaveLength(0);
+  });
+
+  it("round-trips tags and claims through export/import", () => {
+    const { result } = setup();
+    act(() => { result.current.addTag("cat"); });
+    act(() => { result.current.addClaim("thesis"); });
+    let json;
+    act(() => { json = result.current.exportJSON(); });
+    act(() => { result.current.clearAll(); });
+    expect(result.current.tags).toHaveLength(0);
+    expect(result.current.claims).toHaveLength(0);
+    act(() => { result.current.importJSON(json); });
+    expect(result.current.tags).toHaveLength(1);
+    expect(result.current.claims).toHaveLength(1);
+  });
 });

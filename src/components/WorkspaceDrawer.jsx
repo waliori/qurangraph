@@ -13,23 +13,25 @@ import { exportJsonFile } from "../graph/exportGraph.js";
  * `onOpen(item)` restores an item; `onPinNote(id)` pins a note to the current graph.
  */
 
-const TYPE_BADGE = { graph: "t-verse", compare: "t-word", occ: "t-word", dist: "t-lemma", lexicon: "t-root", verse: "t-verse", word: "t-word", phrase: "t-verse", expr: "t-verse" };
+const TYPE_BADGE = { graph: "t-verse", compare: "t-word", occ: "t-word", dist: "t-lemma", lexicon: "t-root", verse: "t-verse", word: "t-word", phrase: "t-verse", expr: "t-verse", pairing: "t-root" };
 // Types offered in the filter row (in display order).
-const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "word", "phrase", "expr"];
+const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "word", "phrase", "expr", "pairing"];
 
-export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
-  const { t } = useI18n();
+export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, canPin }) {
+  const { t, fmtNum } = useI18n();
   const ws = useWorkspace();
   const [tab, setTab] = useState("saved");
   const [editing, setEditing] = useState(null); // item id being renamed
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [newTag, setNewTag] = useState("");
   const dialogRef = useRef(null);
   const fileRef = useRef(null);
   useModalFocus(open, dialogRef, { onEscape: onClose });
 
   if (!open) return null;
-  const { items, notes } = ws;
+  const { items, notes, tags } = ws;
+  const tagCounts = ws.tagCounts ? ws.tagCounts() : {};
   const q = query.trim().toLowerCase();
   const shownItems = items.filter((it) =>
     (typeFilter === "all" || it.type === typeFilter) &&
@@ -55,6 +57,7 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
         <div className="ag-seg ag-seg-sm" role="tablist" style={{ padding: "0 var(--space-3)" }}>
           <button type="button" role="tab" aria-selected={tab === "saved"} className={tab === "saved" ? "is-on" : ""} onClick={() => setTab("saved")}>{t("ws.tabs.saved")} {items.length ? `(${items.length})` : ""}</button>
           <button type="button" role="tab" aria-selected={tab === "notes"} className={tab === "notes" ? "is-on" : ""} onClick={() => setTab("notes")}>{t("ws.tabs.notes")} {notes.length ? `(${notes.length})` : ""}</button>
+          <button type="button" role="tab" aria-selected={tab === "tags"} className={tab === "tags" ? "is-on" : ""} onClick={() => setTab("tags")}>{t("ws.tabs.tags")} {tags.length ? `(${tags.length})` : ""}</button>
         </div>
 
         {tab === "saved" && items.length > 0 && (
@@ -97,6 +100,31 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, canPin }) {
                   onBlur={(e) => ws.updateItem(it.id, { note: e.target.value })} rows={1} />
               </div>
             ))
+          ) : tab === "tags" ? (
+            <div className="ag-ws-tags">
+              <form className="ag-tag-add" style={{ marginBlockEnd: "var(--space-2)" }} onSubmit={(e) => { e.preventDefault(); const v = newTag.trim(); if (v) { ws.addTag(v); setNewTag(""); } }}>
+                <input className="ag-input" value={newTag} placeholder={t("ws.tags.newPh")} aria-label={t("ws.tags.add")} onChange={(e) => setNewTag(e.target.value)} />
+                <button type="submit" className="ag-btn is-gold">＋ {t("ws.tags.add")}</button>
+              </form>
+              {tags.length === 0 ? <p className="ag-hint">{t("ws.tags.empty")}</p> : tags.map((tag) => (
+                <div className="ag-ws-card" key={tag.id}>
+                  <div className="ag-ws-cardhead">
+                    <span className="ag-tag-dot" style={{ background: tag.color }} />
+                    {editing === tag.id
+                      ? <input className="ag-input" autoFocus defaultValue={tag.label}
+                          onBlur={(e) => { ws.updateTag(tag.id, { label: e.target.value.trim() || tag.label }); setEditing(null); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                      : <button type="button" className="ag-ws-title" onClick={() => onOpenTag?.(tag.id, tag.label)}>{tag.label}</button>}
+                    <span className="ag-tag-n">{t("ws.tags.verses", { n: fmtNum(tagCounts[tag.id] || 0) })}</span>
+                  </div>
+                  <div className="ag-ws-actions">
+                    <button type="button" className="ag-btn is-gold" disabled={!tagCounts[tag.id]} onClick={() => onOpenTag?.(tag.id, tag.label)}>↗ {t("ws.tags.openVerses")}</button>
+                    <button type="button" className="ag-iconbtn" title={t("ws.rename")} aria-label={t("ws.rename")} onClick={() => setEditing(tag.id)}>✎</button>
+                    <button type="button" className="ag-iconbtn is-warn" title={t("ws.delete")} aria-label={t("ws.delete")} onClick={() => ws.removeTag(tag.id)}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <button type="button" className="ag-btn is-gold" style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} onClick={() => ws.addNote({})}>＋ {t("ws.addNote")}</button>

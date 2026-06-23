@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { findSharedPhrases, buildSeedIndex } from "../analytics/phrases.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { SaveButton } from "./SaveButton.jsx";
 import { useI18n } from "../i18n/index.js";
-import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* ═══ Shared-phrase (المتشابهات) modal ═══
  *
@@ -89,7 +89,6 @@ const MIN_LENS = [2, 3, 4];
 
 export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose }) {
   const { t, fmtNum } = useI18n();
-  const ws = useWorkspace();
   const centerKey = phrase?.centerKey;
   const [minLen, setMinLen] = useState(3);
   const [ignoreParticles, setIgnoreParticles] = useState(false);
@@ -134,8 +133,7 @@ export function PhraseModal({ phrase, seedIndex, verseData, onNavigate, onClose 
         <span className="ag-modal-count">{computing ? "…" : <><b>{fmtNum(phrases.length)}</b> {t("phrase.sharedPhrases")}</>}</span>
       </>}
       actions={<>
-        {cv && <button type="button" className="ag-btn" title={t("ws.saveTitle")}
-          onClick={() => { ws.saveItem({ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }); ws.toast(t("ws.saved")); }}>★</button>}
+        {cv && <SaveButton item={{ type: "phrase", title: `${t("phrase.badge")}: ${cv.sn} ${cv.a}`, payload: { surah: cv.s, ayah: cv.a } }} />}
         {phrases.length > 0 && (
           <button type="button" data-export className="ag-btn" title={t("phrase.exportCsv")}
             onClick={() => exportCsvFile(

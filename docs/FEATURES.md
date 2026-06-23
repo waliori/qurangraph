@@ -247,6 +247,39 @@ expressions also surface **inline** in the word inspector, the root lab, and the
 
 ---
 
+## Analysis workbench
+
+Four tools that turn browsing into an argument — each built strictly on the corpus,
+each evidenced by its verses.
+
+- **Construction query** (الاستعلام التركيبي) — opened from the **Root lab** (⧉). Pin a
+  root to ONE construction across four facets: verb **Form** (وزن), **voice**
+  (معلوم↔مجهول), the **governed particle** it takes (بـ vs مع vs bare — the preposition
+  inventory comes from the mined frames, with a free field for standalone particles like
+  مع), and **object definiteness** (نكرة↔معرفة). It previews the live count and a
+  by-particle split, then opens just those tokens in the concordance. This is the
+  أشرك+بـ vs أشرك مع vs شركاء distinction in a few clicks.
+- **Syntactic role** (الموقع التركيبي) — a toggle (⚖) on any occurrence list. Adds a
+  per-row role chip and an aggregate breakdown (مضاف إليه · مفعول به · مرفوع · معطوف ·
+  منادى · مجرور بحرف), inferred from the corpus's case tags plus local adjacency. It is
+  an honest **heuristic** (the data ships case, not a full dependency treebank), labelled
+  as such — for distinguishing, not deciding. Answers "is جنّ ever the muḍāf / the object
+  of خلق?".
+- **Pairing matrix** (مصفوفة الاقتران) — toolbar (⊞). A co-occurrence grid over a chosen
+  set of terms, so the **empty cell is visible** — the جنّ↔إنس, جِنّة↔ناس, blank-جنّ↔جانّ
+  move. Two axes (rows × cols) or a symmetric square; seed an axis from a **root's lemmas**
+  or a saved **semantic field** in one click (field-vs-field co-occurrence). Every cell
+  opens its shared verses with both terms highlighted.
+- **Coding** (الترميز) — a toggle (🏷) on any occurrence list. Define categories (شرك في
+  الملك / في العبادة …) and tag each verse, with live tallies per category. Your coding
+  scheme travels in the workspace export.
+- **Claim board** (لوحة الدعاوى) — toolbar (⚖). The ما يؤيد / ما يعارض ledger every study
+  ends in: each claim a statement with two columns — **supporting** and **challenging**
+  verses — every pin carrying its own gloss. Drop verses in from any concordance (⚐), then
+  export the whole case to Markdown or JSON.
+
+---
+
 ## Workspace (the notebook)
 
 Everything is stored locally in your browser — nothing is ever uploaded.

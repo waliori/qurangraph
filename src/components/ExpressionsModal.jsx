@@ -3,9 +3,11 @@ import { norm } from "../arabic-utils.js";
 import { indexExpressions, headRows, expressionsForRoot, occVerses, distBySura, matchPhrase, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { SaveButton } from "./SaveButton.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
+import { MoreButton } from "./MoreButton.jsx";
+import { useReveal } from "../hooks/useReveal.js";
 import { useMyExpressions } from "../hooks/useMyExpressions.js";
-import { useWorkspace } from "../hooks/useWorkspace.js";
 import { useI18n } from "../i18n/index.js";
 
 // Highlight span for a stored expression record by its kind: government/collocation mark two
@@ -30,7 +32,6 @@ const CAP = 200;
 
 export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, initialDetail, onNavigate, onRoot, onClose }) {
   const { t, fmtNum } = useI18n();
-  const ws = useWorkspace();
   const myExpr = useMyExpressions();
   const { mine: myMine, isHidden, has: myHas, toggle: myToggle, removeMine, hideCurated } = myExpr;
   const [tab, setTab] = useState("frames");
@@ -88,6 +89,9 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
   const matchComp = (c) => !q || c.words.some((w) => w.includes(q));
   const matchColloc = (c) => !q || c.verb.includes(q) || c.noun.includes(q);
   const matchIdiom = (i) => !q || i.display.includes(q);
+  // Incremental reveal so capped lists don't silently drop their tail.
+  const versesR = useReveal(CAP, detail);
+  const compR = useReveal(CAP, compGroups);
 
   if (!open) return null;
   if (!expr && !detail) return (
@@ -102,7 +106,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
   const showOcc = (label, occ, span, extra) => { setDetail({ label, verses: occVerses(occ, verseData, span), components: extra?.components || null, related: extra?.related || null, promo: extra?.promo || null, curated: !!extra?.curated }); setPreview(null); setDistSura(null); setDistHover(null); };
   // Persist the open expression to the workspace. The promo descriptor is self-contained
   // (its own occurrences) so reopening rebuilds this exact detail view without the expr index.
-  const saveExpr = () => { const r = detail?.promo; if (!r) return; ws.saveItem({ type: "expr", title: r.display, payload: { kind: r.kind, display: r.display, occ: r.occ, count: r.count, spanKind: r.spanKind, len: r.len } }); ws.toast(t("ws.saved")); };
+  const exprItem = (r) => ({ type: "expr", title: r.display, payload: { kind: r.kind, display: r.display, occ: r.occ, count: r.count, spanKind: r.spanKind, len: r.len } });
   // A collocation's rich leaf: its verses, component roots, and the BIDIRECTIONAL contrast —
   // the other verbs that take the same noun (idx.colByRoot is keyed by both roots).
   const openColloc = (c) => showOcc(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN, {
@@ -180,7 +184,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
           : !focus && <span className="ag-modal-count">{fmtNum((expr.frames || []).length + (expr.compounds || []).length + (expr.idioms || []).length)}</span>}
       </>}
       actions={detail
-        ? (detail.promo && <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={saveExpr}>✶ {t("ws.save")}</button>)
+        ? (detail.promo && <SaveButton item={exprItem(detail.promo)} label={t("ws.save")} />)
         : (!focus && <button type="button" className="ag-btn" onClick={() => exportJsonFile({ frames: expr.frames, compounds: expr.compounds, idioms: expr.idioms }, "expressions.json")}>⤓ JSON</button>)}>
       <div className="ag-dist-body">
         {detail ? (
@@ -229,7 +233,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
             <p className="ag-hint">{t("expr.listHint")}</p>
             {shownVerses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
               <ul className="ag-phrase-list">
-                {shownVerses.slice(0, CAP).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
+                {shownVerses.slice(0, versesR.limit).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
                   <li key={vk}><button type="button" className={"ag-modal-row" + (preview === vk ? " is-on" : "")} style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline" }} onClick={() => setPreview(vk)} aria-pressed={preview === vk}>
                     <span className="ag-ayah-ref" style={{ flexShrink: 0 }}><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{fmtNum(v.a)}</span></span>
                     <span className="ag-modal-text" style={{ fontFamily: "var(--font-quran)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
@@ -237,7 +241,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
                     </span>
                   </button></li>
                 ); })}
-                {shownVerses.length > CAP && <li><span className="ag-hint">{t("expr.more", { n: shownVerses.length - CAP })}</span></li>}
+                <li><MoreButton shown={versesR.limit} total={shownVerses.length} step={CAP} onMore={versesR.more} /></li>
               </ul>
             )}
           </div>
@@ -308,7 +312,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
           })()}
 
           {tab === "compounds" && (() => {
-            const groups = compGroups.map((g) => ({ ...g, items: g.items.filter(matchComp) })).filter((g) => g.items.length).slice(0, CAP);
+            const allGroups = compGroups.map((g) => ({ ...g, items: g.items.filter(matchComp) })).filter((g) => g.items.length);
+            const groups = allGroups.slice(0, compR.limit);
             return (
               <div className="ag-dist-sec">
                 <p className="ag-hint">{t("expr.compoundsHint")}</p>
@@ -325,7 +330,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
                     </div>
                   </div>
                 ))}
-                {compGroups.length > CAP && <p className="ag-hint">{t("expr.more", { n: compGroups.length - CAP })}</p>}
+                <MoreButton shown={groups.length} total={allGroups.length} step={CAP} onMore={compR.more} />
               </div>
             );
           })()}
