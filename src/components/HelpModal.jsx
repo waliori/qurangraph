@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ModalShell } from "./ModalShell.jsx";
 import { useI18n } from "../i18n/index.js";
 import { loadSources } from "../data-loader.js";
+import { CURRENT_VERSION } from "../changelog.js";
 
 /* ═══ Help / guide ═══
  * A visual, scrollable guide — opened from the toolbar. Examples are colour-coded
@@ -104,7 +105,7 @@ const sec = (title, illo, items) => (
   </section>
 );
 
-export function HelpModal({ open, onClose, onStartTour, onWatchIntro }) {
+export function HelpModal({ open, onClose, onStartTour, onWatchIntro, onWhatsNew }) {
   const { t } = useI18n();
   // Lazy-load the build's source-provenance manifest the first time Help opens; null
   // when the build didn't emit one (older builds), in which case the section is hidden.
@@ -115,6 +116,7 @@ export function HelpModal({ open, onClose, onStartTour, onWatchIntro }) {
     <ModalShell open={open} onClose={onClose} closeLabel={t("help.close")} ariaLabel={t("help.dialogAria")}
       title={<><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></>}
       actions={<>
+        {onWhatsNew && <button type="button" className="ag-btn" onClick={onWhatsNew}>✦ {t("changelog.openFromHelp")}</button>}
         {onWatchIntro && <button type="button" className="ag-btn" onClick={onWatchIntro}>▶ {t("intro.watch")}</button>}
         {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
       </>}>
@@ -229,6 +231,8 @@ export function HelpModal({ open, onClose, onStartTour, onWatchIntro }) {
 
           <p className="ag-hint" style={{ textAlign: "center", paddingBlock: "var(--space-3)" }}>
             {t("help.footer")}
+            <br />
+            <span>{t("changelog.version")} </span><span dir="ltr">v{CURRENT_VERSION}</span>
           </p>
         </div>
     </ModalShell>

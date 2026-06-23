@@ -50,6 +50,8 @@ const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpMod
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
 const IntroVideoModal = lazyNamed(() => import("./components/IntroVideoModal.jsx"), "IntroVideoModal");
+const WhatsNewModal = lazyNamed(() => import("./components/WhatsNewModal.jsx"), "WhatsNewModal");
+import { CHANGELOG, CURRENT_VERSION, unseenSince } from "./changelog.js";
 import { usePersistedState } from "./hooks/usePersistedState.js";
 import { useExplorationHistory } from "./hooks/useExplorationHistory.js";
 import { useSearchHistory } from "./hooks/useSearchHistory.js";
@@ -1290,6 +1292,13 @@ export default function QuranGraph() {
   // tour on close) from a manual replay opened from Help (which just closes).
   const [introOpen, setIntroOpen] = useState(false);
   const introAutoRef = useRef(false);
+  // "What's new" changelog. `whatsNew` holds the entries to display (null = closed).
+  // `qg.lastSeenVersion` records the newest release the user has acknowledged, so
+  // a deploy with a newer changelog entry auto-opens the dialog (see the gate in
+  // the first-run effect). Persisted via JSON like every other qg.* key.
+  const [whatsNew, setWhatsNew] = useState(null);
+  const [lastSeenVersion, setLastSeenVersion] = usePersistedState("qg.lastSeenVersion", null,
+    (v, f) => (typeof v === "string" ? v : f));
   // The example's target words resolved to live graph nodes (only when we're on
   // the example verse) — matched by their position in the verse (word nodes carry
   // wordIndex), so steps can spotlight & select them precisely.
@@ -1537,6 +1546,12 @@ export default function QuranGraph() {
   // Replay the intro from Help (manual; closing won't auto-start the tour).
   const openIntro = () => { introAutoRef.current = false; setShowHelp(false); setIntroOpen(true); };
 
+  // Open the "what's new" dialog from Help with the FULL release history, and
+  // mark everything seen on close. Auto-open (deploy gate) passes only the unseen
+  // slice — see the first-run effect below.
+  const openWhatsNew = () => { setShowHelp(false); setWhatsNew(CHANGELOG); };
+  const closeWhatsNew = () => { setWhatsNew(null); setLastSeenVersion(CURRENT_VERSION); };
+
   // Auto-open once, after data is ready, unless dismissed for good. The intro
   // video comes first; the tour follows when the video closes (see closeIntro).
   const autoTourRef = useRef(false);
@@ -1549,8 +1564,15 @@ export default function QuranGraph() {
     if (arrivedViaViewRef.current) return;
     let introHidden = false;
     try { introHidden = localStorage.getItem("qg.introHide") === "1"; } catch { /* ignore */ }
+    // Changelog gate. A null lastSeenVersion means a brand-new install OR an
+    // existing user from before this feature shipped — baseline them to the
+    // current version so we never retroactively dump the whole history; real
+    // changelogs surface from the NEXT deploy onward.
+    const unseen = lastSeenVersion == null ? [] : unseenSince(lastSeenVersion);
     /* eslint-disable react-hooks/set-state-in-effect */
+    if (lastSeenVersion == null) setLastSeenVersion(CURRENT_VERSION);
     if (!introHidden) { introAutoRef.current = true; setIntroOpen(true); }
+    else if (unseen.length) setWhatsNew(unseen);
     else if (!tourHidden()) startTour();
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1610,6 +1632,7 @@ export default function QuranGraph() {
           <img src={`${import.meta.env.BASE_URL}logomark.svg`} alt="" className="ag-logo" />
           <span className="ag-wordmark">آيات<i>.network</i></span>
         </button>
+        <span className="ag-ver" dir="ltr" title={t("changelog.version") + " " + CURRENT_VERSION}>v{CURRENT_VERSION}</span>
 
         <form data-tour="search" className={"ag-search" + (searchMiss ? " is-miss" : "")} onSubmit={runSearch} role="search" style={{ position: "relative" }}>
           <button type="submit" className="ag-search-btn" aria-label={t("common.search.button")} title={t("common.search.button")} disabled={tourLockSearch}>⌕</button>
@@ -2353,10 +2376,13 @@ export default function QuranGraph() {
         onClose={() => { setExprOpen(false); setExprInitial(null); }} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)}
-        onStartTour={() => { setShowHelp(false); startTour(); }} onWatchIntro={openIntro} />}
+        onStartTour={() => { setShowHelp(false); startTour(); }} onWatchIntro={openIntro} onWhatsNew={openWhatsNew} />}
 
       {/* First-run presentation video (language-aware; switchable mid-play). */}
       {introOpen && <IntroVideoModal open={introOpen} onClose={closeIntro} onStartTour={startTourFromIntro} />}
+
+      {/* "What's new" changelog — auto-opens after a deploy, re-openable from Help. */}
+      {whatsNew && <WhatsNewModal open={!!whatsNew} entries={whatsNew} onClose={closeWhatsNew} />}
 
       {/* Getting-started tour (interactive; waits for the user on action steps). */}
       {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour}

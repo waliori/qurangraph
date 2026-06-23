@@ -31,16 +31,22 @@ export function ModalShell({ open, onClose, onEscape, ariaLabel, title, actions,
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
       <div className="ag-modal" role="dialog" aria-modal="true" aria-label={ariaLabel} ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+        {/* Head layout: title (start) · ✕ (end) always share the first row; the actions
+            cluster sits between them on wide screens but reflows to its own wrapping
+            row(s) below the bottom-sheet breakpoint, so a modal with many actions can
+            never push the ✕ off-screen. See .ag-modal-head rules in theme.css. */}
         <div className="ag-modal-head">
           <div className="ag-modal-title">{title}</div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-            {actions}
-            {share && (
-              <button type="button" className="ag-btn" title={copied ? t("common.dock.linkCopied") : t("common.dock.copyLink")}
-                aria-label={t("common.dock.copyLink")} onClick={copyLink}>{copied ? "✓" : "⎘"}</button>
-            )}
-            <button type="button" className="ag-iconbtn" aria-label={closeLabel || t("common.close")} onClick={onClose}>✕</button>
-          </div>
+          {(actions || share) && (
+            <div className="ag-modal-actions">
+              {actions}
+              {share && (
+                <button type="button" className="ag-btn" title={copied ? t("common.dock.linkCopied") : t("common.dock.copyLink")}
+                  aria-label={t("common.dock.copyLink")} onClick={copyLink}>{copied ? "✓" : "⎘"}</button>
+              )}
+            </div>
+          )}
+          <button type="button" className="ag-iconbtn ag-modal-close" aria-label={closeLabel || t("common.close")} onClick={onClose}>✕</button>
         </div>
         {children}
       </div>

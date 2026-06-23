@@ -166,6 +166,11 @@ body {
   color: var(--text-strong); letter-spacing: .01em; white-space: nowrap; line-height: 1;
 }
 .ag-wordmark i { font-style: normal; color: var(--gold-400); font-size: var(--text-sm); font-family: var(--font-ui); }
+/* Small version tag beside the wordmark. Aligned to the top so it reads like a
+   superscript build marker; faint so it never competes with the logo. */
+.ag-ver { flex: 0 0 auto; align-self: flex-start; margin-block-start: 2px; font-family: var(--font-mono);
+  font-size: var(--text-2xs, 10px); font-variant-numeric: tabular-nums; color: var(--text-faint);
+  letter-spacing: .02em; cursor: default; user-select: none; }
 
 .ag-search { flex: 1 1 auto; max-width: 460px; margin-inline: auto; position: relative; }
 .ag-search-btn {
@@ -433,6 +438,34 @@ body {
 .ag-help-srclink { color: var(--gold-400); text-decoration: none; border-block-end: var(--bw-hair) solid transparent; }
 .ag-help-srclink:hover { border-block-end-color: currentColor; }
 @media (max-width: 560px) { .ag-help-row { grid-template-columns: 1fr; gap: 3px; } .ag-help-t { justify-self: start; } }
+
+/* What's-new / changelog dialog */
+.ag-cl-ver { align-self: center; font-family: var(--font-mono); font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums; color: var(--text-faint); background: var(--ink-700);
+  border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-sm); padding: 2px 7px; white-space: nowrap; }
+.ag-cl-body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: var(--space-4) var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-5); }
+.ag-cl-version { display: flex; flex-direction: column; gap: var(--space-3); }
+.ag-cl-vhead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap;
+  border-block-end: var(--bw-hair) solid var(--border-subtle); padding-block-end: 5px; }
+.ag-cl-vtitle { margin: 0; font-size: var(--text-base); font-weight: var(--fw-semibold); color: var(--gold-400);
+  font-family: var(--font-display); }
+.ag-cl-vdate { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ag-cl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.ag-cl-item { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); align-items: start; }
+.ag-cl-kind { flex: 0 0 auto; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 13px; line-height: 1; border: var(--bw-hair) solid transparent; user-select: none; }
+.ag-cl-kind.is-new { color: var(--viridian-400); background: color-mix(in oklab, var(--viridian-500) 16%, transparent);
+  border-color: color-mix(in oklab, var(--viridian-500) 30%, transparent); }
+.ag-cl-kind.is-improve { color: var(--gold-400); background: color-mix(in oklab, var(--gold-500) 14%, transparent);
+  border-color: color-mix(in oklab, var(--gold-500) 28%, transparent); }
+.ag-cl-kind.is-fix { color: var(--lapis-400); background: color-mix(in oklab, var(--lapis-500) 16%, transparent);
+  border-color: color-mix(in oklab, var(--lapis-500) 30%, transparent); }
+.ag-cl-itemmain { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ag-cl-text { margin: 0; color: var(--text-body); font-size: var(--text-sm); line-height: 1.9; }
+.ag-cl-media { max-width: 100%; height: auto; border-radius: var(--radius-md); border: var(--bw-hair) solid var(--border-default);
+  display: block; }
+
 /* Stop-word editor */
 .ag-stop-add { display: flex; gap: var(--space-2); }
 .ag-stop-add .ag-input { flex: 1; min-width: 0; }
@@ -717,13 +750,22 @@ body {
   opacity: 0; pointer-events: none; }
 .ag-modal-scrim.is-open { opacity: 1; pointer-events: auto; animation: ag-fade var(--dur-base) var(--ease-out); }
 @keyframes ag-fade { from { opacity: 0; } to { opacity: 1; } }
-.ag-modal { width: min(720px, 100%); max-height: min(82vh, 920px); display: flex; flex-direction: column;
+.ag-modal { width: min(720px, 100%); max-height: min(82dvh, 920px); display: flex; flex-direction: column;
   direction: inherit; background: var(--ink-850); border: var(--bw-hair) solid var(--border-default);
   border-radius: var(--radius-lg); box-shadow: var(--shadow-3); overflow: hidden;
   animation: ag-pop var(--dur-base) var(--ease-out); }
-.ag-modal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+/* The head is a fixed (non-scrolling) flex child above the scroll body, so the close
+   button is always reachable. sticky+bg is a belt-and-braces guard for any modal that
+   nests its head inside a scroll region; flex-shrink:0 stops it collapsing on short modals.
+   Layout is title | actions | ✕ — title grows, actions take what they need, ✕ is pinned
+   to the inline-end and never shrinks (it reflows below the breakpoint, see @860). */
+.ag-modal-head { display: flex; align-items: center; gap: var(--space-3);
+  flex: 0 0 auto; position: sticky; top: 0; z-index: 2; background: var(--ink-850);
   padding: var(--space-4) var(--space-5); border-block-end: var(--bw-hair) solid var(--border-subtle); }
-.ag-modal-title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; flex-wrap: wrap; }
+.ag-modal-title { display: flex; align-items: center; gap: var(--space-3); flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.ag-modal-actions { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0;
+  flex-wrap: wrap; justify-content: flex-end; }
+.ag-modal-close { flex: 0 0 auto; }
 .ag-modal-word { font-family: var(--font-quran); font-size: var(--text-2xl); color: var(--text-strong); margin: 0; line-height: 1.2; }
 .ag-modal-count { font-size: var(--text-sm); color: var(--text-muted); }
 .ag-modal-count b { color: var(--gold-400); font-family: var(--font-mono); }
@@ -744,9 +786,23 @@ body {
 .ag-modal-text { flex: 1 1 auto; font-family: var(--font-quran); font-size: var(--text-lg); line-height: 2; min-width: 0; }
 .ag-btn:disabled { opacity: .4; cursor: default; }
 @media (max-width: 860px) {
+  /* Bottom sheet. dvh (dynamic viewport) tracks the VISIBLE area as the browser bars
+     show/hide — plain vh references the larger no-chrome viewport, so a vh-capped sheet
+     could exceed the screen and push its head (with the ✕) off the top. The reserved 44px
+     (+ notch) is always a tappable strip of scrim above the sheet for tap-to-close,
+     so a tall dialog never becomes truly full-screen. */
   .ag-modal-scrim { padding: 0; align-items: flex-end; }
-  .ag-modal { max-height: 90vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .ag-modal { max-height: calc(100dvh - 44px - env(safe-area-inset-top));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-block-end: env(safe-area-inset-bottom); }
   .ag-modal-text { font-size: var(--text-base); }
+  /* Reflow the head so the ✕ always rides the first row beside the title (anchored to the
+     top with flex-start), and the action buttons drop to their own full-width row(s) and
+     wrap — a modal with many actions can never shove the ✕ past the edge. */
+  .ag-modal-head { flex-wrap: wrap; align-items: flex-start; }
+  .ag-modal-title { order: 0; }
+  .ag-modal-close { order: 1; }
+  .ag-modal-actions { order: 2; flex-basis: 100%; justify-content: flex-start; }
 }
 
 /* ═══════════ Intro / presentation video ═══════════ */
@@ -825,8 +881,9 @@ body {
   /* Analysis labs as first-class on phones: tab/segment bars and modal head wrap
      instead of overflowing, wide bar charts/matrices scroll, term slots stack. */
   .ag-seg { flex-wrap: wrap; }
-  .ag-modal-title { flex-wrap: wrap; row-gap: 4px; }
-  .ag-modal-head { flex-wrap: wrap; row-gap: var(--space-2); }
+  /* The ✕ stays pinned beside the title and actions wrap below (see the @860 head rules);
+     here just tighten the title's own wrap gap on very narrow screens. */
+  .ag-modal-title { row-gap: 4px; }
   .ag-dist-tags { gap: 4px; }
   .ag-dist-bars { overflow-x: auto; }
   .ag-cmp-slots { flex-direction: column; }

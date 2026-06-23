@@ -31,6 +31,12 @@ describe("QuranGraph", () => {
     // now a lazy chunk) and is global UI unrelated to what these tests assert — leaving
     // it on makes the synchronous selection assertion race with the tour mounting.
     localStorage.setItem("qg.tourHide", "1");
+    // Same rationale for the first-run intro video: it auto-opens on load (a lazy
+    // modal) and is global onboarding unrelated to the graph/selection these tests
+    // assert, so leaving it on races its mount against the synchronous assertions.
+    // (The "what's new" changelog needs no flag here — its gate stays silent while
+    // qg.lastSeenVersion is unset, which it is after localStorage.clear().)
+    localStorage.setItem("qg.introHide", "1");
     vi.stubGlobal("fetch", mockFetch());
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

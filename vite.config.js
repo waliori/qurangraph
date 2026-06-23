@@ -3,6 +3,29 @@ import react from '@vitejs/plugin-react'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import { CURRENT_VERSION } from './src/changelog.js'
+
+// Single source of truth for the app version: the top changelog entry's id
+// (src/changelog.js). package.json's "version" must equal it so build tooling and
+// Docker image tags read the same number — fail the build fast if they drift.
+const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+if (pkg.version !== CURRENT_VERSION) {
+  throw new Error(
+    `Version mismatch: package.json "version" is ${pkg.version} but the top changelog ` +
+    `entry is ${CURRENT_VERSION}. Update package.json to match — they must stay in sync.`,
+  )
+}
+
+// Stamp the app version into the document <title> by replacing the __APP_VERSION__
+// token in index.html. Runs in dev and build so the browser tab always shows it.
+function versionHtmlPlugin() {
+  return {
+    name: 'inject-version',
+    transformIndexHtml(html) {
+      return html.replace(/__APP_VERSION__/g, CURRENT_VERSION)
+    },
+  }
+}
 
 // Inject a Content-Security-Policy meta tag into the *built* HTML only. Doing it
 // here (rather than in index.html) keeps the dev server working — Vite's HMR
@@ -90,7 +113,7 @@ function compressPlugin() {
 // sub-path (e.g. GitHub Pages project sites), not just the domain root.
 export default defineConfig({
   base: './',
-  plugins: [react(), cspPlugin(), swVersionPlugin(), compressPlugin()],
+  plugins: [react(), versionHtmlPlugin(), cspPlugin(), swVersionPlugin(), compressPlugin()],
   build: {
     rollupOptions: {
       output: {

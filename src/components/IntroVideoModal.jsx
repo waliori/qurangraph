@@ -69,13 +69,13 @@ export function IntroVideoModal({ open, onClose, onStartTour }) {
             <span className="ag-badge t-verse">{t("intro.badge")}</span>
             <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("intro.title")}</h2>
           </div>
-          <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+          <div className="ag-modal-actions">
             <button type="button" className="ag-btn ag-intro-lang" onClick={switchLang}
               title={t("intro.switchLangAria")} aria-label={t("intro.switchLangAria")}>
               ⇄ {lang === "ar" ? t("intro.switchToEnglish") : t("intro.switchToArabic")}
             </button>
-            <button type="button" className="ag-iconbtn" aria-label={t("intro.close")} onClick={() => onClose(dontShow)}>✕</button>
           </div>
+          <button type="button" className="ag-iconbtn ag-modal-close" aria-label={t("intro.close")} onClick={() => onClose(dontShow)}>✕</button>
         </div>
 
         <div className="ag-intro-body">
