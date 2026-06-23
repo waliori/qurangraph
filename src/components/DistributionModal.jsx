@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { distributionBySura, collocations, directNeighbors } from "../analytics/stats.js";
-import { exportCsvFile, exportJsonFile, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
+import { exportCsvFile, exportBundle, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { SaveButton } from "./SaveButton.jsx";
+import { DisclosurePanel } from "./DisclosurePanel.jsx";
+import { SigStars, fmtMetric } from "./Significance.jsx";
 import { useI18n } from "../i18n/index.js";
-import { useWorkspace } from "../hooks/useWorkspace.js";
 import { fColor } from "../theme.js";
 
 /* ═══ Distribution + collocation modal ═══
@@ -17,24 +19,29 @@ import { fColor } from "../theme.js";
 // Ranking of the neighbour list: raw shared-verse count, or one of two
 // association measures that correct for how common each word is on its own.
 // Labels/titles are resolved per id via t() inside the component (hook scope).
-const COLLOC_SORT_IDS = ["count", "ll", "pmi"];
+const COLLOC_SORT_IDS = ["count", "ll", "pmi", "logdice"];
+// Collocation window: whole verse (99) or a ±N token span.
+const WINDOW_IDS = [99, 1, 2, 3, 4, 5];
+const ASYM_IDS = ["sym", "left", "right"];
 // Which side of the term the direct-neighbour list ranks by.
 const NBR_SIDE_IDS = ["before", "after", "both"];
 
 export function DistributionModal({ dist, index, verseData, surahList, stopSet, theme, onSurah, onPick, onCompare, onClose }) {
   const { t } = useI18n();
-  const ws = useWorkspace();
   const [collocSort, setCollocSort] = useState("ll");
+  const [collocWindow, setCollocWindow] = useState(99); // 99 = whole verse
+  const [collocAsym, setCollocAsym] = useState("sym");
   const [nbrSide, setNbrSide] = useState("both");
   const [nbrCross, setNbrCross] = useState(false); // span the āya boundary (recited flow)
+  const windowed = collocWindow < 99;
   const data = useMemo(() => {
     if (!dist) return null;
     const distribution = distributionBySura(dist.lookup, index, verseData, surahList, dist.mode).filter((d) => d.count > 0);
-    const colloc = collocations(dist.lookup, dist.mode, index, verseData, stopSet, 99, { sort: collocSort }).slice(0, 60);
+    const colloc = collocations(dist.lookup, dist.mode, index, verseData, stopSet, collocWindow, { sort: collocSort, asym: collocAsym }).slice(0, 60);
     const total = distribution.reduce((s, d) => s + d.count, 0);
     const max = distribution.reduce((m, d) => Math.max(m, d.count), 1);
     return { distribution, colloc, total, max };
-  }, [dist, index, verseData, surahList, stopSet, collocSort]);
+  }, [dist, index, verseData, surahList, stopSet, collocSort, collocWindow, collocAsym]);
   // Adjacency is position-aware but side-independent to compute, so build the full
   // before/after table once and re-rank per side without rescanning the corpus.
   const nbrAll = useMemo(() => (dist ? directNeighbors(dist.lookup, dist.mode, index, verseData, { crossVerse: nbrCross }) : []), [dist, index, verseData, nbrCross]);
@@ -46,8 +53,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
   if (!dist || !data) return null;
   const { distribution, colloc, total, max } = data;
   // The association figure shown on each chip tracks the active sort.
-  const metricOf = (c) => collocSort === "pmi" ? c.pmi : collocSort === "ll" ? c.ll : null;
-  const fmtMetric = (v) => (v == null ? "" : Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1));
+  const metricOf = (c) => collocSort === "pmi" ? c.pmi : collocSort === "ll" ? c.ll : collocSort === "logdice" ? c.logdice : null;
   // The number shown bold on each neighbour chip = the active side's count.
   const nbrCount = (n) => (nbrSide === "before" ? n.before : nbrSide === "after" ? n.after : n.total);
 
@@ -60,13 +66,17 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
         <span className="ag-modal-count"><b>{total}</b> {t("dist.in")} <b>{distribution.length}</b> {t("dist.surahs")}</span>
       </>}
       actions={<>
-            <button type="button" className="ag-btn" title={t("ws.saveTitle")} onClick={() => { ws.saveItem({ type: "dist", title: dist.label, payload: { lookup: dist.lookup, label: dist.label, mode: dist.mode } }); ws.toast(t("ws.saved")); }}>★</button>
+            <SaveButton item={{ type: "dist", title: dist.label, payload: { lookup: dist.lookup, label: dist.label, mode: dist.mode } }} />
             {onCompare && <button type="button" className="ag-btn" title={t("dist.compareTitle")} onClick={() => onCompare({ lookup: dist.lookup, label: dist.label, mode: dist.mode })}>⇄ {t("dist.compare")}</button>}
             <button type="button" className="ag-btn" title={t("dist.exportJson")}
-              onClick={() => exportJsonFile({
-                term: dist.label, mode: dist.mode, total, surahCount: distribution.length, collocationSort: collocSort,
-                distribution: distribution.map((d) => ({ sura: d.sura, name: d.name, count: d.count })),
-                collocations: colloc.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
+              onClick={() => exportBundle({
+                method: "distribution+collocation",
+                params: { term: dist.lookup, label: dist.label, mode: dist.mode, collocationModel: windowed ? "token" : "verse-document", window: windowed ? collocWindow : "whole-verse", asymmetry: windowed ? collocAsym : null, sort: collocSort },
+                data: {
+                  total, surahCount: distribution.length,
+                  distribution: distribution.map((d) => ({ sura: d.sura, name: d.name, count: d.count })),
+                  collocations: colloc.map((c) => ({ word: c.label, count: c.count, pmi: c.pmi, logLikelihood: c.ll, logDice: c.logdice, significance: c.sig })),
+                },
               }, t("dist.fileAnalysis", { label: dist.label }))}>⤓ JSON</button>
             <button type="button" className="ag-btn" title={t("common.cite.resultTitle")}
               onClick={() => {
@@ -107,7 +117,7 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h">
               <span>{t("dist.collocates")}</span>
-              <button type="button" data-export className="ag-btn" onClick={() => exportCsvFile([[t("dist.colWord"), t("dist.colShared"), "PMI", "G²"], ...colloc.map((c) => [c.label, c.count, c.pmi.toFixed(3), c.ll.toFixed(3)])], t("dist.fileColloc", { label: dist.label }))}>⤓ CSV</button>
+              <button type="button" data-export className="ag-btn" onClick={() => exportCsvFile([[t("dist.colWord"), t("dist.colShared"), "PMI", "G²", "Log-Dice", t("ui.sig")], ...colloc.map((c) => [c.label, c.count, c.pmi.toFixed(3), c.ll.toFixed(3), c.logdice.toFixed(3), c.sig])], t("dist.fileColloc", { label: dist.label }))}>⤓ CSV</button>
             </div>
             <div className="ag-seg ag-seg-sm" role="group" aria-label={t("dist.sortGroup")} style={{ marginBlockEnd: "var(--space-2)" }}>
               {COLLOC_SORT_IDS.map((id) => (
@@ -115,21 +125,42 @@ export function DistributionModal({ dist, index, verseData, surahList, stopSet, 
                   aria-pressed={collocSort === id} onClick={() => setCollocSort(id)}>{t(`dist.sort.${id}.label`)}</button>
               ))}
             </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center", marginBlockEnd: "var(--space-2)" }}>
+              <span className="ag-range-lab">{t("ui.window")}</span>
+              <div className="ag-seg ag-seg-sm" role="group" aria-label={t("ui.window")}>
+                {WINDOW_IDS.map((w) => (
+                  <button type="button" key={w} className={collocWindow === w ? "is-on" : ""}
+                    aria-pressed={collocWindow === w} onClick={() => setCollocWindow(w)}>{w === 99 ? t("ui.window.whole") : "±" + w}</button>
+                ))}
+              </div>
+              {windowed && (
+                <div className="ag-seg ag-seg-sm" role="group" aria-label={t("ui.window")}>
+                  {ASYM_IDS.map((id) => (
+                    <button type="button" key={id} className={collocAsym === id ? "is-on" : ""}
+                      aria-pressed={collocAsym === id} onClick={() => setCollocAsym(id)}>{t("ui.window." + id)}</button>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="ag-hint">
               {collocSort === "count"
                 ? <>{t("dist.hintCount", { label: dist.label })}</>
                 : collocSort === "ll"
                 ? <>{t("dist.hintLl.a")}<b>{t("dist.hintLl.b1")}</b>{t("dist.hintLl.mid")}<b>{t("dist.hintLl.b2")}</b>{t("dist.hintLl.c")}</>
-                : <>{t("dist.hintPmi.a")}<b>{t("dist.hintPmi.b1")}</b>{t("dist.hintPmi.mid")}<b>{t("dist.hintPmi.b2")}</b>{t("dist.hintPmi.c")}</>}
+                : collocSort === "pmi"
+                ? <>{t("dist.hintPmi.a")}<b>{t("dist.hintPmi.b1")}</b>{t("dist.hintPmi.mid")}<b>{t("dist.hintPmi.b2")}</b>{t("dist.hintPmi.c")}</>
+                : <>{t("dist.sort.logdice.title")}</>}
             </p>
+            <DisclosurePanel label={t("ui.method")}><p style={{ margin: 0 }}>{t("dist.methodBody")}</p></DisclosurePanel>
             <div className="ag-dist-tags">
               {colloc.length === 0 ? <span className="ag-dist-name">{t("dist.none")}</span> : colloc.map((c) => {
                 const mv = metricOf(c);
                 return (
                   <button type="button" className="ag-tag ag-tag-btn" key={c.key} onClick={() => onPick?.(c.key, c.label)}
-                    title={t("dist.chipTitle", { label: c.label, count: c.count, pmi: c.pmi.toFixed(2), ll: c.ll.toFixed(1) })}>
+                    title={t("dist.chipTitle", { label: c.label, count: c.count, pmi: c.pmi.toFixed(2), ll: c.ll.toFixed(1), ld: c.logdice.toFixed(1) })}>
                     {c.label} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
                     {mv != null && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{fmtMetric(mv)}</span>}
+                    <SigStars sig={c.sig} />
                   </button>
                 );
               })}

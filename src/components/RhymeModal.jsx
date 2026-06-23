@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates } from "../analytics/rhyme.js";
+import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates, finalProsody, classifyFawasil } from "../analytics/rhyme.js";
 import { exportCsvFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { DisclosurePanel } from "./DisclosurePanel.jsx";
 import { useI18n } from "../i18n/index.js";
 
 /* ═══ Verse rhyme / cadence (الفاصلة) ═══
@@ -45,6 +46,8 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
   const mates = useMemo(() => (scope === "sura" ? matesAll.filter((vk) => verseData[vk]?.s === v.s) : matesAll), [matesAll, scope, v, verseData]);
   const activeScheme = useMemo(() => (matchBy === "rawiy" ? (scheme?.rawiyScheme || []) : (scheme?.scheme || [])), [matchBy, scheme]);
   const colors = useMemo(() => endingColors(activeScheme.map((s) => s.key)), [activeScheme]);
+  const prosody = useMemo(() => (v ? finalProsody(v.text) : null), [v]);
+  const fawasil = useMemo(() => (v ? classifyFawasil(v.s, verseData) : null), [v, verseData]);
 
   if (!rhyme || !v) return null;
   const ref = `${v.s}:${v.a}`;
@@ -101,6 +104,29 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
             })}
           </div>
         </div>
+
+        {/* Prosody of this ending + the sūra's fāṣila taxonomy (named adjacency relations). */}
+        {(prosody || fawasil) && (
+          <div className="ag-dist-sec">
+            <div className="ag-dist-sec-h"><span>{t("rhyme.prosody")}</span></div>
+            {prosody && (
+              <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
+                <span className="ag-tag" title={t("rhyme.cvTitle")} style={{ fontFamily: "var(--font-mono, monospace)" }}>{t("rhyme.cv")}: {prosody.cv}</span>
+                {prosody.radf && <span className="ag-tag" title={t("rhyme.radfTitle")}>{t("rhyme.radf")}</span>}
+                {prosody.tasis && <span className="ag-tag" title={t("rhyme.tasisTitle")}>{t("rhyme.tasis")}</span>}
+              </div>
+            )}
+            {fawasil && fawasil.total > 1 && (<>
+              <p className="ag-hint">{t("rhyme.fawasilHint", { run: fmtNum(fawasil.dominantRun) })}</p>
+              <div className="ag-dist-tags">
+                <span className="ag-tag" title={t("rhyme.mutamathilTitle")}>{t("rhyme.mutamathil")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(fawasil.counts.mutamathil)}</b></span>
+                <span className="ag-tag" title={t("rhyme.mutaqaribTitle")}>{t("rhyme.mutaqarib")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(fawasil.counts.mutaqarib)}</b></span>
+                <span className="ag-tag" title={t("rhyme.mukhtalifTitle")}>{t("rhyme.mukhtalif")} <b style={{ color: "var(--gold-400)" }}>{fmtNum(fawasil.counts.mukhtalif)}</b></span>
+              </div>
+              <DisclosurePanel label={t("ui.method")}><p style={{ margin: 0 }}>{t("rhyme.methodBody")}</p></DisclosurePanel>
+            </>)}
+          </div>
+        )}
 
         <div className="ag-dist-sec">
           <div className="ag-dist-sec-h">

@@ -75,6 +75,30 @@ export function exportJsonFile(obj, name = "qurangraph.json") {
   download(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" }), name);
 }
 
+/* The corpus build version (sources.json `builtAt`), set once at app start so every
+ * reproducible export records WHICH corpus snapshot it was computed against. */
+let _corpusVersion = null;
+export function setExportCorpusVersion(v) { _corpusVersion = v || null; }
+
+/* ═══ Reproducible analysis export ═══
+ *
+ * Wraps a result in a self-describing envelope so a researcher can cite not just the
+ * numbers but HOW they were produced — the metric + its parameters (window, thresholds,
+ * sort) and the corpus snapshot. `meta` = { method, params, ...extra }; `data` is the
+ * raw result. Schema-tagged for forward compatibility. */
+export function exportBundle({ method, params, data, ...extra }, name = "qurangraph-analysis.json") {
+  const bundle = {
+    schema: "ayatnet-export-v1",
+    exportedAt: new Date().toISOString(),
+    corpus: _corpusVersion || undefined,
+    method: method || undefined,
+    params: params || undefined,
+    ...extra,
+    data,
+  };
+  download(new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json;charset=utf-8" }), name);
+}
+
 /* Plain-text download (BibTeX / RIS citation files). */
 export function exportTextFile(text, name, mime = "text/plain;charset=utf-8") {
   download(new Blob([text], { type: mime }), name);

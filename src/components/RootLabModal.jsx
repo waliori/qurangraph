@@ -3,10 +3,16 @@ import { derivationFamily } from "../analytics/derivation.js";
 import { radicalKin } from "../analytics/kinship.js";
 import { oppositesOf, candidatesOf } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
+import { sigTier } from "../analytics/assoc.js";
 import { exportCsvFile, exportJsonFile } from "../graph/exportGraph.js";
 import { expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "../analytics/expressions.js";
+import { valencyProfile } from "../analytics/valency.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { DisclosurePanel } from "./DisclosurePanel.jsx";
+import { SigStars, fmtMetric } from "./Significance.jsx";
 import { useMyExpressions } from "../hooks/useMyExpressions.js";
+import { useProposals } from "../hooks/useProposals.js";
+import { useFields } from "../hooks/useFields.js";
 import { useI18n } from "../i18n/index.js";
 
 /* ═══ Root analysis lab ═══
@@ -22,11 +28,23 @@ import { useI18n } from "../i18n/index.js";
  */
 const TABS = ["deriv", "kin", "opp", "lex", "sem", "expr"];
 
-export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, expr, exprIndex, back, onRetarget, onVerses, onExpressions, onBack, onClose }) {
+export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, lexAll, lexMeta, expr, exprIndex, back, onRetarget, onVerses, onExpressions, onConstruct, onPairing, onBack, onClose }) {
   const { t } = useI18n();
   const [tab, setTab] = useState("deriv");
+  const [lexQuery, setLexQuery] = useState(""); // cross-lexicon gloss search (submitted)
+  // Search every loaded dictionary's concise gloss for a term → the roots whose entry
+  // mentions it, ranked by how many of the six lexicons agree. A cheap cross-reference
+  // that turns the dictionaries from per-root lookups into a searchable index.
+  const lexSearch = useMemo(() => {
+    const q = lexQuery.trim();
+    if (q.length < 2 || !lexAll || !lexMeta) return null;
+    const hits = new Map(); // root → #lexicons whose gloss mentions q
+    for (const L of lexMeta) { const m = lexAll[L.id]; if (!m) continue; for (const r in m) { const c = m[r]?.c; if (c && c.includes(q)) hits.set(r, (hits.get(r) || 0) + 1); } }
+    return [...hits.entries()].map(([root, n]) => ({ root, n })).sort((a, b) => b.n - a.n || a.root.localeCompare(b.root)).slice(0, 60);
+  }, [lexQuery, lexAll, lexMeta]);
   const root = lab?.root;
   const exprData = useMemo(() => (expr && exprIndex && root ? expressionsForRoot(expr, exprIndex, root) : null), [expr, exprIndex, root]);
+  const valency = useMemo(() => valencyProfile(exprData), [exprData]);
   // Open an expression's āyāt with EVERY member word highlighted (not just the root): the occ
   // tuples carry each word's index, so map them through `span` and hand the per-verse highlight
   // set to the occurrences modal. Fixes "only the chosen word lit up" for collocations/compounds.
@@ -36,6 +54,8 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
   };
   // "+ add to my expressions" toggle, shared with the explorer (same local store).
   const myExpr = useMyExpressions();
+  const proposals = useProposals();
+  const fieldStore = useFields();
   const promoBtn = (rec) => {
     const added = myExpr.has(rec.kind, rec.display);
     return (
@@ -101,6 +121,8 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
         <span className="ag-modal-count">{t("lab.root")} {root}</span>
       </>}
       actions={<>
+        {onConstruct && <button type="button" className="ag-btn" title={t("work.tools.construction")} onClick={() => onConstruct(root, lab.label)}>⧉ {t("work.tools.construction")}</button>}
+        {onPairing && <button type="button" className="ag-btn" title={t("work.tools.pairing")} onClick={() => onPairing(root, lab.label)}>⊞ {t("work.tools.pairing")}</button>}
         {onExpressions && <button type="button" className="ag-btn" title={t("lab.expressions")} onClick={() => onExpressions(root)}>⛓ {t("lab.expressions")}</button>}
         <button type="button" className="ag-btn" onClick={exportCurrent}>⤓ {tab === "deriv" ? "CSV" : "JSON"}</button>
       </>}>
@@ -110,6 +132,22 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
             <button type="button" key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>{t(`lab.tab.${id}`)}</button>
           ))}
         </div>
+
+        {/* Add this root to a user-built semantic field (concept study). */}
+        {root && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBlockEnd: "var(--space-3)" }}>
+            <span className="ag-hint" style={{ margin: 0 }}>{t("lab.field.add")}</span>
+            {fieldStore.fields.map((f) => (
+              <button type="button" key={f.id} className={"ag-tag ag-tag-btn" + (f.roots.includes(root) ? " is-on" : "")} aria-pressed={f.roots.includes(root)}
+                title={f.roots.includes(root) ? t("lab.field.in", { name: f.name }) : t("lab.field.to", { name: f.name })}
+                onClick={() => (f.roots.includes(root) ? fieldStore.removeRoot(f.id, root) : fieldStore.addRoot(f.id, root))}>
+                {f.name}{f.roots.includes(root) ? " ✓" : ""}
+              </button>
+            ))}
+            <button type="button" className="ag-tag ag-tag-btn" title={t("lab.field.create")}
+              onClick={() => { const id = fieldStore.create(lab.label); fieldStore.addRoot(id, root); }}>+ {t("lab.field.new")}</button>
+          </div>
+        )}
 
         {tab === "deriv" && (
           <div className="ag-dist-sec">
@@ -198,9 +236,29 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
               <p className="ag-hint">{t("lab.opp.candidatesHint")}</p>
               <div className="ag-dist-tags">
                 {cand.map((c) => (
-                  <button type="button" className="ag-tag ag-tag-btn" key={c.other} onClick={() => onVerses?.(`${root} ↔ ${c.other}`, c.verses)} title={t("lab.opp.attested", { n: c.contrast })} style={{ fontFamily: "var(--font-quran)", opacity: 0.85 }}>
-                    {c.other} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>#{c.contrast}</span>
-                  </button>
+                  <span key={c.other} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                    <button type="button" className="ag-tag ag-tag-btn" onClick={() => onVerses?.(`${root} ↔ ${c.other}`, c.verses)} title={t("lab.opp.attested", { n: c.contrast })} style={{ fontFamily: "var(--font-quran)", opacity: 0.85 }}>
+                      {c.other} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>#{c.contrast}</span>
+                    </button>
+                    <button type="button" className={"ag-tag ag-tag-btn" + (proposals.has(root, c.other) ? " is-on" : "")} aria-pressed={proposals.has(root, c.other)}
+                      title={proposals.has(root, c.other) ? t("lab.opp.proposed") : t("lab.opp.propose")}
+                      onClick={() => proposals.toggle(root, c.other, { cat: c.cat })}>{proposals.has(root, c.other) ? "✓" : "+"}</button>
+                  </span>
+                ))}
+              </div>
+            </>}
+            {proposals.count > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}>
+                <span>{t("lab.opp.myProposals")} ({proposals.count})</span>
+                <button type="button" className="ag-btn" onClick={() => exportJsonFile(proposals.exportData(), "proposed-relations.json")}>⤓ JSON</button>
+              </div>
+              <p className="ag-hint">{t("lab.opp.myProposalsHint")}</p>
+              <div className="ag-dist-tags">
+                {proposals.items.map((p) => (
+                  <span key={p.id} className="ag-tag" style={{ fontFamily: "var(--font-quran)" }}>
+                    <button type="button" className="ag-tag-btn" style={{ fontFamily: "var(--font-quran)", background: "none", border: "none", padding: 0, cursor: "pointer" }} onClick={() => onRetarget?.(p.a === root ? p.b : p.a)}>{p.a} ↔ {p.b}</button>
+                    <button type="button" title={t("lab.opp.removeProposal")} aria-label={t("lab.opp.removeProposal")} style={{ background: "none", border: "none", color: "var(--text-faint)", cursor: "pointer", marginInlineStart: 4 }} onClick={() => proposals.remove(p.a, p.b)}>✕</button>
+                  </span>
                 ))}
               </div>
             </>}
@@ -212,15 +270,31 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
             <div className="ag-dist-sec-h"><span>{t("lab.lex.title")}</span></div>
             <p className="ag-hint">{t("lab.lex.hint")}</p>
             {lex == null ? <span className="ag-dist-name">{t("lab.lex.loading")}</span> : (<>
+              {/* ── Cross-lexicon search: find roots whose gloss mentions a term ── */}
+              <form onSubmit={(e) => { e.preventDefault(); setLexQuery(e.currentTarget.elements.lexq.value); }} role="search" style={{ display: "flex", gap: 6, marginBlockEnd: "var(--space-2)" }}>
+                <input name="lexq" className="ag-input" type="search" defaultValue={lexQuery} placeholder={t("lab.lex.searchPh")} aria-label={t("lab.lex.searchAria")} style={{ flex: 1 }} />
+                <button type="submit" className="ag-btn">{t("lab.lex.searchGo")}</button>
+              </form>
+              {lexSearch && (
+                lexSearch.length === 0 ? <p className="ag-hint">{t("lab.lex.searchNone")}</p> : (
+                  <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
+                    {lexSearch.map((h) => (
+                      <button type="button" className="ag-tag ag-tag-btn" key={h.root} onClick={() => onRetarget?.(h.root)} style={{ fontFamily: "var(--font-quran)" }}
+                        title={t("lab.lex.searchHit", { n: h.n })}>{h.root} <b style={{ color: "var(--gold-400)" }}>{h.n}</b></button>
+                    ))}
+                  </div>
+                )
+              )}
+
               {/* ── Dictionary layer: the six classical sources, side by side ── */}
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-2)" }}><span>{t("lab.lex.dicts")}</span></div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {lex.entries.map((e) => (
                   <div key={e.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontSize: "var(--text-xs)", color: "var(--gold-400)" }}>{e.label}</span>
-                    <span className="ag-dist-name" style={{ fontFamily: "var(--font-quran)", color: e.c ? undefined : "var(--text-faint)", lineHeight: 1.7 }}>
+                    <div className="ag-lex-gloss" style={{ fontFamily: "var(--font-quran)", color: e.c ? undefined : "var(--text-faint)" }}>
                       {e.c || t("lab.lex.noEntry")}
-                    </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -275,16 +349,20 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
             {sem == null ? <span className="ag-dist-name">{t("lab.sem.loading")}</span>
               : sem.length === 0 ? <span className="ag-dist-name">{t("lab.sem.none")}</span> : (<>
                 <p className="ag-hint" style={{ color: "var(--text-faint)", fontStyle: "italic" }}>{t("lab.sem.caveat")}</p>
+                <DisclosurePanel label={t("ui.method")}><p style={{ margin: 0 }}>{t("lab.sem.methodBody")}</p></DisclosurePanel>
                 <div className="ag-dist-tags">
-                  {sem.map(([r, s]) => {
+                  {sem.map(([r, s, rel]) => {
                     // Encode confidence: similarity (max ≈ the top neighbour) → border + text opacity,
                     // so a strong tie reads boldly and a weak (possibly coincidental) one fades.
                     const strength = Math.max(0.18, Math.min(1, s / (sem[0]?.[1] || 1)));
+                    // rel: paradigmatic (⇄, substitutable — candidate synonym/antonym) vs syntagmatic (·, goes-together).
+                    const relMark = rel === "paradigmatic" ? "⇄" : rel === "syntagmatic" ? "·" : "";
                     return (
                       <button type="button" className="ag-tag ag-tag-btn" key={r} onClick={() => onRetarget?.(r)}
-                        title={t("lab.sem.chipTitle", { root: r, sim: s })}
+                        title={t("lab.sem.chipTitle", { root: r, sim: s }) + (rel ? " — " + t("lab.sem.rel." + rel) : "")}
                         style={{ borderColor: `color-mix(in srgb, var(--gold-500) ${Math.round(strength * 100)}%, transparent)`, opacity: 0.55 + strength * 0.45 }}>
                         {r} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{s}</span>
+                        {relMark && <span style={{ color: "var(--text-faint)", marginInlineStart: 3 }} aria-hidden="true">{relMark}</span>}
                       </button>
                     );
                   })}
@@ -298,6 +376,18 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
             <p className="ag-hint">{t("lab.expr.hint")}</p>
             {!exprData ? <span className="ag-dist-name">{t("lab.sem.loading")}</span>
               : (exprData.heads.length + exprData.collocations.length + exprData.compounds.length === 0) ? <span className="ag-dist-name">{t("expr.none")}</span> : (<>
+                {valency && (valency.preps.length > 0 || valency.objects.length > 0) && <>
+                  <div className="ag-dist-sec-h"><span>{t("lab.valency")}</span></div>
+                  <p className="ag-hint">{t("lab.valencyHint")}</p>
+                  <div className="ag-dist-tags" style={{ marginBlockEnd: "var(--space-2)" }}>
+                    {valency.preps.map((p) => { const disp = expr.prepDisp?.[p.prep] || p.prep; return (
+                      <span className="ag-tag" key={p.prep} style={{ fontFamily: "var(--font-quran)" }} title={t("lab.valencyPrep", { prep: disp, n: p.count })}>
+                        {disp} <b style={{ color: "var(--gold-400)" }}>{p.count}</b>
+                      </span>
+                    ); })}
+                    {valency.objectTotal > 0 && <span className="ag-tag" title={t("lab.valencyObjTitle")}>{t("lab.valencyObj", { n: valency.objectTotal })}</span>}
+                  </div>
+                </>}
                 {exprData.heads.length > 0 && <>
                   <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
                   <div className="ag-dist-bars">
@@ -323,7 +413,10 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
                     {exprData.collocations.map((c, i) => (
                       <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
                         <button type="button" className="ag-tag ag-tag-btn" style={{ fontFamily: "var(--font-quran)" }}
-                          onClick={() => openExpr(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b></button>
+                          title={c.ll != null ? t("expr.collChipTitle", { count: c.count, ll: c.ll, ld: c.logdice ?? "—" }) : undefined}
+                          onClick={() => openExpr(`${c.verb} ${c.noun}`, c.occ, FRAME_SPAN)}>{c.verb} {c.noun} <b style={{ color: "var(--gold-400)" }}>{c.count}</b>
+                          {c.logdice != null && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{fmtMetric(c.logdice)}</span>}
+                          {c.ll != null && <SigStars sig={sigTier(c.ll)} />}</button>
                         {promoBtn({ kind: "colloc", display: `${c.verb} ${c.noun}`, occ: c.occ, count: c.count, spanKind: "frame" })}
                       </span>
                     ))}

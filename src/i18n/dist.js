@@ -34,6 +34,9 @@ export const ar = {
   "dist.sort.ll.title": "دلالة إحصائية (Dunning G²): التلازم الموثَّق المتكرّر الذي لا تفسّره الصدفة — لا تضخّم النادر",
   "dist.sort.pmi.label": "PMI",
   "dist.sort.pmi.title": "المعلومات المتبادلة النقطية: نسبة المفاجأة — تبرز الاقترانات النادرة الحصرية، وقد تضخّم ما ورد مرّةً",
+  "dist.sort.logdice.label": "Log-Dice",
+  "dist.sort.logdice.title": "مقياس الاقتران المستقر عن التكرار (رِيشلي): من ٠ إلى ١٤، لا يضخّم النادر ولا يبتلعه الشائع — المعيار الحديث للتلازم",
+  "dist.methodBody": "تُحسب المجاورات على نموذجين صحيحين إحصائيًّا: على مستوى الآية (النافذة = الآية كاملة) حيث k = الآيات المشتركة وN = عدد الآيات؛ وعلى مستوى الرموز عند تضييق النافذة (±n كلمة) حيث k = التلازمات داخل النافذة وN = مجموع الرموز. ثلاثة مقاييس: G² (دلالة واتجاه)، PMI (يضخّم النادر)، Log-Dice (مستقر عن التكرار، ٠–١٤). النجوم = مستوى الدلالة (p<٠٫٠٥ / ٠٫٠١ / ٠٫٠٠١).",
 
   "dist.hintCount": "الكلمات التي ترد في نفس آيات «{label}»، والعدد هو الآيات المشتركة — اضغط كلمة لعرض آياتها.",
   "dist.hintLl.a": "مرتّبة حسب ",
@@ -47,7 +50,7 @@ export const ar = {
   "dist.hintPmi.b2": "النادرة الحصرية",
   "dist.hintPmi.c": " (وقد تضخّم كلمةً وردت مرّةً واحدة). الرقم الذهبي = الآيات المشتركة، والرمادي = قيمة PMI.",
 
-  "dist.chipTitle": "«{label}» — {count} آية مشتركة · PMI {pmi} · G² {ll}",
+  "dist.chipTitle": "«{label}» — {count} · PMI {pmi} · G² {ll} · Log-Dice {ld}",
 
   "nbr.title": "الجارّ المباشر (الكلمة الملاصقة)",
   "nbr.hint": "الكلمات الملاصقة لـ«{label}» مباشرةً عبر القرآن كلِّه: قبلها أو بعدها. عدٌّ بالمرّات لا بالآيات، وتشمل الحروف (فالجار المباشر — حرف الجر أو العطف — هو المقصود هنا). اضغط كلمة لعرض آياتها.",
@@ -106,6 +109,9 @@ export const en = {
   "dist.sort.ll.title": "Statistical significance (Dunning G²): well-attested, recurrent collocation that chance does not explain — does not inflate the rare",
   "dist.sort.pmi.label": "PMI",
   "dist.sort.pmi.title": "Pointwise mutual information: the surprise ratio — highlights rare, exclusive associations, and may inflate what occurs only once",
+  "dist.sort.logdice.label": "Log-Dice",
+  "dist.sort.logdice.title": "Frequency-stable collocation measure (Rychlý): 0 to 14, neither inflating the rare nor drowned by the common — the modern collocation standard",
+  "dist.methodBody": "Collocates use two statistically valid models: whole-verse (window = whole verse) where k = shared verses and N = verse count; and a token model when the window is narrowed (±n words) where k = in-window co-occurrences and N = total tokens. Three measures: G² (significance + direction), PMI (inflates rare pairs), Log-Dice (frequency-stable, 0–14). Stars = significance level (p<.05 / .01 / .001).",
 
   "dist.hintCount": "Words that appear in the same verses as «{label}»; the count is the shared verses — click a word to view its verses.",
   "dist.hintLl.a": "Ranked by ",
@@ -119,7 +125,7 @@ export const en = {
   "dist.hintPmi.b2": "rare, exclusive",
   "dist.hintPmi.c": " associations (and may inflate a word that appears only once). The gold number = shared verses, the gray = the PMI value.",
 
-  "dist.chipTitle": "«{label}» — {count} shared verses · PMI {pmi} · G² {ll}",
+  "dist.chipTitle": "«{label}» — {count} · PMI {pmi} · G² {ll} · Log-Dice {ld}",
 
   "nbr.title": "Direct neighbours (adjacent word)",
   "nbr.hint": "Words sitting directly next to «{label}» across the whole Qur'an — immediately before or after. Counted by occurrence, not by verse, and particles are kept (the immediate neighbour — a preposition or conjunction — is the point here). Click a word to view its verses.",

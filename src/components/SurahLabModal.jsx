@@ -2,9 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { surahProfile, surahKeyness, surahCohesion, surahSelfSimilarity, surahBonds, sharedRoots } from "../analytics/surah.js";
 import { suraIltifat } from "../analytics/iltifat.js";
 import { surahLetterProfile } from "../analytics/letters.js";
+import { sigTier } from "../analytics/assoc.js";
 import { exportJsonFile, exportCsvFile } from "../graph/exportGraph.js";
+import { loadMunasabat, loadIltifat } from "../data-loader.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { SigStars } from "./Significance.jsx";
+import { MoreButton } from "./MoreButton.jsx";
+import { useReveal } from "../hooks/useReveal.js";
 import { useI18n } from "../i18n/index.js";
+
+// Viridis colour ramp (5 stops) — perceptually uniform and colour-blind-safe. `t` ∈ [0,1].
+const VIRIDIS = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
+function viridis(t) {
+  const x = Math.max(0, Math.min(1, t)) * (VIRIDIS.length - 1);
+  const i = Math.floor(x), f = x - i;
+  const a = VIRIDIS[i], b = VIRIDIS[Math.min(VIRIDIS.length - 1, i + 1)];
+  return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
+}
 
 /* ═══ Sūra analysis lab ═══
  *
@@ -27,13 +41,28 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
   const sid = surah?.surahId;
   const canvasRef = useRef(null);
   const pxRef = useRef(1); // heatmap cell size in px, for hit-testing clicks/hovers
+  const magRef = useRef(null); // magnifier canvas (zoom of the area under the cursor)
 
   // Light lenses — synchronous.
   const profile = useMemo(() => (sid ? surahProfile(sid, verseData) : null), [sid, verseData]);
   const keyness = useMemo(() => (sid ? surahKeyness(sid, verseData, r2v).slice(0, 24) : []), [sid, verseData, r2v]);
   const cohesion = useMemo(() => (sid ? surahCohesion(sid, verseData, r2v) : null), [sid, verseData, r2v]);
-  const iltifat = useMemo(() => (sid && morph ? suraIltifat(sid, verseData, morph) : null), [sid, verseData, morph]);
+  // Iltifāt — prefer the precomputed artifact (segment-level, accurate incl. attached pronouns);
+  // fall back to the live word-level computation if it isn't built.
+  const [iltifatData, setIltifatData] = useState(null);
+  useEffect(() => { if (surah && !iltifatData) loadIltifat().then(setIltifatData).catch(() => {}); }, [surah, iltifatData]);
+  const iltifat = useMemo(() => {
+    if (!sid) return null;
+    const pre = iltifatData?.bySura?.[sid];
+    if (pre) return pre;
+    return morph ? suraIltifat(sid, verseData, morph) : null;
+  }, [sid, iltifatData, verseData, morph]);
   const letters = useMemo(() => (sid ? surahLetterProfile(sid, verseData) : null), [sid, verseData]);
+  const turnsR = useReveal(60, iltifat?.shifts); // cap the turns list (long sūras have many)
+  // Munāsabāt — coherence links with neighbouring sūras (lazy, optional artifact).
+  const [munasabat, setMunasabat] = useState(null);
+  useEffect(() => { if (surah && !munasabat) loadMunasabat().then(setMunasabat).catch(() => {}); }, [surah, munasabat]);
+  const neighbours = useMemo(() => (munasabat && sid ? (munasabat.bySura[sid] || []).map((i) => munasabat.pairs[i]).filter(Boolean) : []), [munasabat, sid]);
 
   // Compare tab: a second sūra, its profile + keyness, and how its distinctive roots overlap A's.
   const [sidB, setSidB] = useState(null);
@@ -73,7 +102,10 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
     return () => { alive = false; cic(id); };
   }, [sid, verseData, r2v, w2v, seedIndex, stopSet]);
 
-  // Draw the self-similarity heatmap when the Structure tab is shown.
+  // Draw the self-similarity heatmap when the Structure tab is shown. Cells are coloured
+  // on a VIRIDIS ramp (perceptually uniform + colour-blind-safe + legible in grayscale, unlike
+  // the old single-hue opacity ramp), and the strongest tier gets a hatch overlay so high
+  // similarity is distinguishable even without colour perception.
   useEffect(() => {
     if (tab !== "structure" || !sim || !canvasRef.current) return;
     const n = sim.size, c = canvasRef.current;
@@ -81,17 +113,38 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
     pxRef.current = px;
     c.width = n * px; c.height = n * px;
     const ctx = c.getContext("2d");
-    // Use the theme-aware gold token (amber on the light theme) so cells stay legible.
-    const gold = getComputedStyle(document.documentElement).getPropertyValue("--gold-500").trim() || "#f5b301";
-    ctx.fillStyle = gold;
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const v = sim.matrix[i][j];
       if (v <= 0) continue;
-      ctx.globalAlpha = Math.min(1, v) ** 0.7;
+      const t = Math.min(1, v) ** 0.7;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = viridis(t);
       ctx.fillRect(j * px, i * px, px, px);
+      if (t >= 0.85 && px >= 3) { // hatch the top tier for non-colour distinguishability
+        ctx.globalAlpha = 0.5; ctx.strokeStyle = "#000"; ctx.lineWidth = 0.6;
+        ctx.beginPath(); ctx.moveTo(j * px, (i + 1) * px); ctx.lineTo((j + 1) * px, i * px); ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
   }, [tab, sim]);
+
+  // Magnifier: when hovering the matrix, draw a zoomed neighbourhood of cells around the
+  // cursor so dense matrices (long sūras) are workable. The center cell is outlined.
+  useEffect(() => {
+    if (tab !== "structure" || !sim || !hover || !magRef.current) return;
+    const R = 6, cell = 11, n = sim.size, size = (2 * R + 1) * cell;
+    const c = magRef.current; c.width = size; c.height = size;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#0b0f17"; ctx.fillRect(0, 0, size, size);
+    for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) {
+      const i = hover.i + di, j = hover.j + dj;
+      if (i < 0 || j < 0 || i >= n || j >= n) continue;
+      const v = sim.matrix[i][j]; if (v <= 0) continue;
+      ctx.fillStyle = viridis(Math.min(1, v) ** 0.7);
+      ctx.fillRect((dj + R) * cell, (di + R) * cell, cell, cell);
+    }
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(R * cell + 0.5, R * cell + 0.5, cell, cell);
+  }, [tab, sim, hover]);
 
   if (!surah || !profile) return null;
   const nav = (a) => setPreview({ ayat: [a] }); // click a verse number → read it inline below (no jump, no cascade)
@@ -152,6 +205,7 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
               {keyness.length === 0 ? <span className="ag-dist-name">{t("surah.none")}</span> : keyness.map((k) => (
                 <button type="button" className="ag-tag ag-tag-btn" key={k.root} onClick={() => onRoot?.(k.root)} title={t("surah.keyChip", { inSura: k.inSura, total: k.total })}>
                   {k.root} <b style={{ color: "var(--gold-400)" }}>{k.inSura}</b>
+                  <SigStars sig={sigTier(k.keyness)} />
                 </button>
               ))}
             </div>
@@ -167,6 +221,23 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
                   </span></li>
                 ))}
               </ul>
+            </>}
+            {neighbours.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("surah.munasabat")}</span></div>
+              <p className="ag-hint">{t("surah.munasabatHint")}</p>
+              {neighbours.map((p, i) => {
+                const otherId = p.a === sid ? p.b : p.a;
+                const otherName = p.a === sid ? p.bName : p.aName;
+                return (
+                  <div key={i} style={{ marginBlockEnd: "var(--space-2)" }}>
+                    <button type="button" className="ag-tag ag-tag-btn" onClick={() => onNavigate?.(otherId, 1)} title={t("surah.munasabatGo")}>
+                      {fmtNum(otherId)}. {otherName}
+                    </button>
+                    {p.sharedKey.length > 0 && <span style={{ marginInlineStart: 6 }}><span className="ag-hint" style={{ display: "inline" }}>{t("surah.munasabatShared")}:</span> {p.sharedKey.map((r) => <button type="button" className="ag-tag ag-tag-btn" key={"k" + r} style={{ fontFamily: "var(--font-quran)" }} onClick={() => onRoot?.(r)}>{r}</button>)}</span>}
+                    {p.seam.length > 0 && <span style={{ marginInlineStart: 6 }}><span className="ag-hint" style={{ display: "inline" }}>{t("surah.munasabatSeam")}:</span> {p.seam.map((r) => <button type="button" className="ag-tag ag-tag-btn" key={"s" + r} style={{ fontFamily: "var(--font-quran)" }} onClick={() => onRoot?.(r)}>{r}</button>)}</span>}
+                  </div>
+                );
+              })}
             </>}
           </div>
         )}
@@ -203,9 +274,25 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
               </p>
               <div style={{ overflow: "auto", maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }}>
                 <canvas ref={canvasRef} style={{ display: "block", cursor: "crosshair" }}
-                  onMouseMove={(ev) => { const c = cellAt(ev); setHover(c ? { ai: sim.ayat[c.i], aj: sim.ayat[c.j], score: sim.matrix[c.i][c.j] } : null); }}
+                  onMouseMove={(ev) => { const c = cellAt(ev); setHover(c ? { ai: sim.ayat[c.i], aj: sim.ayat[c.j], score: sim.matrix[c.i][c.j], i: c.i, j: c.j, cx: ev.clientX, cy: ev.clientY } : null); }}
                   onMouseLeave={() => setHover(null)}
                   onClick={(ev) => { const c = cellAt(ev); if (!c) return; if (c.i === c.j) nav(sim.ayat[c.i]); else previewPair(sim.ayat[c.i], sim.ayat[c.j], sim.matrix[c.i][c.j]); }} />
+              </div>
+              {/* Floating magnifier: a zoom of the cells under the cursor + the readout. */}
+              {hover && hover.i != null && (
+                <div style={{ position: "fixed", zIndex: 60, pointerEvents: "none",
+                  left: Math.min(hover.cx + 18, (typeof window !== "undefined" ? window.innerWidth : 9999) - 180),
+                  top: Math.min(hover.cy + 18, (typeof window !== "undefined" ? window.innerHeight : 9999) - 200),
+                  background: "var(--ink-800)", border: "1px solid var(--gold-500)", borderRadius: 8, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+                  <canvas ref={magRef} style={{ display: "block", imageRendering: "pixelated", borderRadius: 4 }} />
+                  <div className="ag-hint" style={{ marginBlockStart: 4, maxWidth: 150 }}>{t("surah.cellReadout", { ai: hover.ai, aj: hover.aj, pct: Math.round(hover.score * 100) })}</div>
+                </div>
+              )}
+              {/* Colour-scale legend (viridis: low → high overlap). */}
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBlockStart: "var(--space-2)" }}>
+                <span className="ag-hint">{t("surah.scaleLow")}</span>
+                <span aria-hidden="true" style={{ flex: "0 0 120px", height: 8, borderRadius: 4, background: "linear-gradient(to right, rgb(68,1,84), rgb(59,82,139), rgb(33,145,140), rgb(94,201,98), rgb(253,231,37))" }} />
+                <span className="ag-hint">{t("surah.scaleHigh")}</span>
               </div>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("surah.echoes")}</span></div>
               <p className="ag-hint">{t("surah.echoesHint")}</p>
@@ -247,18 +334,24 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("surah.turns")} ({fmtNum(iltifat.shifts.length)})</span></div>
               {iltifat.shifts.length === 0 ? <span className="ag-dist-name">{t("surah.none")}</span> : (
                 <ul className="ag-phrase-list">
-                  {iltifat.shifts.map((s, i) => (
+                  {iltifat.shifts.slice(0, turnsR.limit).map((s, i) => {
+                    // from/to are codes in the shift's own dimension; resolve per type.
+                    const lab = (val) => s.type === "person" ? t(`surah.person.${val}`)
+                      : s.type === "number" ? t(`surah.num.${val}`)
+                      : s.type === "gender" ? t(`surah.gender.${val}`)
+                      : t(`morph.${s.type}.${val}`); // aspect / voice → morph.aspect.* / morph.voice.*
+                    return (
                     <li key={i}><span className="ag-modal-row" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span className="ag-badge" style={{ background: s.type === "number" ? "var(--surface-3)" : "var(--gold-500)", color: "#fff" }}>{t(`surah.shift.${s.type}`)}</span>
+                      <span className="ag-badge" style={{ background: s.type === "person" ? "var(--gold-500)" : "var(--surface-3)", color: "#fff" }}>{t(`surah.shift.${s.type}`)}</span>
                       <button type="button" className="ag-tag ag-tag-btn" onClick={() => previewPair(s.a, s.b)}>{fmtNum(s.a)}→{fmtNum(s.b)}</button>
                       <span className="ag-dist-name">
-                        {t(`surah.person.${s.from}`)}{s.type === "number" && s.fromNumber ? ` · ${t(`surah.num.${s.fromNumber}`)}` : ""}
-                        <span style={{ color: "var(--text-faint)" }}> → </span>
-                        {t(`surah.person.${s.to}`)}{s.type === "number" && s.toNumber ? ` · ${t(`surah.num.${s.toNumber}`)}` : ""}
+                        {lab(s.from)}<span style={{ color: "var(--text-faint)" }}> → </span>{lab(s.to)}
                       </span>
                       <span style={{ fontFamily: "var(--font-quran)", color: "var(--text-faint)" }}>{s.fromSample} ⇠ {s.toSample}</span>
                     </span></li>
-                  ))}
+                    );
+                  })}
+                  <li><MoreButton shown={turnsR.limit} total={iltifat.shifts.length} step={60} onMore={turnsR.more} /></li>
                 </ul>
               )}
             </>}

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { wordGroupKey } from "../arabic-utils.js";
 import { looseResolve } from "../search.js";
 import { distributionBySura, collocations, mergeCollocations } from "../analytics/stats.js";
-import { exportJsonFile, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
+import { exportBundle, exportTextFile, buildResultBibtex } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { SaveButton } from "./SaveButton.jsx";
+import { DisclosurePanel } from "./DisclosurePanel.jsx";
+import { SigStars, fmtMetric } from "./Significance.jsx";
 import { useI18n } from "../i18n/index.js";
-import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* ═══ Compare two terms ═══
  *
@@ -22,11 +24,9 @@ import { useWorkspace } from "../hooks/useWorkspace.js";
 
 const MODES = ["exact", "lemma", "root"]; // labels resolved via t("cmp.mode.*") at render
 const MODE_BADGE = { exact: "t-word", lemma: "t-lemma", root: "t-root" };
-const COLLOC_SORTS = ["count", "ll", "pmi"]; // labels via t("cmp.sort.*")
+const COLLOC_SORTS = ["count", "ll", "pmi", "logdice"]; // labels via t("cmp.sort.*")
 const A_COLOR = "var(--gold-400)";
 const B_COLOR = "var(--viridian-400)";
-
-const fmtMetric = (v) => (v == null ? "" : Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1));
 
 // One editable term slot: a mode segment + a search field, plus the current term. The
 // query is resolved forgivingly (looseResolve): a lone match is set straight away, but an
@@ -86,7 +86,6 @@ function TermSlot({ term, color, indices, precision, searchAlias, searchAliasFuz
 
 export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, verseData, surahList, stopSet, precision, onNavigate, onPick, onChange, onClose }) {
   const { t } = useI18n();
-  const ws = useWorkspace();
   const [A, setA] = useState(cmp?.A || null);
   const [B, setB] = useState(cmp?.B || null);
   const [sort, setSort] = useState("ll");
@@ -143,7 +142,7 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
 
   if (!cmp) return null;
 
-  const metricOf = (c) => (sort === "pmi" ? c.pmi : sort === "ll" ? c.ll : null);
+  const metricOf = (c) => (sort === "pmi" ? c.pmi : sort === "ll" ? c.ll : sort === "logdice" ? c.logdice : null);
   // A word's highlight colour: A's gold, B's teal, or none — by each term's own mode.
   const wordColor = (w) => (A && wordGroupKey(w, A.mode) === A.lookup ? A_COLOR : B && wordGroupKey(w, B.mode) === B.lookup ? B_COLOR : null);
   const chip = (c, color, mode) => {
@@ -153,6 +152,7 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
         title={t("cmp.chipTitle", { label: c.label, count: c.count, pmi: c.pmi.toFixed(2), ll: c.ll.toFixed(1) })}>
         {c.label} <b style={{ color }}>{c.count}</b>
         {mv != null && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{fmtMetric(mv)}</span>}
+        <SigStars sig={c.sig} />
       </button>
     );
   };
@@ -171,19 +171,21 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
       </>)}
       actions={<>
             {ready && (
-              <button type="button" className="ag-btn" title={t("ws.saveTitle")}
-                onClick={() => { ws.saveItem({ type: "compare", title: `${A.label} ⇄ ${B.label}`, payload: { A, B } }); ws.toast(t("ws.saved")); }}>★ {t("ws.save")}</button>
+              <SaveButton item={{ type: "compare", title: `${A.label} ⇄ ${B.label}`, payload: { A, B } }} label={t("ws.save")} />
             )}
             {ready && (
               <button type="button" className="ag-btn" title={t("cmp.exportTitle")}
-                onClick={() => exportJsonFile({
-                  a: { term: A.label, mode: A.mode, total: data.totalA, surahCount: data.surasA },
-                  b: { term: B.label, mode: B.mode, total: data.totalB, surahCount: data.surasB },
-                  collocationSort: sort,
-                  distribution: data.rows.map((r) => ({ sura: r.sura, name: r.name, a: r.a, b: r.b })),
-                  sharedCollocations: data.merged.shared.map((s) => ({ word: s.label, aSharedVerses: s.a.count, bSharedVerses: s.b.count, aLL: s.a.ll, bLL: s.b.ll })),
-                  onlyA: data.merged.onlyA.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
-                  onlyB: data.merged.onlyB.map((c) => ({ word: c.label, sharedVerses: c.count, pmi: c.pmi, logLikelihood: c.ll })),
+                onClick={() => exportBundle({
+                  method: "compare-terms",
+                  params: { a: { term: A.lookup, label: A.label, mode: A.mode }, b: { term: B.lookup, label: B.label, mode: B.mode }, collocationModel: "verse-document", sort },
+                  data: {
+                    a: { total: data.totalA, surahCount: data.surasA },
+                    b: { total: data.totalB, surahCount: data.surasB },
+                    distribution: data.rows.map((r) => ({ sura: r.sura, name: r.name, a: r.a, b: r.b })),
+                    sharedCollocations: data.merged.shared.map((s) => ({ word: s.label, aCount: s.a.count, bCount: s.b.count, aLL: s.a.ll, bLL: s.b.ll, aLogDice: s.a.logdice, bLogDice: s.b.logdice })),
+                    onlyA: data.merged.onlyA.map((c) => ({ word: c.label, count: c.count, pmi: c.pmi, logLikelihood: c.ll, logDice: c.logdice, significance: c.sig })),
+                    onlyB: data.merged.onlyB.map((c) => ({ word: c.label, count: c.count, pmi: c.pmi, logLikelihood: c.ll, logDice: c.logdice, significance: c.sig })),
+                  },
                 }, t("cmp.fileName", { a: A.label, b: B.label }))}>⤓ JSON</button>
             )}
             {ready && (
@@ -264,6 +266,7 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
                   <button type="button" key={id} className={sort === id ? "is-on" : ""} aria-pressed={sort === id} onClick={() => setSort(id)}>{t("cmp.sort." + id)}</button>
                 ))}
               </div>
+              <DisclosurePanel label={t("ui.method")}><p style={{ margin: 0 }}>{t("cmp.methodBody")}</p></DisclosurePanel>
 
               <div className="ag-cmp-coll-h">{t("cmp.shared")} <b>{data.merged.shared.length}</b></div>
               <div className="ag-dist-tags">
@@ -274,6 +277,7 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
                       title={t("cmp.sharedChipTitle", { label: s.label, aLabel: A.label, aCount: s.a.count, bLabel: B.label, bCount: s.b.count })}>
                       {s.label} <b style={{ color: A_COLOR }}>{s.a.count}</b><span style={{ color: "var(--text-faint)" }}>/</span><b style={{ color: B_COLOR }}>{s.b.count}</b>
                       {mv != null && <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)", marginInlineStart: 4 }}>{fmtMetric(mv)}</span>}
+                      <SigStars sig={Math.min(s.a.sig, s.b.sig)} />
                     </button>
                   );
                 })}

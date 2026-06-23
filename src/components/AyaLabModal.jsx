@@ -4,6 +4,7 @@ import { verseDiff } from "../analytics/diff.js";
 import { verseAntithesis } from "../analytics/relations.js";
 import { formRoman } from "../morphology.js";
 import { exportJsonFile } from "../graph/exportGraph.js";
+import { loadMutashabihat } from "../data-loader.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { useI18n } from "../i18n/index.js";
@@ -34,6 +35,10 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
 
   const profile = useMemo(() => (centerKey ? verseProfile(centerKey, verseData, r2v, morph) : null), [centerKey, verseData, r2v, morph]);
   const antithesis = useMemo(() => (centerKey && relations ? verseAntithesis(centerKey, relations) : []), [centerKey, relations]);
+  // Near-identical verses (mutashābihāt) for the centre — lazy, optional artifact.
+  const [mutab, setMutab] = useState(null);
+  useEffect(() => { if (aya && !mutab) loadMutashabihat().then(setMutab).catch(() => {}); }, [aya, mutab]);
+  const nearTwins = useMemo(() => (centerKey && mutab ? mutab.byVerse?.[centerKey] || [] : []), [centerKey, mutab]);
   const [sim, setSim] = useState(null);
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { setPreview(centerKey || null); setExprHi(null); }, [centerKey]); // preview follows the centre verse
@@ -125,6 +130,24 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
                         return <button type="button" className="ag-tag ag-tag-btn" key={vk} onClick={() => setPreview(vk)} title={t("aya.antithesisVerse")}>{`${s}:${a}`}</button>;
                       })}</span>}
                     </span></li>
+                  );
+                })}
+              </ul>
+            </>}
+            {nearTwins.length > 0 && <>
+              <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("aya.mutashabihat")} ({fmtNum(nearTwins.length)})</span></div>
+              <p className="ag-hint">{t("aya.mutashabihatHint")}</p>
+              <ul className="ag-phrase-list">
+                {nearTwins.slice(0, 30).map((p) => {
+                  const ov = verseData[p.other]; if (!ov) return null;
+                  return (
+                    <li key={p.other} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button type="button" className={"ag-modal-row" + (preview === p.other ? " is-on" : "")} style={{ flex: 1 }} onClick={() => { setPreview(p.other); setShowDiff(true); }} title={t("aya.mutashabihatClick")} aria-pressed={preview === p.other}>
+                        <span className="ag-ayah-ref"><span className="ag-ayah-surah">{ov.sn}</span><span className="ag-ayah-num">{fmtNum(ov.a)}</span></span>
+                        <span className="ag-dist-num" style={{ color: "var(--gold-400)" }}>{p.changed === 0 ? t("aya.twinIdentical") : t("aya.twinDiff", { n: p.changed })}</span>
+                      </button>
+                      <button type="button" className="ag-btn" title={t("aya.goTo")} aria-label={t("aya.goTo")} onClick={() => navTo(p.other)}>⌖</button>
+                    </li>
                   );
                 })}
               </ul>

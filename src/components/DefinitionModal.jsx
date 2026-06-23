@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { loadLexicon, loadLexiconFullShard, loadLexiconManifest } from "../data-loader.js";
 import { shardOf } from "../lexiconShard.js";
 import { ModalShell } from "./ModalShell.jsx";
+import { ErrorState, LoadingState, EmptyState } from "./States.jsx";
 import { useI18n } from "../i18n/index.js";
 import { buildBibtex, buildRis, exportTextFile } from "../graph/exportGraph.js";
 
@@ -16,18 +17,26 @@ export function DefinitionModal({ def, onClose }) {
   const { t } = useI18n();
   const [manifest, setManifest] = useState(null);
   const [entry, setEntry] = useState(undefined); // concise { c, f, cite } | null (absent) | undefined (loading)
+  const [err, setErr] = useState(false);         // the concise fetch FAILED (vs. loaded-but-absent)
   const [full, setFull] = useState(undefined);   // full article string | undefined
   const [open, setOpen] = useState(false);
+  const [retry, setRetry] = useState(0);
+
+  const load = useCallback((live) => {
+    setEntry(undefined); setErr(false); setFull(undefined); setOpen(false);
+    loadLexiconManifest().then((m) => { if (live()) setManifest(m); }).catch(() => {});
+    loadLexicon(def.lexicon)
+      .then((map) => { if (live()) setEntry(map?.[def.root] || null); })
+      .catch(() => { if (live()) { setEntry(null); setErr(true); } });
+  }, [def]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!def) return undefined;
-    let live = true;
-    setEntry(undefined); setFull(undefined); setOpen(false);
-    loadLexiconManifest().then((m) => { if (live) setManifest(m); }).catch(() => {});
-    loadLexicon(def.lexicon).then((map) => { if (live) setEntry(map?.[def.root] || null); }).catch(() => { if (live) setEntry(null); });
-    return () => { live = false; };
-  }, [def]);
+    let alive = true;
+    load(() => alive);
+    return () => { alive = false; };
+  }, [def, load, retry]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!def) return null;
@@ -59,11 +68,10 @@ export function DefinitionModal({ def, onClose }) {
         <span className="ag-modal-count">{lex?.label || def.lexicon}</span>
       </>}>
         <div className="ag-dist-body">
-          <div className="ag-insp-mean" style={!entry ? { color: "var(--text-faint)", fontStyle: "italic" } : { whiteSpace: "pre-wrap" }}>
-            {entry === undefined ? t("common.insp.lexLoading")
-              : entry ? body
-              : t("common.insp.lexNone")}
-          </div>
+          {entry === undefined ? <LoadingState message={t("common.insp.lexLoading")} />
+            : err ? <ErrorState onRetry={() => setRetry((n) => n + 1)} />
+            : !entry ? <EmptyState message={t("common.insp.lexNone")} />
+            : <div className="ag-insp-mean" style={{ whiteSpace: "pre-wrap" }}>{body}</div>}
           {entry && (
             <div className="ag-insp-cite" title={t("common.cite.title")}>
               {cite && <span className="ag-insp-cite-pg">{t("common.cite.volPage", { vol: cite.vol, page: cite.page })}</span>}
