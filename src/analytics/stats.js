@@ -1,4 +1,7 @@
 import { wordGroupKey } from "../arabic-utils.js";
+import { association } from "./assoc.js";
+
+export { association } from "./assoc.js";
 
 /* ═══ Pure Qur'an-internal statistics ═══
  *
@@ -32,83 +35,102 @@ export function distributionBySura(lookup, index, verseData, surahList, mode) {
   return surahList.map((s) => ({ sura: s.id, name: s.name, count: counts[s.id] || 0 }));
 }
 
-/* Association strength of a co-occurrence, on the standard 2×2 contingency table
- * over verses (the "documents"):
- *   k  = verses where BOTH term and neighbour occur
- *   a  = verses with the term, b = verses with the neighbour, N = total verses
- * Returns { pmi, ll } where:
- *   - pmi : pointwise mutual information, log2( k·N / (a·b) ) — how much more often
- *           the two co-occur than chance would predict (0 = independent, >0 = drawn
- *           together, <0 = repelled). Intuitive but unstable for rare pairs.
- *   - ll  : Dunning's log-likelihood ratio G² — a significance score that does NOT
- *           over-reward rare hapax pairs the way PMI does; SIGNED (negative when the
- *           pair co-occurs LESS than expected) so attraction/avoidance are distinct.
- * This turns "raw co-occurrence count" into a real corpus-linguistic measure. */
-export function association(k, a, b, N) {
-  if (!k || !a || !b || !N) return { pmi: 0, ll: 0 };
-  const pmi = Math.log2((k * N) / (a * b));
-  // Observed 2×2 cells (term × neighbour): both / term-only / neigh-only / neither.
-  const o11 = k, o12 = a - k, o21 = b - k, o22 = N - a - b + k;
-  // Expected cells under independence.
-  const e11 = (a * b) / N, e12 = (a * (N - b)) / N, e21 = ((N - a) * b) / N, e22 = ((N - a) * (N - b)) / N;
-  const term = (o, e) => (o > 0 && e > 0 ? o * Math.log(o / e) : 0);
-  let g2 = 2 * (term(o11, e11) + term(o12, e12) + term(o21, e21) + term(o22, e22));
-  if (!Number.isFinite(g2) || g2 < 0) g2 = 0;
-  const ll = o11 >= e11 ? g2 : -g2; // sign by attraction vs. avoidance
-  return { pmi, ll };
+/* `association(k, a, b, N)` (the standard 2×2 contingency measure over verses)
+ * now lives in ./assoc.js so the runtime and the offline build scripts share one
+ * definition. It returns { pmi, ll, logdice, sig } — PMI, signed Dunning G²,
+ * frequency-stable Log-Dice, and a significance tier (0..3). Re-exported above. */
+
+/* Token-frequency of every grouping key in the corpus, memoised per (verseData, mode):
+ * key → number of TOKENS with that key, plus `_N` = total tokens. The token model for
+ * windowed collocation needs these corpus-wide marginals. */
+const tokFreqCache = new WeakMap();
+function tokenFreq(verseData, mode) {
+  let byMode = tokFreqCache.get(verseData);
+  if (!byMode) tokFreqCache.set(verseData, (byMode = new Map()));
+  const mk = mode || "exact";
+  let m = byMode.get(mk);
+  if (m) return m;
+  m = new Map();
+  let total = 0;
+  for (const vk in verseData) for (const w of verseData[vk].words || []) {
+    const k = keyOf(w, mode);
+    if (!k) continue;
+    m.set(k, (m.get(k) || 0) + 1);
+    total++;
+  }
+  m.set("__N__", total);
+  byMode.set(mk, m);
+  return m;
 }
 
-/* Words that co-occur with `lookup` inside the same verse.
- * `window` limits to ±N word positions around an occurrence (default = whole verse).
- * Stop words, and the term itself, are excluded. `opts.N` is the corpus verse count
- * (for significance; defaults to verseData size) and `opts.sort` ∈ "count"|"pmi"|"ll"
- * picks the ranking (default "count"). Each result also carries pmi + ll so the UI
- * can show significance regardless of sort.
+/* Words that co-occur with `lookup`, ranked by association strength.
+ * `window` limits to ±N word positions around an occurrence (default 99 = whole verse).
+ * Stop words, and the term itself, are excluded. `opts.sort` ∈ "count"|"pmi"|"ll"|"logdice"
+ * picks the ranking (default "count"). Each result carries pmi + ll + logdice + sig.
  *
- * Significance (PMI / G²) is a VERSE-document model: the 2×2 table counts verses, so
- * it is only valid when a "co-occurrence" means "in the same verse" — i.e. whole-verse
- * mode (window ≥ 99). With a narrower window the co-occurrence count `k` is windowed
- * but the marginals (verses containing each term) are not, which would mix two
- * populations and bias the figures. So in windowed mode pmi/ll are returned as null
- * (the ranking falls back to raw count) rather than reporting an inconsistent number.
- * Returns [{ key, label, count, pmi, ll }] (pmi/ll null in windowed mode). */
+ * Two statistically valid models, picked by window:
+ *   - WHOLE-VERSE (window ≥ 99): the verse-document 2×2 table — k = verses where both
+ *     occur, a/b = verses containing each, N = total verses. `count` is shared verses.
+ *   - WINDOWED (window < 99): the TOKEN model — k = token-level co-occurrences inside the
+ *     ±window, a/b = corpus token frequencies, N = total tokens. `count` is token-level
+ *     windowed co-occurrences. `opts.asym` ∈ "sym"|"left"|"right" restricts the window side.
+ * Both feed association() so PMI / Log-Dice / G² / significance are valid in either model
+ * (no more null metrics in windowed mode). Returns [{ key, label, count, pmi, ll, logdice, sig }]. */
 export function collocations(lookup, mode, index, verseData, stopSet, window = 99, opts = {}) {
+  const wholeVerse = window >= 99;
+  const isStop = (w, k) => k === lookup || (stopSet && (stopSet.has(w.norm) || stopSet.has(k)));
   const tally = {};   // key → count
   const labels = {};  // key → a representative surface form
+  const note = (w, k) => { if (!labels[k]) labels[k] = w.orig; };
+
+  if (wholeVerse) {
+    for (const vk of index[lookup] || []) {
+      const words = verseData[vk]?.words || [];
+      if (!words.some((w) => keyOf(w, mode) === lookup)) continue;
+      // Count each neighbour ONCE per verse (shared-verse count), so the figure equals
+      // what opening the neighbour shows — not per-occurrence.
+      const keysHere = new Set();
+      for (const w of words) {
+        const k = keyOf(w, mode);
+        if (isStop(w, k)) continue;
+        keysHere.add(k); note(w, k);
+      }
+      for (const k of keysHere) tally[k] = (tally[k] || 0) + 1;
+    }
+    const N = opts.N || Object.keys(verseData).length;
+    const a = (index[lookup] || []).length; // verses containing the term
+    return rankCollocations(tally, labels, (k) => association(tally[k], a, (index[k] || []).length, N), opts.sort);
+  }
+
+  // Windowed token model.
+  const asym = opts.asym || "sym";
   for (const vk of index[lookup] || []) {
     const words = verseData[vk]?.words || [];
-    const hits = [];
-    words.forEach((w, i) => { if (keyOf(w, mode) === lookup) hits.push(i); });
-    if (!hits.length) continue;
-    const within = new Set();
-    for (const h of hits) for (let j = Math.max(0, h - window); j <= Math.min(words.length - 1, h + window); j++) within.add(j);
-    // Count each neighbour ONCE per verse (the number of shared verses), so the
-    // count equals what opening the neighbour shows — not per-occurrence.
-    const keysHere = new Set();
-    for (const j of within) {
-      const w = words[j];
-      const k = keyOf(w, mode);
-      // Drop a neighbour if EITHER its surface form or its grouping key is a stop
-      // word — matching getUW() in the graph, so a particle hidden by its root/lemma
-      // key (not just its surface) doesn't leak into the collocation list.
-      if (k === lookup || (stopSet && (stopSet.has(w.norm) || stopSet.has(k)))) continue;
-      keysHere.add(k);
-      if (!labels[k]) labels[k] = w.orig;
-    }
-    for (const k of keysHere) tally[k] = (tally[k] || 0) + 1;
+    words.forEach((w, h) => {
+      if (keyOf(w, mode) !== lookup) return;
+      const lo = asym === "right" ? h + 1 : Math.max(0, h - window);
+      const hi = asym === "left" ? h - 1 : Math.min(words.length - 1, h + window);
+      for (let j = lo; j <= hi; j++) {
+        if (j === h) continue;
+        const nw = words[j], k = keyOf(nw, mode);
+        if (isStop(nw, k)) continue;
+        tally[k] = (tally[k] || 0) + 1; note(nw, k); // token-level: each window slot counts
+      }
+    });
   }
-  const N = opts.N || Object.keys(verseData).length;
-  const a = (index[lookup] || []).length; // verses containing the term
-  const wholeVerse = window >= 99; // the only window where the verse-document table is valid
-  let sort = opts.sort || "count";
-  if (!wholeVerse && (sort === "pmi" || sort === "ll")) sort = "count"; // no valid metric to sort by
-  const out = Object.keys(tally).map((k) => {
-    const b = (index[k] || []).length; // verses containing the neighbour
-    const { pmi, ll } = wholeVerse ? association(tally[k], a, b, N) : { pmi: null, ll: null };
-    return { key: k, label: labels[k], count: tally[k], pmi, ll };
-  });
+  const tf = tokenFreq(verseData, mode);
+  const Nt = tf.get("__N__") || 1;
+  const fn = tf.get(lookup) || 1; // node token frequency
+  return rankCollocations(tally, labels, (k) => association(tally[k], fn, tf.get(k) || 0, Nt), opts.sort);
+}
+
+/* Shared assembly + sort for both collocation models. `assoc(key)` returns the
+ * { pmi, ll, logdice, sig } record for a neighbour key. */
+function rankCollocations(tally, labels, assoc, sort = "count") {
+  const out = Object.keys(tally).map((k) => ({ key: k, label: labels[k], count: tally[k], ...assoc(k) }));
   const cmp = sort === "pmi" ? (x, y) => y.pmi - x.pmi
     : sort === "ll" ? (x, y) => y.ll - x.ll
+    : sort === "logdice" ? (x, y) => y.logdice - x.logdice
     : (x, y) => y.count - x.count;
   return out.sort((x, y) => cmp(x, y) || x.key.localeCompare(y.key));
 }

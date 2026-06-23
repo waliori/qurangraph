@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { matchPhrase } from "../src/analytics/expressions.js";
 import { parseMorphology, aggregateWord } from "./lib/parse.js";
+import { g2, logDice } from "../src/analytics/assoc.js";
 
 /* ═══ Multi-word expression inventory (build step) ═══
  *
@@ -139,16 +140,16 @@ const compoundList = [...compounds.values()]
   .sort((x, y) => y.count - x.count || y.len - x.len)
   .slice(0, 800);
 
-/* ── Collocation ranking by log-likelihood (G²) over the verb×noun table ──────── */
-const g2 = (o11, r1, c1, N) => {
-  const o12 = r1 - o11, o21 = c1 - o11, o22 = N - r1 - c1 + o11;
-  const e = (a, b) => (a * b) / N;
-  const t = (o, ex) => (o > 0 && ex > 0 ? o * Math.log(o / ex) : 0);
-  return 2 * (t(o11, e(r1, c1)) + t(o12, e(r1, N - c1)) + t(o21, e(N - r1, c1)) + t(o22, e(N - r1, N - c1)));
-};
+/* ── Collocation ranking over the verb×noun table — shared metrics (assoc.js) ───
+ * `ll` = signed Dunning G² (significance + direction); `logdice` = frequency-stable
+ * Log-Dice (0..14), the same measures the runtime collocation lens reports. */
 const collocList = [...colloc.values()]
   .filter((c) => c.count >= 3)
-  .map((c) => ({ ...c, ll: +g2(c.count, verbTot.get(c.verb), nounTot.get(c.noun), colSlots).toFixed(2) }))
+  .map((c) => ({
+    ...c,
+    ll: +g2(c.count, verbTot.get(c.verb), nounTot.get(c.noun), colSlots).toFixed(2),
+    logdice: +logDice(c.count, verbTot.get(c.verb), nounTot.get(c.noun)).toFixed(2),
+  }))
   .sort((x, y) => y.ll - x.ll)
   .slice(0, 700);
 

@@ -53,25 +53,43 @@ describe("collocations", () => {
     expect(c.find((x) => x.key === "قول")).toBeUndefined();
   });
 
-  it("returns null PMI/LL in windowed mode (verse-document table is invalid there)", () => {
-    // With a narrow window the co-occurrence count is windowed but the marginals are
-    // whole-verse, so the significance table would mix populations — report null, not a
-    // biased number, and fall back to count ranking.
-    const c = collocations("نور", "exact", index, verseData, stop, 1, { sort: "pmi" });
-    for (const x of c) { expect(x.pmi).toBeNull(); expect(x.ll).toBeNull(); }
-    // count ranking still holds (sort fell back from the unavailable pmi metric).
-    expect(c[0].count).toBeGreaterThanOrEqual(c[c.length - 1].count);
+  it("uses the token model in windowed mode — valid metrics, token-level counts", () => {
+    // With a ±1 window the co-occurrence count is token-level and the marginals are
+    // corpus token frequencies, so PMI/LL/Log-Dice are still well-defined (no nulls).
+    const c = collocations("نور", "exact", index, verseData, stop, 1, { sort: "logdice" });
+    for (const x of c) {
+      expect(x.pmi).toBeTypeOf("number");
+      expect(x.logdice).toBeTypeOf("number");
+      expect(Number.isFinite(x.logdice)).toBe(true);
+    }
+    // logdice ranking holds (descending).
+    for (let i = 1; i < c.length; i++) expect(c[i - 1].logdice).toBeGreaterThanOrEqual(c[i].logdice);
   });
 
-  it("attaches PMI + signed log-likelihood to every neighbour", () => {
+  it("respects window asymmetry (left/right) in the token model", () => {
+    // In "2:3" نور is followed by ارض; with asym:"left" the after-neighbour ارض drops out.
+    const right = collocations("نور", "exact", index, verseData, stop, 1, { asym: "right" });
+    const left = collocations("نور", "exact", index, verseData, stop, 1, { asym: "left" });
+    expect(right.find((x) => x.key === "ارض")).toBeTruthy();
+    expect(left.find((x) => x.key === "ارض")).toBeFalsy();
+  });
+
+  it("attaches PMI, signed G², Log-Dice and a significance tier to every neighbour", () => {
     const c = collocations("نور", "exact", index, verseData, stop, 99, { sort: "ll" });
     const m = Object.fromEntries(c.map((x) => [x.key, x]));
     expect(m["سماء"].pmi).toBeTypeOf("number");
     expect(m["سماء"].ll).toBeTypeOf("number");
+    expect(m["سماء"].logdice).toBeTypeOf("number");
+    expect(m["سماء"].sig).toBeTypeOf("number");
     // نور saturates this toy corpus (every verse), so its neighbours sit exactly at
-    // chance — the figures are finite zeros, not NaN. (Positivity is covered below.)
+    // chance — the figures are finite, not NaN. (Positivity is covered below.)
     expect(Number.isFinite(m["سماء"].pmi)).toBe(true);
     expect(Number.isFinite(m["سماء"].ll)).toBe(true);
+  });
+
+  it("can rank by Log-Dice", () => {
+    const c = collocations("نور", "exact", index, verseData, stop, 99, { sort: "logdice" });
+    for (let i = 1; i < c.length; i++) expect(c[i - 1].logdice).toBeGreaterThanOrEqual(c[i].logdice);
   });
 });
 
@@ -89,8 +107,16 @@ describe("association", () => {
     expect(association(1, 100, 100, 1000).ll).toBeLessThan(0);
   });
   it("returns zeros for degenerate inputs", () => {
-    expect(association(0, 5, 5, 100)).toEqual({ pmi: 0, ll: 0 });
-    expect(association(3, 0, 5, 100)).toEqual({ pmi: 0, ll: 0 });
+    expect(association(0, 5, 5, 100)).toEqual({ pmi: 0, ll: 0, logdice: 0, sig: 0 });
+    expect(association(3, 0, 5, 100)).toEqual({ pmi: 0, ll: 0, logdice: 0, sig: 0 });
+  });
+  it("reports Log-Dice (frequency-stable, ≤14) and a significance tier", () => {
+    // Perfect co-occurrence: every X is a Y and vice-versa → Log-Dice = 14 (the ceiling).
+    expect(association(50, 50, 50, 1000).logdice).toBeCloseTo(14, 6);
+    // A strongly attracted pair clears the p<.001 critical value (tier 3).
+    expect(association(50, 100, 100, 1000).sig).toBe(3);
+    // An independent pair is not significant (tier 0).
+    expect(association(10, 100, 100, 1000).sig).toBe(0);
   });
 });
 

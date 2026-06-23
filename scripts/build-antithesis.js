@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { norm, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "../src/arabic-utils.js";
+import { pmi as pmiScore } from "../src/analytics/assoc.js";
 
 /* ═══ Lexical relations: opposition (طباق/مقابلة) — build step ═══
  *
@@ -94,7 +95,7 @@ const vec = new Map(), mag = new Map();
 for (const [r, ctx] of cooc) {
   if (df.get(r) < MIN_DF || df.get(r) > MAX_DF) continue;
   const m = new Map(); let sq = 0;
-  for (const [c, k] of ctx) { if (df.get(c) < MIN_DF || df.get(c) > MAX_DF) continue; const pmi = Math.log2((k * N) / (df.get(r) * df.get(c))); if (pmi > 0) { m.set(c, pmi); sq += pmi * pmi; } }
+  for (const [c, k] of ctx) { if (df.get(c) < MIN_DF || df.get(c) > MAX_DF) continue; const p = pmiScore(k, df.get(r), df.get(c), N); if (p > 0) { m.set(c, p); sq += p * p; } }
   if (m.size) { vec.set(r, m); mag.set(r, Math.sqrt(sq)); }
 }
 const cosine = (a, b) => { const va = vec.get(a), vb = vec.get(b); if (!va || !vb) return 0; const [s, l] = va.size < vb.size ? [va, vb] : [vb, va]; let dot = 0; for (const [c, w] of s) { const o = l.get(c); if (o) dot += w * o; } return +(dot / ((mag.get(a) || 1) * (mag.get(b) || 1))).toFixed(3); };

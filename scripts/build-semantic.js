@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { norm, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "../src/arabic-utils.js";
+import { pmi as pmiScore } from "../src/analytics/assoc.js";
 
 /* ═══ Distributional semantic neighbours (build step) ═══
  *
@@ -24,6 +25,7 @@ for (const f of [HAFS, ROOTS]) {
 const TOP_K = 12;        // neighbours kept per root
 const MIN_DF = 3;        // ignore roots occurring in <3 verses (too sparse to be reliable)
 const MIN_SIM = 0.08;    // drop weak ties so the list stays meaningful
+const SYNTAGM_MIN = 0.25; // direct co-occurrence / min(df) above this → syntagmatic, else paradigmatic
 const MAX_DF_FRAC = 0.25; // backstop: a root in >25% of verses is too ubiquitous to inform
 
 const hafs = JSON.parse(readFileSync(HAFS, "utf8"));
@@ -74,8 +76,8 @@ for (const r of eligible) {
   let sq = 0;
   for (const [c, k] of ctx) {
     if (df.get(c) < MIN_DF || df.get(c) > dfCeil) continue;
-    const pmi = Math.log2((k * N) / (df.get(r) * df.get(c)));
-    if (pmi > 0) { vec.set(c, pmi); sq += pmi * pmi; }
+    const p = pmiScore(k, df.get(r), df.get(c), N);
+    if (p > 0) { vec.set(c, p); sq += p * p; }
   }
   if (vec.size) { vectors.set(r, vec); norms.set(r, Math.sqrt(sq)); }
 }
@@ -100,7 +102,16 @@ for (const [r, vec] of vectors) {
     if (sim >= MIN_SIM) scored.push([o, sim]);
   }
   scored.sort((a, b) => b[1] - a[1]);
-  if (scored.length) out[r] = scored.slice(0, TOP_K).map(([o, s]) => [o, +s.toFixed(3)]);
+  // Relation type: a neighbour that ALSO co-occurs directly with the root often
+  // (relative to the rarer of the two) is SYNTAGMATIC (they go together in a verse);
+  // one that merely shares contexts but seldom co-occurs is PARADIGMATIC (substitutable —
+  // a candidate synonym/antonym). The cosine alone can't tell these apart.
+  if (scored.length) out[r] = scored.slice(0, TOP_K).map(([o, s]) => {
+    const k = cooc.get(r)?.get(o) || 0;
+    const denom = Math.min(df.get(r) || 1, df.get(o) || 1);
+    const rel = denom && k / denom >= SYNTAGM_MIN ? "syntagmatic" : "paradigmatic";
+    return [o, +s.toFixed(3), rel];
+  });
 }
 
 writeFileSync("public/data/semantic-neighbours.json", JSON.stringify(out));
