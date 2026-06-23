@@ -38,7 +38,7 @@ describe("suraIltifat", () => {
     expect(contour[0].person).toBe(3);
     expect(shifts).toHaveLength(2);
     expect(shifts[0]).toMatchObject({ type: "person", a: 4, b: 5, from: 3, to: 1 }); // 3rd → 1st
-    expect(shifts[1]).toMatchObject({ type: "number", from: 1, to: 1, fromNumber: "s", toNumber: "p" }); // divine plural turn
+    expect(shifts[1]).toMatchObject({ type: "number", a: 6, b: 7, from: "s", to: "p" }); // divine plural turn (within 1st person)
   });
   it("is empty without morphology", () => {
     expect(suraIltifat(1, verseData, null).shifts).toEqual([]);

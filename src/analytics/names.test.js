@@ -15,4 +15,16 @@ describe("divineNames", () => {
     expect(divineNames({}).every((n) => n.count === 0)).toBe(true);
     expect(divineNames(null).length).toBe(NAMES_99.length);
   });
+  it("distinguishes the root-FAMILY count from the definite name-FORM count", () => {
+    const w2v = { الرحمن: ["1:1"] };
+    const out = divineNames(r2v, w2v, (nm) => nm);
+    const rahman = out.find((n) => n.name === "الرحمن");
+    expect(rahman.familyCount).toBe(3);
+    expect(rahman.formCount).toBe(1);
+    expect(rahman.count).toBe(rahman.familyCount); // count aliases family (back-compat)
+    expect(out.find((n) => n.name === "الملك").formCount).toBe(0); // form absent here
+  });
+  it("leaves formCount null when no exact index is supplied", () => {
+    expect(divineNames(r2v).every((n) => n.formCount === null)).toBe(true);
+  });
 });

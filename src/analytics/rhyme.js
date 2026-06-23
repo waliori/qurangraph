@@ -94,6 +94,64 @@ export function suraRhymeScheme(suraId, verseData) {
   return { seq, scheme, rawiyScheme, total: seq.length, dominant: scheme[0]?.key || null, dominantRawiy: rawiyScheme[0]?.key || null };
 }
 
+const LONG = "اويى"; // long-vowel letters (madd) for CV / radf / taʾsīs analysis
+const isLong = (ch) => LONG.includes(ch);
+
+/* Articulation (makhraj) groups — a simplified classical grouping so two DIFFERENT rawiy
+ * consonants from the same region count as a near-rhyme (mutaqārib) rather than a clash. */
+const MAKHRAJ = [
+  "ءهعحغخ",   // throat (حلقية)
+  "قك",       // uvular/velar
+  "جشي",      // palatal
+  "ضلنر",     // …approximate apico-/lateral
+  "طدت",      // dental stops
+  "صزس",      // sibilants
+  "ظذث",      // interdentals
+  "فبمو",     // labial
+  "ا",        // ā
+];
+const makhrajOf = (c) => MAKHRAJ.findIndex((g) => g.includes(c));
+
+/* Prosodic profile of a verse ending: { cv, radf, tasis } over the final pausal skeleton.
+ *   cv    — the syllabic weight pattern (C = consonant, V = long vowel), e.g. ـِين → "CV C".
+ *   radf  — a long vowel directly before the rawiy (ridf): ـُون، ـِيم، ـَاب.
+ *   tasis — an alif separated from the rawiy by exactly one consonant (التأسيس): ـَاعِل-class. */
+export function finalProsody(verseText) {
+  const sk = finalSkeleton(verseText);
+  if (!sk) return null;
+  const cv = sk.split("").map((ch) => (isLong(ch) ? "V" : "C")).join("");
+  const n = sk.length;
+  const last = sk[n - 1];
+  const radf = n >= 2 && isLong(sk[n - 2]) && !isLong(last);
+  const tasis = n >= 3 && sk[n - 3] === "ا" && !isLong(sk[n - 2]) && !isLong(last);
+  return { cv, radf, tasis };
+}
+
+/* Classify the fāṣila relation of each ADJACENT pair of verses in a sūra by their rawiy:
+ *   mutamathil — identical rawiy (the prevailing same-rhyme run)
+ *   mutaqarib  — different rawiy but same articulation region (a near-rhyme)
+ *   mukhtalif  — a genuine change of rhyme
+ * Returns { pairs:[{ a, b, type }], counts, dominantRun } where dominantRun is the longest
+ * unbroken mutamāthil stretch (verses). Pure, text-only. */
+export function classifyFawasil(suraId, verseData) {
+  const seq = [];
+  for (const vk in verseData) { const v = verseData[vk]; if (v.s === suraId) seq.push({ a: v.a, rawiy: rawiyKey(v.text) }); }
+  seq.sort((x, y) => x.a - y.a);
+  const pairs = [], counts = { mutamathil: 0, mutaqarib: 0, mukhtalif: 0 };
+  let run = 1, dominantRun = 1;
+  for (let i = 1; i < seq.length; i++) {
+    const p = seq[i - 1].rawiy, q = seq[i].rawiy;
+    let type;
+    if (p && q && p === q) type = "mutamathil";
+    else if (p && q && makhrajOf(p) >= 0 && makhrajOf(p) === makhrajOf(q)) type = "mutaqarib";
+    else type = "mukhtalif";
+    counts[type]++;
+    pairs.push({ a: seq[i - 1].a, b: seq[i].a, type });
+    if (type === "mutamathil") { run++; dominantRun = Math.max(dominantRun, run); } else run = 1;
+  }
+  return { pairs, counts, dominantRun, total: seq.length };
+}
+
 /* Every verse in the corpus that ends on the same rhyme, in muṣḥaf order, excluding
  * `excludeVk`. `opts.by` ∈ "key" (strict ending, default) | "rawiy" (loose, same rawiy
  * consonant). Returns [vk…]. */

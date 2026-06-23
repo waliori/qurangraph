@@ -37,12 +37,19 @@ export const NAMES_99 = [
   ["البديع", "بدع"], ["الباقي", "بقي"], ["الوارث", "ورث"], ["الرشيد", "رشد"], ["الصبور", "صبر"],
 ];
 
-/* The ninety-nine names with their root-family attestation. `r2v` (root → verses) gives the
- * count. Returns [{ name, root, count }] in canonical order — every name, with count 0 (and no
- * root) where unmapped/unattested. The caller links a name to its root's occurrences. */
-export function divineNames(r2v) {
-  return NAMES_99.map(([name, root]) => ({
-    name, root: root || null,
-    count: root && r2v && r2v[root] ? r2v[root].length : 0,
-  }));
+/* The ninety-nine names with their attestation, at TWO distinct levels:
+ *   familyCount — verses containing the name's ROOT family (الباسط → بسط, however inflected)
+ *   formCount   — verses containing the definite name-FORM itself (الباسط as written), or null
+ *                 when no exact index is supplied. Many names have a Qurʾanic root but the
+ *                 definite form is rare or absent, so the two genuinely differ.
+ * `r2v` is root→verses; the optional `w2v` (exact form → verses) + `keyOf` (name → its exact
+ * index key, precision-aware) give the form count. Returns [{ name, root, familyCount,
+ * formCount, count }] in canonical order; `count` aliases familyCount for back-compat. */
+export function divineNames(r2v, w2v, keyOf) {
+  return NAMES_99.map(([name, root]) => {
+    const familyCount = root && r2v && r2v[root] ? r2v[root].length : 0;
+    let formCount = null;
+    if (w2v && keyOf) { const k = keyOf(name); formCount = w2v[k] ? w2v[k].length : 0; }
+    return { name, root: root || null, familyCount, formCount, count: familyCount };
+  });
 }

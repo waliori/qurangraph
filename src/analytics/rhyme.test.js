@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates } from "./rhyme.js";
+import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates, finalProsody, classifyFawasil } from "./rhyme.js";
 
 describe("rhymeKey / finalWord", () => {
   it("captures ridf + rawiy for a consonant close", () => {
@@ -52,6 +52,36 @@ describe("suraRhymeScheme", () => {
     expect(seq[1].key).toBe("ين"); // العالمين
     expect(dominant).toBe("يم"); // يم appears twice (1:1, 1:3) vs ين once
     expect(scheme.find((s) => s.key === "يم").count).toBe(2);
+  });
+});
+
+describe("finalProsody", () => {
+  it("reports CV pattern and the ridf (radf) before a consonant rawiy", () => {
+    const p = finalProsody("الحمد لله رب العالمين"); // العالمين skeleton ا ل ع ا ل م ي ن
+    expect(p.cv).toBe("VCCVCCVC");
+    expect(p.radf).toBe(true);  // long ي directly before rawiy ن
+    expect(p.tasis).toBe(false);
+  });
+  it("flags taʾsīs — an alif one consonant before the rawiy", () => {
+    // قادر skeleton قادر → C ا C C? actually ق ا د ر: alif at -3, د at -2, ر rawiy → taʾsīs
+    const p = finalProsody("ان الله على كل شيء قادر");
+    expect(p.tasis).toBe(true);
+  });
+  it("returns null on empty input", () => { expect(finalProsody("")).toBeNull(); });
+});
+
+describe("classifyFawasil", () => {
+  const verseData = {
+    "1:1": { s: 1, a: 1, text: "بسم الله الرحمن الرحيم" },   // rawiy م
+    "1:2": { s: 1, a: 2, text: "الرحمن الرحيم" },            // rawiy م → mutamāthil
+    "1:3": { s: 1, a: 3, text: "مالك يوم الدين" },           // rawiy ن → ن,م same labial/… group? ن is in ضلنر, م in فبمو → mukhtalif
+  };
+  it("classifies adjacent endings and tracks the longest same-rhyme run", () => {
+    const r = classifyFawasil(1, verseData);
+    expect(r.total).toBe(3);
+    expect(r.pairs[0].type).toBe("mutamathil"); // م = م
+    expect(r.counts.mutamathil).toBe(1);
+    expect(r.dominantRun).toBe(2); // 1:1–1:2 unbroken
   });
 });
 

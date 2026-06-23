@@ -20,33 +20,44 @@ function deixis(words, M, vk) {
   words.forEach((w, i) => {
     const m = morphAt(M, vk, i);
     if (!m || !m.person || (m.pos !== "verb" && m.pos !== "pron")) return;
-    out.push({ person: m.person, number: m.number, gender: m.gender, pos: m.pos, orig: w.orig });
+    out.push({ person: m.person, number: m.number, gender: m.gender, aspect: m.aspect, voice: m.voice, pos: m.pos, orig: w.orig });
   });
   return out;
 }
 
-/* The dominant grammatical person of a verse (mode of its verbs/pronouns, ties → the last —
- * the clause's operative voice), with the number/gender of the deciding token. Returns
- * { person, number, gender, sample } or null when the verse carries no person-bearing word. */
+// Mode of a field over a list (ties → the last, the clause's operative voice).
+function dominant(list, field) {
+  const counts = {};
+  for (const x of list) if (x[field] != null) counts[x[field]] = (counts[x[field]] || 0) + 1;
+  let best = null, bestC = 0;
+  for (let i = list.length - 1; i >= 0; i--) { const val = list[i][field]; if (val == null) continue; if (counts[val] > bestC) { bestC = counts[val]; best = val; } }
+  return best;
+}
+
+/* The dominant grammatical reading of a verse: person/number/gender from verbs+pronouns,
+ * aspect/voice from VERBS only (pronouns carry neither). Returns
+ * { person, number, gender, aspect, voice, sample } or null when the verse has no
+ * person-bearing word. */
 export function versePerson(words, M, vk) {
   const d = deixis(words, M, vk);
   if (!d.length) return null;
-  const counts = {};
-  for (const x of d) counts[x.person] = (counts[x.person] || 0) + 1;
-  let best = d[d.length - 1].person, bestC = 0;
-  for (let i = d.length - 1; i >= 0; i--) { const p = d[i].person; if (counts[p] > bestC) { bestC = counts[p]; best = p; } }
-  const decider = [...d].reverse().find((x) => x.person === best) || d[d.length - 1];
-  return { person: best, number: decider.number, gender: decider.gender, sample: decider.orig };
+  const person = dominant(d, "person");
+  const decider = [...d].reverse().find((x) => x.person === person) || d[d.length - 1];
+  const verbs = d.filter((x) => x.pos === "verb");
+  return { person, number: decider.number, gender: decider.gender, aspect: dominant(verbs, "aspect"), voice: dominant(verbs, "voice"), sample: decider.orig };
 }
 
 const SUR = (vk) => { const [s, a] = vk.split(":").map(Number); return [s, a]; };
 
-/* Person/number shifts across a sūra. Returns
- *   { contour:[{ a, person, number, gender, sample }|null …], shifts:[{ a, b, type, from, to,
- *     fromNumber, toNumber, fromSample, toSample }] }
- * `contour` is every āya in order with its dominant person (null = no verb/pronoun); `shifts`
- * are consecutive āyāt (skipping person-less ones) whose person changes (type "person") or
- * whose number changes at the same person (type "number") — the iltifāt turns. */
+/* Iltifāt — grammatical shifts across a sūra. Returns
+ *   { contour:[{ a, person, number, gender, aspect, voice, sample }|null …],
+ *     shifts:[{ a, b, type, from, to, fromSample, toSample }] }
+ * `contour` is every āya in order with its dominant reading (null = no verb/pronoun).
+ * `shifts` compares consecutive person-bearing āyāt: a change of PERSON is the headline
+ * turn (type "person"); within the SAME person, a change of number / gender / aspect (tense)
+ * / voice is a finer turn (الالتفات في العدد/الزمن/البناء). `from`/`to` are that dimension's
+ * codes (e.g. person 1/2/3, aspect perf/impf, voice act/pass), so a pair can yield several
+ * shift entries when more than one dimension turns. */
 export function suraIltifat(suraId, verseData, M) {
   const keys = [];
   for (const vk in verseData) if (verseData[vk].s === suraId) keys.push(vk);
@@ -57,10 +68,15 @@ export function suraIltifat(suraId, verseData, M) {
   for (const c of contour) {
     if (c.person == null) continue;
     if (prev) {
-      if (c.person !== prev.person)
-        shifts.push({ a: prev.a, b: c.a, type: "person", from: prev.person, to: c.person, fromNumber: prev.number, toNumber: c.number, fromSample: prev.sample, toSample: c.sample });
-      else if (c.number && prev.number && c.number !== prev.number)
-        shifts.push({ a: prev.a, b: c.a, type: "number", from: prev.person, to: c.person, fromNumber: prev.number, toNumber: c.number, fromSample: prev.sample, toSample: c.sample });
+      const mk = (type, from, to) => ({ a: prev.a, b: c.a, type, from, to, fromSample: prev.sample, toSample: c.sample });
+      if (c.person !== prev.person) {
+        shifts.push(mk("person", prev.person, c.person)); // the headline turn
+      } else { // same speaker — finer turns can stack
+        if (c.number && prev.number && c.number !== prev.number) shifts.push(mk("number", prev.number, c.number));
+        if (c.gender && prev.gender && c.gender !== prev.gender) shifts.push(mk("gender", prev.gender, c.gender));
+        if (c.aspect && prev.aspect && c.aspect !== prev.aspect) shifts.push(mk("aspect", prev.aspect, c.aspect));
+        if (c.voice && prev.voice && c.voice !== prev.voice) shifts.push(mk("voice", prev.voice, c.voice));
+      }
     }
     prev = c;
   }
