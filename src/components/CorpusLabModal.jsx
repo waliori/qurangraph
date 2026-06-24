@@ -11,6 +11,7 @@ import { ModalShell } from "./ModalShell.jsx";
 import { MorphologyFilter } from "./MorphologyFilter.jsx";
 import { MoreButton } from "./MoreButton.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
+import { useVerseFilter } from "./VerseFilter.jsx";
 import { useReveal } from "../hooks/useReveal.js";
 import { useI18n } from "../i18n/index.js";
 
@@ -67,6 +68,8 @@ export function CorpusLabModal({ open, verseData, r2v, morph, relations, theme, 
   // useReveal's reset-on-key-change fire setState every render (infinite loop → React #301).
   const rhetList = useMemo(() => (rhetoric ? rhetoric[rhetView] : EMPTY), [rhetoric, rhetView]);
   const rhetR = useReveal(CAP, rhetList);
+  // Sūra/āya filter for the inline āyāt list (a term's occurrences span many sūras).
+  const { filtered: detailView, controls: detailFilter } = useVerseFilter(detail?.keys || [], verseData);
 
   if (!open) return null;
   // detail.match = { mode, primary, shared } drives the highlight in the list + preview.
@@ -85,8 +88,8 @@ export function CorpusLabModal({ open, verseData, r2v, morph, relations, theme, 
 
   return (
     <ModalShell open={open} share onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("corpus.title")}
+      back={detail ? () => { setDetail(null); setPreview(null); } : undefined} backLabel={t("corpus.back")}
       title={<>
-        {detail && <button type="button" className="ag-btn" title={t("corpus.back")} onClick={() => { setDetail(null); setPreview(null); }} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("corpus.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{detail ? detail.label : t("corpus.title")}</h2>
         {detail && <span className="ag-modal-count">{fmtNum(detail.keys.length)} {t("corpus.ayat")}</span>}
@@ -101,9 +104,10 @@ export function CorpusLabModal({ open, verseData, r2v, morph, relations, theme, 
         {detail ? (
           <div className="ag-dist-sec">
             <p className="ag-hint">{t("corpus.listHint")}</p>
-            {detail.keys.length === 0 ? <span className="ag-dist-name">{t("corpus.none")}</span> : (
+            {detailFilter}
+            {detailView.length === 0 ? <span className="ag-dist-name">{t("corpus.none")}</span> : (
               <ul className="ag-phrase-list">
-                {detail.keys.slice(0, detailR.limit).map((vk) => { const v = verseData[vk]; if (!v) return null; return (
+                {detailView.slice(0, detailR.limit).map((vk) => { const v = verseData[vk]; if (!v) return null; return (
                   <li key={vk}><button type="button" className={"ag-modal-row" + (preview === vk ? " is-on" : "")} style={{ width: "100%", textAlign: "start", display: "flex", gap: 8, alignItems: "baseline" }} onClick={() => setPreview(vk)} aria-pressed={preview === vk}>
                     <span className="ag-ayah-ref" style={{ flexShrink: 0 }}><span className="ag-ayah-surah">{v.sn}</span><span className="ag-ayah-num">{fmtNum(v.a)}</span></span>
                     <span className="ag-modal-text" style={{ fontFamily: "var(--font-quran)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
@@ -111,7 +115,7 @@ export function CorpusLabModal({ open, verseData, r2v, morph, relations, theme, 
                     </span>
                   </button></li>
                 ); })}
-                <li><MoreButton shown={detailR.limit} total={detail.keys.length} step={CAP} onMore={detailR.more} /></li>
+                <li><MoreButton shown={detailR.limit} total={detailView.length} step={CAP} onMore={detailR.more} /></li>
               </ul>
             )}
           </div>

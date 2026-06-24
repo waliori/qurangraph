@@ -95,7 +95,10 @@ export function ClaimBoard({ open, verseData, onNavigate, onClose }) {
   const { t } = useI18n();
   const ws = useWorkspace();
   const [openId, setOpenId] = useState(null);
+  const [claimQuery, setClaimQuery] = useState(""); // filter the master list when many claims exist
   const current = ws.claims.find((c) => c.id === openId) || null;
+  const cq = claimQuery.trim();
+  const shownClaims = cq ? ws.claims.filter((c) => (c.statement || "").includes(cq)) : ws.claims;
 
   const exportAllMd = () => exportTextFile(ws.claims.map((c) => claimMd(c, verseData, t)).join("\n"), "claims.md", "text/markdown;charset=utf-8");
   const exportOneMd = (c) => exportTextFile(claimMd(c, verseData, t), `claim-${(c.statement || "claim").slice(0, 20).replace(/\s+/g, "-")}.md`, "text/markdown;charset=utf-8");
@@ -128,7 +131,14 @@ export function ClaimBoard({ open, verseData, onNavigate, onClose }) {
           : <>
               <p className="ag-hint ag-cq-intro">{t("claim.intro")}</p>
               {ws.claims.length === 0 && <p className="ag-hint is-warn">{t("claim.empty")}</p>}
-              {ws.claims.map((c, i) => (
+              {ws.claims.length > 8 && (
+                <input className="ag-input" type="search" value={claimQuery} placeholder={t("claim.filterPh")} aria-label={t("claim.filterAria")}
+                  onChange={(e) => setClaimQuery(e.target.value)} />
+              )}
+              {ws.claims.length > 0 && shownClaims.length === 0 && <p className="ag-hint">{t("claim.filterNone")}</p>}
+              {shownClaims.map((c) => {
+                const i = ws.claims.indexOf(c); // position in the FULL list (reorder stays correct under a filter)
+                return (
                 <div key={c.id} className="ag-claim-listrow">
                   <button type="button" className="ag-claim-listmain" title={t("claim.openTitle")} onClick={() => setOpenId(c.id)}>
                     <span className="ag-claim-liststatement">{c.statement || t("claim.untitled")}</span>
@@ -138,12 +148,13 @@ export function ClaimBoard({ open, verseData, onNavigate, onClose }) {
                     </span>
                   </button>
                   <div className="ag-claim-ctrl">
-                    <button type="button" className="ag-iconbtn" aria-label="↑" disabled={i === 0} onClick={() => ws.moveClaim(c.id, -1)}>↑</button>
-                    <button type="button" className="ag-iconbtn" aria-label="↓" disabled={i === ws.claims.length - 1} onClick={() => ws.moveClaim(c.id, 1)}>↓</button>
+                    {!cq && <button type="button" className="ag-iconbtn" aria-label="↑" disabled={i === 0} onClick={() => ws.moveClaim(c.id, -1)}>↑</button>}
+                    {!cq && <button type="button" className="ag-iconbtn" aria-label="↓" disabled={i === ws.claims.length - 1} onClick={() => ws.moveClaim(c.id, 1)}>↓</button>}
                     <button type="button" className="ag-iconbtn is-warn" title={t("claim.delete")} aria-label={t("claim.delete")} onClick={() => ws.removeClaim(c.id)}>🗑</button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </>}
       </div>
     </ModalShell>

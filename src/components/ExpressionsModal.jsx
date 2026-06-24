@@ -7,6 +7,7 @@ import { SaveButton } from "./SaveButton.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { MoreButton } from "./MoreButton.jsx";
 import { useReveal } from "../hooks/useReveal.js";
+import { useVerseFilter } from "./VerseFilter.jsx";
 import { useMyExpressions } from "../hooks/useMyExpressions.js";
 import { useI18n } from "../i18n/index.js";
 
@@ -53,6 +54,8 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
   const [preview, setPreview] = useState(null); // vk in the sticky foot
   const [distSura, setDistSura] = useState(null); // distribution bar clicked → filter list to this sūra
   const [distHover, setDistHover] = useState(null); // sūra under the cursor on the distribution
+  // Government matrix ↔ ranked-list view (a matrix is unworkable at phone width → list on touch).
+  const [exprView, setExprView] = useState(() => (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "list" : "grid"));
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { setFocus(focusRoot || null); setDetail(null); setPreview(null); }, [focusRoot]);
   // Reopened from the workspace: a saved expression record carries its own occurrences, so the
@@ -92,6 +95,13 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
   // Incremental reveal so capped lists don't silently drop their tail.
   const versesR = useReveal(CAP, detail);
   const compR = useReveal(CAP, compGroups);
+  // Sūra/āya filter, layered on top of the distribution-bar (distSura) selection.
+  const barFilteredKeys = useMemo(() => {
+    const dv = detail ? detail.verses : [];
+    const bf = distSura ? dv.filter((v) => +v.vk.split(":")[0] === distSura) : dv;
+    return bf.map((v) => v.vk);
+  }, [detail, distSura]);
+  const { matchSet: exprMatch, controls: exprFilter } = useVerseFilter(barFilteredKeys, verseData);
 
   if (!open) return null;
   if (!expr && !detail) return (
@@ -126,7 +136,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
   // Interactive distribution: bars per sūra, hover → readout, click → filter the verse list.
   const distData = detail ? distBySura(detail.verses.map((v) => v.vk)) : [];
   const suraNameOf = (s) => { const f = detail?.verses.find((v) => +v.vk.split(":")[0] === s); return f ? verseData[f.vk]?.sn : s; };
-  const shownVerses = detail ? (distSura ? detail.verses.filter((v) => +v.vk.split(":")[0] === distSura) : detail.verses) : [];
+  const shownVerses = (detail ? (distSura ? detail.verses.filter((v) => +v.vk.split(":")[0] === distSura) : detail.verses) : []).filter((v) => exprMatch.has(v.vk));
 
   // The government CONTRAST as a matrix: rows = heads, fixed columns = the ḥurūf al-jarr (+ a
   // bare column), cells shaded by how often that head takes that preposition. A column scan shows
@@ -173,11 +183,43 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
       </div>
     );
   };
+  // Phone-friendly view of the government matrix: each head×preposition frame as a ranked,
+  // tappable row (same open-the-āyāt action as a cell).
+  const renderList = (rows) => {
+    const items = [];
+    for (const h of rows) for (const p of h.preps) if (p.count) items.push({ h, p });
+    if (!items.length) return <span className="ag-dist-name">{t("expr.none")}</span>;
+    items.sort((a, b) => b.p.count - a.p.count);
+    return (
+      <ul className="ag-pm-list">
+        {items.map(({ h, p }, i) => (
+          <li key={i}>
+            <button type="button" className="ag-pm-listrow"
+              title={`${h.head} ${p.disp} · ${t("expr.occN", { n: p.count })}`}
+              onClick={() => showOcc(`${h.head} ${p.disp}`, p.occ, FRAME_SPAN, { components: [{ label: h.head, root: h.root }], promo: { kind: "frame", display: `${h.head} ${p.disp}`, occ: p.occ, count: p.count, spanKind: "frame" } })}>
+              <span className="ag-pm-listpair">{h.head} <span className="ag-pm-listx">{p.disp}</span></span>
+              <span className="ag-pm-listn">{fmtNum(p.count)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+  // Toggle between the matrix and the ranked list.
+  const renderFrames = (rows) => (<>
+    {rows.length > 0 && (
+      <div className="ag-seg ag-seg-sm ag-pm-viewtoggle" role="group" aria-label={t("pm.viewAria")}>
+        <button type="button" className={exprView === "grid" ? "is-on" : ""} aria-pressed={exprView === "grid"} onClick={() => setExprView("grid")}>⊞ {t("pm.viewGrid")}</button>
+        <button type="button" className={exprView === "list" ? "is-on" : ""} aria-pressed={exprView === "list"} onClick={() => setExprView("list")}>☰ {t("pm.viewList")}</button>
+      </div>
+    )}
+    {exprView === "list" ? renderList(rows) : renderMatrix(rows)}
+  </>);
 
   return (
     <ModalShell open={open} share onClose={onClose} closeLabel={t("common.close")} ariaLabel={t("expr.title")}
+      back={(detail || focus) ? () => (detail ? setDetail(null) : setFocus(null)) : undefined} backLabel={t("expr.back")}
       title={<>
-        {(detail || focus) && <button type="button" className="ag-btn" title={t("expr.back")} onClick={() => (detail ? setDetail(null) : setFocus(null))} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("expr.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{detail ? detail.label : focus ? t("expr.ofRoot", { root: focus }) : t("expr.title")}</h2>
         {detail ? <span className="ag-modal-count">{fmtNum(detail.verses.length)} {t("expr.ayat")}</span>
@@ -231,6 +273,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
               </div>
             </>)}
             <p className="ag-hint">{t("expr.listHint")}</p>
+            {exprFilter}
             {shownVerses.length === 0 ? <span className="ag-dist-name">{t("expr.none")}</span> : (
               <ul className="ag-phrase-list">
                 {shownVerses.slice(0, versesR.limit).map(({ vk, hi }) => { const v = verseData[vk]; if (!v) return null; return (
@@ -251,7 +294,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
             {rootView.heads.length === 0 && rootView.compounds.length === 0 && <span className="ag-dist-name">{t("expr.none")}</span>}
             {rootView.heads.length > 0 && <>
               <div className="ag-dist-sec-h"><span>{t("expr.tab.frames")}</span></div>
-              {renderMatrix(rootView.heads)}
+              {renderFrames(rootView.heads)}
             </>}
             {rootView.collocations.length > 0 && <>
               <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-3)" }}><span>{t("expr.tab.collocations")}</span></div>
@@ -285,7 +328,7 @@ export function ExpressionsModal({ open, verseData, expr, theme, focusRoot, init
           {tab === "frames" && (() => { const hs = heads.filter(matchHead); return (
             <div className="ag-dist-sec">
               <p className="ag-hint">{t("expr.framesHint")}</p>
-              {renderMatrix(hs)}
+              {renderFrames(hs)}
             </div>
           ); })()}
 

@@ -38,7 +38,9 @@ function TermSlot({ term, color, indices, precision, searchAlias, searchAliasFuz
   const [mode, setMode] = useState(term?.mode || "root");
   const [miss, setMiss] = useState(false);
   const [choices, setChoices] = useState(null); // candidate list when the query is ambiguous
-  const set = (lookup) => { onSet({ lookup, label: lookup, mode }); setQ(""); setMiss(false); setChoices(null); };
+  const [editing, setEditing] = useState(false); // once a term is set, collapse the picker (frees space for results)
+  const showForm = !term || editing;
+  const set = (lookup) => { onSet({ lookup, label: lookup, mode }); setQ(""); setMiss(false); setChoices(null); setEditing(false); };
   const submit = (e) => {
     e.preventDefault();
     const { candidates } = looseResolve(q, mode, precision, indices, searchAlias, searchAliasFuzzy);
@@ -50,9 +52,14 @@ function TermSlot({ term, color, indices, precision, searchAlias, searchAliasFuz
     <div className="ag-cmp-slot">
       <div className="ag-cmp-current">
         {term
-          ? <><span className={"ag-badge " + MODE_BADGE[term.mode]}>{t("cmp.mode." + term.mode)}</span><span className="ag-cmp-label" style={{ color }}>{term.label}</span></>
+          ? <>
+              <span className={"ag-badge " + MODE_BADGE[term.mode]}>{t("cmp.mode." + term.mode)}</span>
+              <span className="ag-cmp-label" style={{ color }}>{term.label}</span>
+              {!editing && <button type="button" className="ag-btn ag-btn-xs ag-cmp-edit" onClick={() => setEditing(true)}>{t("cmp.change")}</button>}
+            </>
           : <span className="ag-cmp-empty">{t("cmp.chooseTerm")}</span>}
       </div>
+      {showForm && (
       <form className="ag-cmp-pick" onSubmit={submit} role="search">
         <div className="ag-seg ag-seg-sm" role="group" aria-label={t("cmp.modeAria")}>
           {MODES.map((m) => (
@@ -80,6 +87,7 @@ function TermSlot({ term, color, indices, precision, searchAlias, searchAliasFuz
           </div>
         )}
       </form>
+      )}
     </div>
   );
 }
@@ -160,9 +168,9 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
   const ready = A && B && data;
 
   return (
-    <ModalShell open={!!cmp} share onClose={onClose} onEscape={detail ? () => setDetail(null) : onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
+    <ModalShell open={!!cmp} share onClose={onClose} closeLabel={t("cmp.close")} ariaLabel={t("cmp.dialogAria")}
+      back={detail ? () => setDetail(null) : undefined} backLabel={t("cmp.back")}
       title={detail ? (<>
-        <button type="button" className="ag-iconbtn" title={t("cmp.back")} aria-label={t("cmp.back")} onClick={() => setDetail(null)}>→</button>
         <span className="ag-badge t-verse">{t("ctx.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{detail.sura}. {detail.name}</h2>
       </>) : (<>
@@ -230,7 +238,7 @@ export function CompareModal({ cmp, indices, searchAlias, searchAliasFuzzy, vers
             )}
           </div>
         ) : (<>
-        <div className="ag-cmp-slots">
+        <div className={"ag-cmp-slots" + (ready ? " is-ready" : "")}>
           <TermSlot term={A} color={A_COLOR} indices={indices} precision={precision} searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy} onSet={onSetA} />
           <button type="button" className="ag-iconbtn ag-cmp-swap" title={t("cmp.swap")} aria-label={t("cmp.swapAria")}
             onClick={swap}>⇄</button>

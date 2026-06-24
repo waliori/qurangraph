@@ -71,7 +71,7 @@ export function DefinitionModal({ def, onClose }) {
           {entry === undefined ? <LoadingState message={t("common.insp.lexLoading")} />
             : err ? <ErrorState onRetry={() => setRetry((n) => n + 1)} />
             : !entry ? <EmptyState message={t("common.insp.lexNone")} />
-            : <div className="ag-insp-mean" style={{ whiteSpace: "pre-wrap" }}>{body}</div>}
+            : <div className="ag-lex-article">{body}</div>}
           {entry && (
             <div className="ag-insp-cite" title={t("common.cite.title")}>
               {cite && <span className="ag-insp-cite-pg">{t("common.cite.volPage", { vol: cite.vol, page: cite.page })}</span>}

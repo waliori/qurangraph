@@ -113,9 +113,9 @@ export function RootLabModal({ lab, r2v, verseData, morph, semantic, relations, 
 
   return (
     <ModalShell open={!!lab} share onClose={onClose} closeLabel={t("lab.close")}
+      back={back ? onBack : undefined} backLabel={t("lab.back")}
       ariaLabel={t("lab.title", { label: lab.label })}
       title={<>
-        {back && <button type="button" className="ag-btn" title={t("lab.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-root">{t("common.graphMode.root")}</span>
         <h2 className="ag-modal-word">{lab.label}</h2>
         <span className="ag-modal-count">{t("lab.root")} {root}</span>

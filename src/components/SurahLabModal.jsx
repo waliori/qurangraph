@@ -9,6 +9,7 @@ import { ModalShell } from "./ModalShell.jsx";
 import { SigStars } from "./Significance.jsx";
 import { MoreButton } from "./MoreButton.jsx";
 import { useReveal } from "../hooks/useReveal.js";
+import { useMediaQuery } from "../hooks/useMediaQuery.js";
 import { useI18n } from "../i18n/index.js";
 
 // Viridis colour ramp (5 stops) — perceptually uniform and colour-blind-safe. `t` ∈ [0,1].
@@ -38,10 +39,12 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
   const [tab, setTab] = useState("overview");
   const [preview, setPreview] = useState(null); // array of ayah numbers shown in the inline preview
   const [hover, setHover] = useState(null); // { ai, aj, score } under the cursor on the heatmap
+  const coarse = useMediaQuery("(pointer: coarse)"); // touch: magnifier becomes the primary, tappable picker
   const sid = surah?.surahId;
   const canvasRef = useRef(null);
   const pxRef = useRef(1); // heatmap cell size in px, for hit-testing clicks/hovers
   const magRef = useRef(null); // magnifier canvas (zoom of the area under the cursor)
+  const magPanelRef = useRef(null); // the floating magnifier panel (for outside-tap dismissal on touch)
 
   // Light lenses — synchronous.
   const profile = useMemo(() => (sid ? surahProfile(sid, verseData) : null), [sid, verseData]);
@@ -128,28 +131,56 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
     ctx.globalAlpha = 1;
   }, [tab, sim]);
 
-  // Magnifier: when hovering the matrix, draw a zoomed neighbourhood of cells around the
-  // cursor so dense matrices (long sūras) are workable. The center cell is outlined.
+  // Magnifier: when hovering OR dragging over the matrix, draw a zoomed neighbourhood of
+  // cells around the cursor so dense matrices (long sūras) are workable — and on touch it's
+  // the primary way in: drag to aim, then tap a cell IN the magnifier (big targets) to open
+  // the pair. The centre cell is outlined.
+  const MAG_R = 6, MAG_CELL = 15, MAG_SIZE = (2 * MAG_R + 1) * MAG_CELL;
   useEffect(() => {
     if (tab !== "structure" || !sim || !hover || !magRef.current) return;
-    const R = 6, cell = 11, n = sim.size, size = (2 * R + 1) * cell;
-    const c = magRef.current; c.width = size; c.height = size;
+    const n = sim.size;
+    const c = magRef.current; c.width = MAG_SIZE; c.height = MAG_SIZE;
     const ctx = c.getContext("2d");
-    ctx.fillStyle = "#0b0f17"; ctx.fillRect(0, 0, size, size);
-    for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) {
+    ctx.fillStyle = "#0b0f17"; ctx.fillRect(0, 0, MAG_SIZE, MAG_SIZE);
+    for (let di = -MAG_R; di <= MAG_R; di++) for (let dj = -MAG_R; dj <= MAG_R; dj++) {
       const i = hover.i + di, j = hover.j + dj;
       if (i < 0 || j < 0 || i >= n || j >= n) continue;
       const v = sim.matrix[i][j]; if (v <= 0) continue;
       ctx.fillStyle = viridis(Math.min(1, v) ** 0.7);
-      ctx.fillRect((dj + R) * cell, (di + R) * cell, cell, cell);
+      ctx.fillRect((dj + MAG_R) * MAG_CELL, (di + MAG_R) * MAG_CELL, MAG_CELL, MAG_CELL);
     }
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(R * cell + 0.5, R * cell + 0.5, cell, cell);
-  }, [tab, sim, hover]);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(MAG_R * MAG_CELL + 0.5, MAG_R * MAG_CELL + 0.5, MAG_CELL, MAG_CELL);
+  }, [tab, sim, hover, MAG_SIZE]);
+
+  // Touch: the magnifier persists after a drag (so it's tappable), so dismiss it on a tap
+  // outside it AND outside the matrix (a tap on the matrix re-aims it; a tap inside selects).
+  useEffect(() => {
+    if (!coarse || !hover) return undefined;
+    const onDown = (e) => {
+      if (magPanelRef.current?.contains(e.target) || canvasRef.current?.contains(e.target)) return;
+      setHover(null);
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, [coarse, hover]);
 
   if (!surah || !profile) return null;
   const nav = (a) => setPreview({ ayat: [a] }); // click a verse number → read it inline below (no jump, no cascade)
   // Preview a verse PAIR with its similarity score + shared roots (from a matrix cell or echo).
   const previewPair = (ai, aj, score, shared) => setPreview({ ayat: [ai, aj], score, shared: shared || sharedRoots(`${sid}:${ai}`, `${sid}:${aj}`, verseData) });
+  // Tap a cell inside the magnifier → open that verse pair (diagonal → read the verse).
+  const magCellClick = (e) => {
+    if (!sim || !hover) return;
+    const c = magRef.current; const rect = c.getBoundingClientRect();
+    const dj = Math.floor((e.clientX - rect.left) * (c.width / rect.width) / MAG_CELL) - MAG_R;
+    const di = Math.floor((e.clientY - rect.top) * (c.height / rect.height) / MAG_CELL) - MAG_R;
+    const i = hover.i + di, j = hover.j + dj;
+    if (i < 0 || j < 0 || i >= sim.size || j >= sim.size) return;
+    // Re-centre the magnifier on the tapped cell so the outline marks the selection (it was
+    // staying on the original drag centre), then open the pair.
+    setHover({ ai: sim.ayat[i], aj: sim.ayat[j], score: sim.matrix[i][j], i, j, cx: hover.cx, cy: hover.cy });
+    if (i === j) nav(sim.ayat[i]); else previewPair(sim.ayat[i], sim.ayat[j], sim.matrix[i][j]);
+  };
   const pvAyat = preview?.ayat || [];
 
   // Map a click/hover on the heatmap to a verse pair.
@@ -166,9 +197,9 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
 
   return (
     <ModalShell open={!!surah} share onClose={onClose} closeLabel={t("surah.close")}
+      back={back ? onBack : undefined} backLabel={t("surah.back")}
       ariaLabel={t("surah.title", { name: profile.name })}
       title={<>
-        {back && <button type="button" className="ag-btn" title={t("surah.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{t("surah.badge")}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{profile.name}</h2>
         <span className="ag-modal-count">{fmtNum(sid)} · {fmtNum(profile.verseCount)} {t("surah.verses")}</span>
@@ -246,7 +277,7 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
           <div className="ag-dist-sec">
             <div className="ag-dist-sec-h"><span>{t("surah.cohesion")}</span></div>
             <p className="ag-hint">{t("surah.cohesionHint")}</p>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 90, overflowX: "auto", padding: "4px 0" }}>
+            <div className="ag-hscroll" style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 90, padding: "4px 0" }}>
               {cohesion.seq.map((s, i) => {
                 const boundary = s.score <= cohesion.mean * 0.4;
                 return (
@@ -272,22 +303,34 @@ export function SurahLabModal({ surah, verseData, r2v, w2v, seedIndex, stopSet, 
               <p className="ag-hint" style={{ minHeight: "1.4em" }}>
                 {hover ? t("surah.cellReadout", { ai: hover.ai, aj: hover.aj, pct: Math.round(hover.score * 100) }) : t("surah.matrixHint")}
               </p>
+              {/* touch-action:none so a finger DRAG aims the magnifier instead of scrolling the
+                  sheet. onPointerMove covers both mouse-hover and touch-drag. */}
               <div style={{ overflow: "auto", maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 6 }}>
-                <canvas ref={canvasRef} style={{ display: "block", cursor: "crosshair" }}
-                  onMouseMove={(ev) => { const c = cellAt(ev); setHover(c ? { ai: sim.ayat[c.i], aj: sim.ayat[c.j], score: sim.matrix[c.i][c.j], i: c.i, j: c.j, cx: ev.clientX, cy: ev.clientY } : null); }}
-                  onMouseLeave={() => setHover(null)}
+                <canvas ref={canvasRef} style={{ display: "block", cursor: "crosshair", touchAction: "none" }}
+                  onPointerDown={(ev) => { const c = cellAt(ev); if (c) setHover({ ai: sim.ayat[c.i], aj: sim.ayat[c.j], score: sim.matrix[c.i][c.j], i: c.i, j: c.j, cx: ev.clientX, cy: ev.clientY }); }}
+                  onPointerMove={(ev) => { const c = cellAt(ev); setHover(c ? { ai: sim.ayat[c.i], aj: sim.ayat[c.j], score: sim.matrix[c.i][c.j], i: c.i, j: c.j, cx: ev.clientX, cy: ev.clientY } : (coarse ? hover : null)); }}
+                  onPointerLeave={() => { if (!coarse) setHover(null); }}
                   onClick={(ev) => { const c = cellAt(ev); if (!c) return; if (c.i === c.j) nav(sim.ayat[c.i]); else previewPair(sim.ayat[c.i], sim.ayat[c.j], sim.matrix[c.i][c.j]); }} />
               </div>
-              {/* Floating magnifier: a zoom of the cells under the cursor + the readout. */}
-              {hover && hover.i != null && (
-                <div style={{ position: "fixed", zIndex: 60, pointerEvents: "none",
+              {/* Magnifier. On a mouse it floats by the cursor (read-only). On touch it's a fixed,
+                  TAPPABLE panel — drag the matrix to aim, then tap a cell here (big targets) to
+                  open the pair. */}
+              {hover && hover.i != null && (coarse ? (
+                <div ref={magPanelRef} style={{ position: "fixed", zIndex: 70, left: "50%", top: 10, transform: "translateX(-50%)",
+                  background: "var(--ink-800)", border: "1px solid var(--gold-500)", borderRadius: 10, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,.5)", textAlign: "center" }}>
+                  <canvas ref={magRef} onClick={magCellClick} style={{ display: "block", imageRendering: "pixelated", borderRadius: 4, cursor: "pointer", touchAction: "manipulation" }} />
+                  <div className="ag-hint" style={{ marginBlockStart: 6 }}>{t("surah.cellReadout", { ai: hover.ai, aj: hover.aj, pct: Math.round(hover.score * 100) })}</div>
+                  <div className="ag-hint" style={{ marginBlockStart: 2, color: "var(--gold-400)" }}>{t("surah.magTapHint")}</div>
+                </div>
+              ) : (
+                <div style={{ position: "fixed", zIndex: 70, pointerEvents: "none",
                   left: Math.min(hover.cx + 18, (typeof window !== "undefined" ? window.innerWidth : 9999) - 180),
                   top: Math.min(hover.cy + 18, (typeof window !== "undefined" ? window.innerHeight : 9999) - 200),
                   background: "var(--ink-800)", border: "1px solid var(--gold-500)", borderRadius: 8, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
                   <canvas ref={magRef} style={{ display: "block", imageRendering: "pixelated", borderRadius: 4 }} />
                   <div className="ag-hint" style={{ marginBlockStart: 4, maxWidth: 150 }}>{t("surah.cellReadout", { ai: hover.ai, aj: hover.aj, pct: Math.round(hover.score * 100) })}</div>
                 </div>
-              )}
+              ))}
               {/* Colour-scale legend (viridis: low → high overlap). */}
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBlockStart: "var(--space-2)" }}>
                 <span className="ag-hint">{t("surah.scaleLow")}</span>

@@ -7,6 +7,7 @@ import { exportJsonFile } from "../graph/exportGraph.js";
 import { loadMutashabihat } from "../data-loader.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
+import { useVerseFilter } from "./VerseFilter.jsx";
 import { useI18n } from "../i18n/index.js";
 
 const EXPR_TYPE = { frame: "expr.tab.frames", colloc: "expr.tab.collocations", compound: "expr.tab.compounds", idiom: "expr.tab.idioms" };
@@ -52,6 +53,11 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
     return () => { alive = false; cic(id); };
   }, [centerKey, verseData, r2v]);
 
+  // Sūra/āya filter for the (cross-sūra) similar-verses list.
+  const simKeys = useMemo(() => (sim || []).map((s) => s.vk), [sim]);
+  const { matchSet: simMatch, controls: simFilter } = useVerseFilter(simKeys, verseData);
+  const simView = useMemo(() => (sim || []).filter((s) => simMatch.has(s.vk)), [sim, simMatch]);
+
   if (!aya || !v) return null;
   const ref = `${v.s}:${v.a}`;
   const navTo = (vk) => { const [s, a] = vk.split(":").map(Number); onNavigate?.(s, a); };
@@ -59,9 +65,9 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
 
   return (
     <ModalShell open={!!aya} share onClose={onClose} closeLabel={t("aya.close")}
+      back={aya.back ? onBack : undefined} backLabel={t("aya.back")}
       ariaLabel={t("aya.title", { ref })}
       title={<>
-        {aya.back && <button type="button" className="ag-btn" title={t("aya.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{ref}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{v.sn}</h2>
       </>}
@@ -160,9 +166,10 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
             <div className="ag-dist-sec-h"><span>{t("aya.similar")}</span></div>
             <p className="ag-hint">{t("aya.similarHint")}</p>
             {sim == null ? <span className="ag-dist-name">{t("aya.computing")}</span>
-              : sim.length === 0 ? <span className="ag-dist-name">{t("aya.noSimilar")}</span> : (
+              : sim.length === 0 ? <span className="ag-dist-name">{t("aya.noSimilar")}</span> : (<>
+                {simFilter}
                 <ul className="ag-phrase-list">
-                  {sim.map((s) => {
+                  {simView.map((s) => {
                     const ov = verseData[s.vk]; if (!ov) return null;
                     return (
                       <li key={s.vk} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -176,7 +183,7 @@ export function AyaLabModal({ aya, verseData, r2v, morph, relations, exprByVerse
                     );
                   })}
                 </ul>
-              )}
+              </>)}
           </div>
         )}
 

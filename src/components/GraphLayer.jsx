@@ -20,12 +20,16 @@ const REDUCE_MOTION = typeof matchMedia !== "undefined" && matchMedia("(prefers-
  * only the handful of nodes whose flags changed.
  */
 
-const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, aria, onEnter, onLeave, onClick }) {
+const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, aria, coarse, onEnter, onLeave, onClick }) {
   const opacity = dim ? 0.42 : 1;
   const r = isH ? n.r * 1.35 : isS || isAW ? n.r * 1.2 : n.r;
   const isWE = n.type === "word" && n.isExpanded;
   const isVE = n.type === "verse" && n.isExpanded;
   const clickable = n.type !== "center";
+  // On touch, a transparent disc enlarges the tap area to ≥44px diameter (Apple HIG)
+  // without changing the painted node — small nodes are otherwise near-impossible to hit
+  // with a fingertip. It sits first/under everything and shares the <g>'s click handler.
+  const hitR = coarse ? Math.max(r, 22) : 0;
 
   // Recompute the node colour per render so a theme switch instantly recolours the
   // graph (the colour baked at build time is for one theme only). Light mode swaps
@@ -49,6 +53,7 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
         role="button" tabIndex={0} aria-label={aria}
         onMouseEnter={() => onEnter(n)} onMouseLeave={() => onLeave(n)} onClick={(e) => onClick(n, e)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } }}>
+        {hitR > 0 && <circle cx={0} cy={0} r={hitR} fill="transparent" />}
         <circle cx={0} cy={0} r={r} fill={(L ? "#9a9077" : "#586a88") + "22"} stroke={L ? "#9a9077" : "#8d9bb5"} strokeWidth={1.4} strokeDasharray="3,2" />
         <text x={0} y={3} textAnchor="middle" fontSize={9} fontWeight="bold" fill={L ? "#6f6757" : "#8d9bb5"} style={{ pointerEvents: "none", fontFamily: "var(--font-mono)" }}>{n.label}</text>
       </g>
@@ -67,6 +72,7 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
       onClick={(e) => onClick(n, e)}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(n, e); } } : undefined}>
 
+      {hitR > 0 && clickable && <circle cx={0} cy={0} r={hitR} fill="transparent" />}
       {(isWE || isVE) && <circle cx={0} cy={0} r={r + 7} fill="none" stroke={isWE ? cVir : cPur} strokeWidth={2} opacity={0.3} strokeDasharray={isVE ? "4,2" : "none"} />}
       {(isS || isAW) && <circle cx={0} cy={0} r={r + 10} fill="none" stroke={isAW ? cGold : col} strokeWidth={2} opacity={0.3}>{!REDUCE_MOTION && <animate attributeName="r" values={`${r + 8};${r + 14};${r + 8}`} dur="2s" repeatCount="indefinite" />}</circle>}
 
@@ -93,7 +99,7 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   );
 });
 
-function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, onNodeEnter, onNodeLeave, onNodeClick }) {
+function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, coarse, onNodeEnter, onNodeLeave, onNodeClick }) {
   const { t } = useI18n();
   const anyHighlight = !!highlightSet || activeWordNodeIds.size > 0;
   const pos = (n) => positions[n.id] || { x: n.x, y: n.y };
@@ -147,7 +153,7 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewpo
         const onP = highlightSet ? highlightSet.has(n.id) : true;
         const dim = !(onP || isAW) && anyHighlight;
         return <GraphNode key={n.id} node={n} x={p.x} y={p.y} reg={reg} aria={nodeAria(n, t)}
-          isH={hovered === n.id} isS={selected === n.id} isAW={isAW} dim={dim}
+          isH={hovered === n.id} isS={selected === n.id} isAW={isAW} dim={dim} coarse={coarse}
           T={T} theme={theme} onEnter={onNodeEnter} onLeave={onNodeLeave} onClick={onNodeClick} />;
       })}
     </>

@@ -3,6 +3,7 @@ import { rhymeKey, rawiyKey, finalWord, suraRhymeScheme, rhymeMates, finalProsod
 import { exportCsvFile } from "../graph/exportGraph.js";
 import { ModalShell } from "./ModalShell.jsx";
 import { DisclosurePanel } from "./DisclosurePanel.jsx";
+import { useVerseFilter } from "./VerseFilter.jsx";
 import { useI18n } from "../i18n/index.js";
 
 /* ═══ Verse rhyme / cadence (الفاصلة) ═══
@@ -48,6 +49,8 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
   const colors = useMemo(() => endingColors(activeScheme.map((s) => s.key)), [activeScheme]);
   const prosody = useMemo(() => (v ? finalProsody(v.text) : null), [v]);
   const fawasil = useMemo(() => (v ? classifyFawasil(v.s, verseData) : null), [v, verseData]);
+  // Sūra/āya filter for the rhyme-mates list (spans many sūras in "all" scope).
+  const { filtered: matesView, controls: matesFilter } = useVerseFilter(mates, verseData);
 
   if (!rhyme || !v) return null;
   const ref = `${v.s}:${v.a}`;
@@ -58,9 +61,9 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
 
   return (
     <ModalShell open={!!rhyme} share onClose={onClose} closeLabel={t("rhyme.close")}
+      back={rhyme.back ? onBack : undefined} backLabel={t("rhyme.back")}
       ariaLabel={t("rhyme.title", { ref })}
       title={<>
-        {rhyme.back && <button type="button" className="ag-btn" title={t("rhyme.back")} onClick={onBack} style={{ marginInlineEnd: 4 }}>←</button>}
         <span className="ag-badge t-verse">{ref}</span>
         <h2 className="ag-modal-word" style={{ fontFamily: "var(--font-quran)" }}>{finalWord(v.text)}</h2>
         {ending && <span className="ag-modal-count" style={{ background: colors.get(ending) || "var(--surface-2)", color: "#fff", padding: "1px 9px", borderRadius: 6 }}>{ending}</span>}
@@ -88,7 +91,7 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
         <div className="ag-dist-sec">
           <div className="ag-dist-sec-h"><span>{t("rhyme.scheme")}</span></div>
           <p className="ag-hint">{t("rhyme.schemeHint")}</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          <div className="ag-scheme-grid">
             {(scheme?.seq || []).map((r) => {
               const ek = matchBy === "rawiy" ? r.rawiy : r.key;
               const dim = selEnding && ek !== selEnding; // spotlight the legend-selected ending
@@ -145,14 +148,15 @@ export function RhymeModal({ rhyme, verseData, theme = "dark", onRetarget, onBac
             </div>
           </div>
           <p className="ag-hint">{t("rhyme.matesHint", { key: ending || "—" })}</p>
+          {matesFilter}
           <div className="ag-dist-tags">
-            {mates.length === 0 ? <span className="ag-dist-name">{t("rhyme.none")}</span> : mates.slice(0, 400).map((vk) => (
+            {matesView.length === 0 ? <span className="ag-dist-name">{t("rhyme.none")}</span> : matesView.slice(0, 400).map((vk) => (
               <span key={vk} style={{ display: "inline-flex" }}>
                 <button type="button" className={"ag-tag ag-tag-btn" + (vk === preview ? " is-on" : "")} onClick={() => setPreview(vk)} title={t("rhyme.matesRowTitle")}>{vk}</button>
                 <button type="button" className="ag-tag ag-tag-btn" onClick={() => navTo(vk)} title={t("common.insp.makeCenter")} aria-label={t("common.insp.makeCenter")} style={{ marginInlineStart: -1 }}>⌖</button>
               </span>
             ))}
-            {mates.length > 400 && <span className="ag-hint">{t("rhyme.moreMates", { n: mates.length - 400 })}</span>}
+            {matesView.length > 400 && <span className="ag-hint">{t("rhyme.moreMates", { n: matesView.length - 400 })}</span>}
           </div>
         </div>
 

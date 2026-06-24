@@ -79,10 +79,30 @@ export function PairingModal({ seed, initialRows, initialCols, indices, r2v, ver
   // Seeded once from props (the modal remounts on each open, so reopening restores the matrix).
   const [rows, setRows] = useState(() => initialRows || []);
   const [cols, setCols] = useState(() => initialCols || []);
+  // Grid ↔ ranked-list view. A matrix is unworkable at phone width, so default to the list
+  // on touch; both are available via the toggle.
+  const [view, setView] = useState(() => (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? "list" : "grid"));
+  // Collapse the term-picker form once a matrix exists, freeing vertical space for the result.
+  const [editAxes, setEditAxes] = useState(() => !(initialRows && initialRows.length));
   // Report the current terms up so the parent can persist them across close/reopen + save them.
   useEffect(() => { onChange?.(rows, cols); }, [rows, cols]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const matrix = useMemo(() => (rows.length ? pairingMatrix(rows, cols.length ? cols : null) : null), [rows, cols]);
+  // Flattened, ranked list of non-empty pairs (the phone-friendly view of the matrix). For a
+  // symmetric square, only the upper triangle is kept so each pair appears once.
+  const pairList = useMemo(() => {
+    if (!matrix) return [];
+    const out = [];
+    for (let ri = 0; ri < matrix.rows.length; ri++) {
+      for (let ci = 0; ci < matrix.cols.length; ci++) {
+        if (matrix.symmetric && ci < ri) continue;
+        const cell = matrix.cells[ri][ci];
+        if (!cell.count) continue;
+        out.push({ ri, ci, a: matrix.rows[ri].label, b: matrix.cols[ci].label, count: cell.count, diag: matrix.symmetric && ri === ci });
+      }
+    }
+    return out.sort((x, y) => y.count - x.count);
+  }, [matrix]);
   // The workspace item this matrix saves as — only the term descriptors (keys recomputed on reopen).
   const saveItem = useMemo(() => {
     const strip = (arr) => arr.map((tm) => ({ label: tm.label, key: tm.key, mode: tm.mode }));
@@ -126,17 +146,58 @@ export function PairingModal({ seed, initialRows, initialCols, indices, r2v, ver
           onClick={() => exportJsonFile({ rows: matrix.rows, cols: matrix.cols, cells: matrix.cells.map((r) => r.map((c) => c.count)) }, "pairing-matrix.json")}>⤓ JSON</button>
       </>}>
       <div className="ag-pm">
-        <p className="ag-hint ag-cq-intro">{t("pm.intro")}</p>
-        <AxisEditor title={t("pm.rows")} terms={rows} indices={indices} r2v={r2v} fields={fields} precision={precision}
-          searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy}
-          onAdd={(tm) => setRows((r) => [...r, tm])} onAddMany={(ts) => setRows((r) => [...r, ...ts])} onRemove={(i) => setRows((r) => r.filter((_, j) => j !== i))}
-          seedBtn={seed?.root ? <button type="button" className="ag-btn ag-btn-xs" onClick={seedLemmas}>{t("pm.seedLemmas")}</button> : null} />
-        <AxisEditor title={t("pm.cols")} terms={cols} indices={indices} r2v={r2v} fields={fields} precision={precision}
-          searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy}
-          onAdd={(tm) => setCols((c) => [...c, tm])} onAddMany={(ts) => setCols((c) => [...c, ...ts])} onRemove={(i) => setCols((c) => c.filter((_, j) => j !== i))} />
-        <p className="ag-hint">{t("pm.symmetricHint")}</p>
+        {(editAxes || !matrix || rows.length < 1) ? (<>
+          <p className="ag-hint ag-cq-intro">{t("pm.intro")}</p>
+          <AxisEditor title={t("pm.rows")} terms={rows} indices={indices} r2v={r2v} fields={fields} precision={precision}
+            searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy}
+            onAdd={(tm) => setRows((r) => [...r, tm])} onAddMany={(ts) => setRows((r) => [...r, ...ts])} onRemove={(i) => setRows((r) => r.filter((_, j) => j !== i))}
+            seedBtn={seed?.root ? <button type="button" className="ag-btn ag-btn-xs" onClick={seedLemmas}>{t("pm.seedLemmas")}</button> : null} />
+          <AxisEditor title={t("pm.cols")} terms={cols} indices={indices} r2v={r2v} fields={fields} precision={precision}
+            searchAlias={searchAlias} searchAliasFuzzy={searchAliasFuzzy}
+            onAdd={(tm) => setCols((c) => [...c, tm])} onAddMany={(ts) => setCols((c) => [...c, ...ts])} onRemove={(i) => setCols((c) => c.filter((_, j) => j !== i))} />
+          <p className="ag-hint">{t("pm.symmetricHint")}</p>
+          {matrix && rows.length >= 1 && (
+            <button type="button" className="ag-btn ag-btn-xs is-primary" onClick={() => setEditAxes(false)}>✓ {t("pm.doneEditing")}</button>
+          )}
+        </>) : (
+          /* Collapsed: a one-line summary of the compared terms + an edit toggle, so the
+             result grid/list gets the room. */
+          <div className="ag-pm-summary">
+            <button type="button" className="ag-btn ag-btn-xs ag-pm-editbtn" onClick={() => setEditAxes(true)}>✎ {t("pm.editTerms")}</button>
+            <div className="ag-pm-summchips">
+              {rows.map((tm, i) => <span key={"r" + i} className="ag-pm-summchip">{tm.label}</span>)}
+              {cols.length > 0 && <span className="ag-pm-summx">×</span>}
+              {cols.map((tm, i) => <span key={"c" + i} className="ag-pm-summchip">{tm.label}</span>)}
+            </div>
+          </div>
+        )}
 
-        {!matrix || rows.length < 1 ? <p className="ag-hint is-warn">{t("pm.none")}</p> : (
+        {matrix && rows.length >= 1 && (
+          <div className="ag-seg ag-seg-sm ag-pm-viewtoggle" role="group" aria-label={t("pm.viewAria")}>
+            <button type="button" className={view === "grid" ? "is-on" : ""} aria-pressed={view === "grid"} onClick={() => setView("grid")}>⊞ {t("pm.viewGrid")}</button>
+            <button type="button" className={view === "list" ? "is-on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>☰ {t("pm.viewList")}</button>
+          </div>
+        )}
+
+        {!matrix || rows.length < 1 ? <p className="ag-hint is-warn">{t("pm.none")}</p> : view === "list" ? (
+          pairList.length === 0 ? <p className="ag-hint">{t("pm.noPairs")}</p> : (
+            <ul className="ag-pm-list">
+              {pairList.map((p) => (
+                <li key={p.ri + "-" + p.ci}>
+                  <button type="button" className="ag-pm-listrow" onClick={() => openCell(p.ri, p.ci)}
+                    title={t("pm.cellTitle", { a: p.a, b: p.b, n: fmtNum(p.count) })}>
+                    <span className="ag-pm-listpair">
+                      <span className={p.diag ? "ag-pm-diag" : undefined}>{p.a}</span>
+                      {!p.diag && <span className="ag-pm-listx"> × </span>}
+                      {!p.diag && <span>{p.b}</span>}
+                    </span>
+                    <span className="ag-pm-listn">{fmtNum(p.count)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
           <div className="ag-pm-grid-wrap">
             <table className="ag-pm-grid">
               <thead>

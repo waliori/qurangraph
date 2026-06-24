@@ -64,10 +64,9 @@ export function ConstructionModal({ lab, r2v, verseData, morph, expr, onVerses, 
   if (!lab) return null;
   return (
     <ModalShell open={!!lab} share onClose={onClose} closeLabel={t("occ.close")}
-      onEscape={() => (onBack ? onBack() : onClose())}
+      back={onBack || undefined} backLabel={t("occ.back")}
       ariaLabel={t("cq.title")}
       title={<>
-        {onBack && <button type="button" className="ag-iconbtn" title={t("occ.back")} aria-label={t("occ.back")} onClick={onBack}>→</button>}
         <span className="ag-badge t-root">{t("occ.badge.root")}</span>
         <h2 className="ag-modal-word">{t("cq.title")}</h2>
         <span className="ag-modal-count">{t("cq.for", { label: lab.label || root })}</span>
