@@ -96,6 +96,44 @@ describe("useWorkspace", () => {
     expect(result.current.claims.find((x) => x.id === id).oppose).toHaveLength(0);
   });
 
+  it("manages semantic fields (create, add/remove roots, rename)", () => {
+    const { result } = setup();
+    let f;
+    act(() => { f = result.current.addField("نور/ظلمة"); });
+    act(() => { result.current.addFieldRoot(f, "نور"); });
+    act(() => { result.current.addFieldRoot(f, "ظلم"); });
+    act(() => { result.current.addFieldRoot(f, "نور"); }); // dup → no-op
+    expect(result.current.fields[0].roots).toEqual(["نور", "ظلم"]);
+    act(() => { result.current.removeFieldRoot(f, "نور"); });
+    expect(result.current.fields[0].roots).toEqual(["ظلم"]);
+    act(() => { result.current.renameField(f, "تباين"); });
+    expect(result.current.fields[0].name).toBe("تباين");
+  });
+
+  it("groups any artifact and cleans membership on group delete", () => {
+    const { result } = setup();
+    let g, item, fld;
+    act(() => { g = result.current.addGroup("Light/Dark"); });
+    act(() => { item = result.current.saveItem({ type: "occ", title: "نور", payload: { lookup: "نور" } }); });
+    act(() => { fld = result.current.addField("contrast"); });
+    act(() => { result.current.toggleGroupMember("items", item, g); });
+    act(() => { result.current.toggleGroupMember("fields", fld, g); });
+    expect(result.current.items[0].groups).toContain(g);
+    expect(result.current.fields[0].groups).toContain(g);
+    act(() => { result.current.toggleGroupMember("items", item, g); }); // toggle off
+    expect(result.current.items[0].groups).not.toContain(g);
+    act(() => { result.current.removeGroup(g); }); // delete group → scrub from all artifacts
+    expect(result.current.groups).toHaveLength(0);
+    expect(result.current.fields[0].groups).not.toContain(g);
+  });
+
+  it("migrates a legacy qg.fields store into the workspace once", () => {
+    localStorage.setItem("qg.fields", JSON.stringify({ fields: [{ id: "old1", name: "legacy", roots: ["قول"], note: "" }] }));
+    const { result } = setup();
+    expect(result.current.fields.some((f) => f.id === "old1")).toBe(true);
+    expect(localStorage.getItem("qg.fields.migrated")).toBe("1");
+  });
+
   it("round-trips tags and claims through export/import", () => {
     const { result } = setup();
     act(() => { result.current.addTag("cat"); });

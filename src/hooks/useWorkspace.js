@@ -26,30 +26,44 @@ import { usePersistedState } from "./usePersistedState.js";
  */
 
 const KEY = "qg.workspace";
-const EMPTY = { v: 2, items: [], notes: [], tags: [], tagAssign: {}, claims: [] };
+const EMPTY = { v: 3, items: [], notes: [], tags: [], tagAssign: {}, claims: [], fields: [], groups: [] };
+// Artifact arrays that participate in grouping (a group can hold any of these).
+export const GROUPABLE = ["items", "notes", "fields", "tags", "claims"];
 
 // CSS hue palette for new tags — picked round-robin so categories stay visually distinct.
 export const TAG_COLORS = ["#e8b04b", "#5ec2c2", "#b06be0", "#e07b7b", "#79c267", "#6aa3e0", "#e0a06a", "#c97fb0"];
 
+// Normalise an artifact's `groups` membership array (strings, deduped).
+const grps = (x) => (Array.isArray(x.groups) ? [...new Set(x.groups.filter((g) => typeof g === "string"))] : []);
+
 function sanitize(v) {
   if (!v || typeof v !== "object") return { ...EMPTY };
   const isRef = (r) => r && typeof r.vk === "string";
+  const strs = (a) => (Array.isArray(a) ? a.filter((r) => typeof r === "string") : []);
   return {
-    v: 2,
-    items: Array.isArray(v.items) ? v.items.filter((x) => x && x.id && x.type) : [],
-    notes: Array.isArray(v.notes) ? v.notes.filter((x) => x && x.id) : [],
-    tags: Array.isArray(v.tags) ? v.tags.filter((x) => x && x.id && x.label) : [],
+    v: 3,
+    items: Array.isArray(v.items) ? v.items.filter((x) => x && x.id && x.type).map((x) => ({ ...x, groups: grps(x) })) : [],
+    notes: Array.isArray(v.notes) ? v.notes.filter((x) => x && x.id).map((x) => ({ ...x, groups: grps(x) })) : [],
+    tags: Array.isArray(v.tags) ? v.tags.filter((x) => x && x.id && x.label).map((x) => ({ ...x, groups: grps(x) })) : [],
     tagAssign: v.tagAssign && typeof v.tagAssign === "object"
       ? Object.fromEntries(Object.entries(v.tagAssign).filter(([k, a]) => k && Array.isArray(a)).map(([k, a]) => [k, [...new Set(a)]]))
       : {},
     claims: Array.isArray(v.claims)
       ? v.claims.filter((c) => c && c.id).map((c) => ({
-          id: c.id, statement: c.statement || "", note: c.note || "",
+          id: c.id, statement: c.statement || "", note: c.note || "", groups: grps(c),
           support: Array.isArray(c.support) ? c.support.filter(isRef) : [],
           oppose: Array.isArray(c.oppose) ? c.oppose.filter(isRef) : [],
           created: c.created || Date.now(), updated: c.updated || Date.now(),
         }))
       : [],
+    // Semantic fields (root sets) — migrated in from the old standalone qg.fields store.
+    fields: Array.isArray(v.fields)
+      ? v.fields.filter((f) => f && typeof f.id === "string").map((f) => ({
+          id: f.id, name: typeof f.name === "string" ? f.name : "—", note: typeof f.note === "string" ? f.note : "",
+          roots: [...new Set(strs(f.roots))], groups: grps(f),
+        }))
+      : [],
+    groups: Array.isArray(v.groups) ? v.groups.filter((g) => g && typeof g.id === "string").map((g) => ({ id: g.id, name: g.name || "", color: g.color || TAG_COLORS[0] })) : [],
   };
 }
 
@@ -61,13 +75,15 @@ const sig = (type, payload) => type + ":" + JSON.stringify(payload ?? null);
 // A no-op default so components used without the provider (e.g. unit tests) don't
 // crash — they just read empty lists and saving is a no-op.
 const NOOP = {
-  items: [], notes: [], tags: [], tagAssign: {}, claims: [],
+  items: [], notes: [], tags: [], tagAssign: {}, claims: [], fields: [], groups: [],
   saveItem: () => undefined, updateItem: () => {}, removeItem: () => {}, moveItem: () => {}, findSaved: () => null,
   addNote: () => undefined, updateNote: () => {}, removeNote: () => {},
   addTag: () => undefined, updateTag: () => {}, removeTag: () => {}, toggleTag: () => {},
   tagsForVerse: () => [], tagCounts: () => ({}),
   addClaim: () => undefined, updateClaim: () => {}, removeClaim: () => {}, moveClaim: () => {},
   addClaimRef: () => {}, updateClaimRef: () => {}, removeClaimRef: () => {},
+  addField: () => undefined, removeField: () => {}, renameField: () => {}, updateField: () => {}, addFieldRoot: () => {}, removeFieldRoot: () => {},
+  addGroup: () => undefined, renameGroup: () => {}, removeGroup: () => {}, toggleGroupMember: () => {},
   exportJSON: () => "{}", importJSON: () => false, clearAll: () => {},
   toast: () => {}, toastMsg: null,
 };
@@ -100,7 +116,7 @@ export function WorkspaceProvider({ children }) {
         const rest = st.items.filter((x) => x.id !== existing.id);
         return { ...st, items: [{ ...existing, title: item.title || existing.title, created: Date.now() }, ...rest] };
       }
-      return { ...st, items: [{ id, created: Date.now(), tags: [], note: "", ...item }, ...st.items] };
+      return { ...st, items: [{ id, created: Date.now(), tags: [], note: "", groups: [], ...item }, ...st.items] };
     });
     return id;
   }, [setStore]);
@@ -125,7 +141,7 @@ export function WorkspaceProvider({ children }) {
   const addNote = useCallback((note = {}) => {
     const id = uid("n");
     const now = Date.now();
-    setStore((st) => ({ ...st, notes: [{ id, title: "", body: "", refs: [], pin: null, created: now, updated: now, ...note }, ...st.notes] }));
+    setStore((st) => ({ ...st, notes: [{ id, title: "", body: "", refs: [], pin: null, groups: [], created: now, updated: now, ...note }, ...st.notes] }));
     return id;
   }, [setStore]);
   const updateNote = useCallback((id, patch) => setStore((st) => ({ ...st, notes: st.notes.map((n) => (n.id === id ? { ...n, ...patch, updated: Date.now() } : n)) })), [setStore]);
@@ -136,7 +152,7 @@ export function WorkspaceProvider({ children }) {
     const id = uid("t");
     setStore((st) => {
       const c = color || TAG_COLORS[st.tags.length % TAG_COLORS.length];
-      return { ...st, tags: [...st.tags, { id, label: label || "", color: c }] };
+      return { ...st, tags: [...st.tags, { id, label: label || "", color: c, groups: [] }] };
     });
     return id;
   }, [setStore]);
@@ -166,7 +182,7 @@ export function WorkspaceProvider({ children }) {
   const addClaim = useCallback((statement = "") => {
     const id = uid("c");
     const now = Date.now();
-    setStore((st) => ({ ...st, claims: [{ id, statement, note: "", support: [], oppose: [], created: now, updated: now }, ...st.claims] }));
+    setStore((st) => ({ ...st, claims: [{ id, statement, note: "", support: [], oppose: [], groups: [], created: now, updated: now }, ...st.claims] }));
     return id;
   }, [setStore]);
   const updateClaim = useCallback((id, patch) => setStore((st) => ({ ...st, claims: st.claims.map((c) => (c.id === id ? { ...c, ...patch, updated: Date.now() } : c)) })), [setStore]);
@@ -194,30 +210,89 @@ export function WorkspaceProvider({ children }) {
     ...st, claims: st.claims.map((c) => (c.id === id ? { ...c, [side]: c[side].filter((r) => r.vk !== vk), updated: Date.now() } : c)),
   })), [setStore]);
 
+  // ── Semantic fields (root sets) — moved in from the old standalone qg.fields store ──
+  const addField = useCallback((name) => {
+    const id = uid("fld");
+    setStore((st) => ({ ...st, fields: [{ id, name: name || "—", roots: [], note: "", groups: [] }, ...st.fields] }));
+    return id;
+  }, [setStore]);
+  const removeField = useCallback((id) => setStore((st) => ({ ...st, fields: st.fields.filter((f) => f.id !== id) })), [setStore]);
+  const renameField = useCallback((id, name) => setStore((st) => ({ ...st, fields: st.fields.map((f) => (f.id === id ? { ...f, name } : f)) })), [setStore]);
+  const updateField = useCallback((id, patch) => setStore((st) => ({ ...st, fields: st.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) })), [setStore]);
+  const addFieldRoot = useCallback((id, root) => setStore((st) => ({ ...st, fields: st.fields.map((f) => (f.id === id && !f.roots.includes(root) ? { ...f, roots: [...f.roots, root] } : f)) })), [setStore]);
+  const removeFieldRoot = useCallback((id, root) => setStore((st) => ({ ...st, fields: st.fields.map((f) => (f.id === id ? { ...f, roots: f.roots.filter((r) => r !== root) } : f)) })), [setStore]);
+
+  // ── Groups (named collections that can hold any artifact: item/note/field/tag/claim) ──
+  const addGroup = useCallback((name) => {
+    const id = uid("g");
+    setStore((st) => ({ ...st, groups: [...st.groups, { id, name: name || "", color: TAG_COLORS[st.groups.length % TAG_COLORS.length] }] }));
+    return id;
+  }, [setStore]);
+  const renameGroup = useCallback((id, patch) => setStore((st) => ({ ...st, groups: st.groups.map((g) => (g.id === id ? { ...g, ...(typeof patch === "string" ? { name: patch } : patch) } : g)) })), [setStore]);
+  // Deleting a group also strips its id from every artifact's membership.
+  const removeGroup = useCallback((id) => setStore((st) => {
+    const strip = (arr) => arr.map((x) => (x.groups?.includes(id) ? { ...x, groups: x.groups.filter((g) => g !== id) } : x));
+    const next = { ...st, groups: st.groups.filter((g) => g.id !== id) };
+    for (const k of GROUPABLE) next[k] = strip(st[k]);
+    return next;
+  }), [setStore]);
+  // Add/remove an artifact (kind ∈ GROUPABLE, by id) to/from a group.
+  const toggleGroupMember = useCallback((kind, id, groupId) => setStore((st) => ({
+    ...st,
+    [kind]: st[kind].map((x) => {
+      if (x.id !== id) return x;
+      const cur = x.groups || [];
+      return { ...x, groups: cur.includes(groupId) ? cur.filter((g) => g !== groupId) : [...cur, groupId] };
+    }),
+  })), [setStore]);
+
   const exportJSON = useCallback(() => JSON.stringify(store, null, 2), [store]);
   const importJSON = useCallback((text, { merge = false } = {}) => {
     let parsed;
     try { parsed = sanitize(JSON.parse(text)); } catch { return false; }
     setStore((st) => (merge
-      ? { v: 2, items: [...parsed.items, ...st.items], notes: [...parsed.notes, ...st.notes],
+      ? { v: 3, items: [...parsed.items, ...st.items], notes: [...parsed.notes, ...st.notes],
           tags: [...st.tags, ...parsed.tags.filter((p) => !st.tags.some((t) => t.id === p.id))],
           tagAssign: { ...parsed.tagAssign, ...st.tagAssign },
-          claims: [...parsed.claims, ...st.claims] }
+          claims: [...parsed.claims, ...st.claims],
+          fields: [...parsed.fields, ...st.fields.filter((f) => !parsed.fields.some((p) => p.id === f.id))],
+          groups: [...st.groups, ...parsed.groups.filter((p) => !st.groups.some((g) => g.id === p.id))] }
       : parsed));
     return true;
   }, [setStore]);
   const clearAll = useCallback(() => setStore({ ...EMPTY }), [setStore]);
 
+  // One-time migration: fold the legacy standalone semantic-fields store (qg.fields) into
+  // the workspace, so fields live alongside everything else and can be grouped.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("qg.fields.migrated")) return;
+      const raw = localStorage.getItem("qg.fields");
+      const old = raw ? JSON.parse(raw) : null;
+      const oldFields = Array.isArray(old?.fields) ? old.fields : [];
+      if (oldFields.length) {
+        setStore((st) => ({ ...st, fields: [...oldFields.filter((f) => f && f.id && !st.fields.some((x) => x.id === f.id))
+          .map((f) => ({ id: f.id, name: f.name || "—", roots: [...new Set((f.roots || []).filter((r) => typeof r === "string"))], note: f.note || "", groups: [] })), ...st.fields] }));
+      }
+      localStorage.setItem("qg.fields.migrated", "1");
+    } catch { /* ignore */ }
+  }, [setStore]);
+
   const value = useMemo(() => ({
     items: store.items, notes: store.notes, tags: store.tags, tagAssign: store.tagAssign, claims: store.claims,
+    fields: store.fields, groups: store.groups,
     saveItem, updateItem, removeItem, moveItem, findSaved,
     addNote, updateNote, removeNote,
     addTag, updateTag, removeTag, toggleTag, tagsForVerse, tagCounts,
     addClaim, updateClaim, removeClaim, moveClaim, addClaimRef, updateClaimRef, removeClaimRef,
+    addField, removeField, renameField, updateField, addFieldRoot, removeFieldRoot,
+    addGroup, renameGroup, removeGroup, toggleGroupMember,
     exportJSON, importJSON, clearAll, toast, toastMsg,
   }), [store, saveItem, updateItem, removeItem, moveItem, findSaved, addNote, updateNote, removeNote,
     addTag, updateTag, removeTag, toggleTag, tagsForVerse, tagCounts,
     addClaim, updateClaim, removeClaim, moveClaim, addClaimRef, updateClaimRef, removeClaimRef,
+    addField, removeField, renameField, updateField, addFieldRoot, removeFieldRoot,
+    addGroup, renameGroup, removeGroup, toggleGroupMember,
     exportJSON, importJSON, clearAll, toast, toastMsg]);
 
   return createElement(Ctx.Provider, { value }, children);

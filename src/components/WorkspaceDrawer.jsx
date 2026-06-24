@@ -17,6 +17,31 @@ const TYPE_BADGE = { graph: "t-verse", compare: "t-word", occ: "t-word", dist: "
 // Types offered in the filter row (in display order).
 const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "word", "phrase", "expr", "pairing"];
 
+/* Per-card group membership control: a ⊕N chip that opens a checklist of all groups to
+ * toggle this artifact (kind ∈ items/notes/fields/tags/claims) in/out of each. */
+function GroupPicker({ ws, kind, id }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const mine = (ws[kind]?.find((x) => x.id === id)?.groups) || [];
+  if (ws.groups.length === 0) return null;
+  return (
+    <div className="ag-ws-grp">
+      <button type="button" className={"ag-btn ag-btn-xs" + (mine.length ? " is-active" : "")} aria-expanded={open}
+        title={t("ws.groups.assign")} onClick={() => setOpen((o) => !o)}>⊕{mine.length ? ` ${mine.length}` : ""}</button>
+      {open && (
+        <div className="ag-ws-grpmenu" role="menu">
+          {ws.groups.map((g) => (
+            <label key={g.id} className="ag-occ-menu-row ag-tag-pick">
+              <input type="checkbox" checked={mine.includes(g.id)} onChange={() => ws.toggleGroupMember(kind, id, g.id)} />
+              <span className="ag-tag-dot" style={{ background: g.color }} />{g.name || "—"}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, canPin }) {
   const { t, fmtNum } = useI18n();
   const ws = useWorkspace();
@@ -25,19 +50,33 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [newTag, setNewTag] = useState("");
+  const [tagQuery, setTagQuery] = useState("");   // filter the tags tab when it grows
+  const [noteQuery, setNoteQuery] = useState(""); // filter the notes tab when it grows
+  const [groupFilter, setGroupFilter] = useState("all"); // filter the active tab by group
+  const [newGroup, setNewGroup] = useState("");
+  const [newField, setNewField] = useState("");
+  const [fieldRoot, setFieldRoot] = useState({}); // per-field add-root input value
+  const FILTER_MIN = 8; // show a search box once a tab list is longer than this
   const dialogRef = useRef(null);
   const fileRef = useRef(null);
   useModalFocus(open, dialogRef, { onEscape: onClose });
 
   if (!open) return null;
-  const { items, notes, tags } = ws;
+  const { items, notes, tags, fields, groups } = ws;
   const tagCounts = ws.tagCounts ? ws.tagCounts() : {};
+  const inGroup = (x) => groupFilter === "all" || (x.groups || []).includes(groupFilter);
   const q = query.trim().toLowerCase();
-  const shownItems = items.filter((it) =>
+  const shownItems = items.filter((it) => inGroup(it) &&
     (typeFilter === "all" || it.type === typeFilter) &&
     (!q || (it.title || "").toLowerCase().includes(q) || (it.note || "").toLowerCase().includes(q)));
   // Only offer type chips that actually have items, so the filter row stays relevant.
   const presentTypes = FILTER_TYPES.filter((ty) => items.some((it) => it.type === ty));
+  const shownTagsList = (tagQuery.trim() ? tags.filter((tg) => (tg.label || "").includes(tagQuery.trim())) : tags).filter(inGroup);
+  const nq = noteQuery.trim().toLowerCase();
+  const shownNotes = (nq ? notes.filter((n) => (n.title || "").toLowerCase().includes(nq) || (n.body || "").toLowerCase().includes(nq)) : notes).filter(inGroup);
+  const shownFields = fields.filter(inGroup);
+  const addGroup = (e) => { e.preventDefault(); const v = newGroup.trim(); if (v) { ws.addGroup(v); setNewGroup(""); } };
+  const curGroup = groups.find((g) => g.id === groupFilter) || null;
 
   const onImportFile = (e) => {
     const f = e.target.files?.[0];
@@ -58,7 +97,31 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
           <button type="button" role="tab" aria-selected={tab === "saved"} className={tab === "saved" ? "is-on" : ""} onClick={() => setTab("saved")}>{t("ws.tabs.saved")} {items.length ? `(${items.length})` : ""}</button>
           <button type="button" role="tab" aria-selected={tab === "notes"} className={tab === "notes" ? "is-on" : ""} onClick={() => setTab("notes")}>{t("ws.tabs.notes")} {notes.length ? `(${notes.length})` : ""}</button>
           <button type="button" role="tab" aria-selected={tab === "tags"} className={tab === "tags" ? "is-on" : ""} onClick={() => setTab("tags")}>{t("ws.tabs.tags")} {tags.length ? `(${tags.length})` : ""}</button>
+          <button type="button" role="tab" aria-selected={tab === "fields"} className={tab === "fields" ? "is-on" : ""} onClick={() => setTab("fields")}>{t("ws.tabs.fields")} {fields.length ? `(${fields.length})` : ""}</button>
         </div>
+
+        {/* Group filter chips: filter the active tab to one group; ＋ adds a group; the
+            active group can be renamed/deleted inline. Groups can hold any artifact. */}
+        <div className="ag-ws-groupbar">
+          <button type="button" className={"ag-tag ag-tag-btn" + (groupFilter === "all" ? " is-on" : "")} onClick={() => setGroupFilter("all")}>{t("ws.groups.all")}</button>
+          {groups.map((g) => (
+            <button type="button" key={g.id} className={"ag-tag ag-tag-btn" + (groupFilter === g.id ? " is-on" : "")} onClick={() => setGroupFilter(g.id)}>
+              <span className="ag-tag-dot" style={{ background: g.color }} />{g.name || "—"}
+            </button>
+          ))}
+          <form className="ag-tag-add" onSubmit={addGroup}>
+            <input className="ag-input ag-input-sm" value={newGroup} placeholder={t("ws.groups.addPh")} aria-label={t("ws.groups.add")} onChange={(e) => setNewGroup(e.target.value)} />
+            <button type="submit" className="ag-btn ag-btn-xs">＋</button>
+          </form>
+        </div>
+        {curGroup && (
+          <div className="ag-ws-groupedit">
+            <input className="ag-input ag-input-sm" value={curGroup.name} aria-label={t("ws.groups.rename")}
+              onChange={(e) => ws.renameGroup(curGroup.id, e.target.value)} />
+            <button type="button" className="ag-iconbtn is-warn" title={t("ws.groups.delete")} aria-label={t("ws.groups.delete")}
+              onClick={() => { ws.removeGroup(curGroup.id); setGroupFilter("all"); }}>🗑</button>
+          </div>
+        )}
 
         {tab === "saved" && items.length > 0 && (
           <div className="ag-ws-filter">
@@ -94,6 +157,7 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
                   <button type="button" className="ag-iconbtn" title={t("ws.up")} aria-label={t("ws.up")} onClick={() => ws.moveItem(it.id, -1)}>↑</button>
                   <button type="button" className="ag-iconbtn" title={t("ws.down")} aria-label={t("ws.down")} onClick={() => ws.moveItem(it.id, 1)}>↓</button>
                   <button type="button" className="ag-iconbtn is-warn" title={t("ws.delete")} aria-label={t("ws.delete")} onClick={() => ws.removeItem(it.id)}>🗑</button>
+                  <GroupPicker ws={ws} kind="items" id={it.id} />
                 </div>
                 {it.type === "lexicon" && it.payload?.gloss && <div className="ag-ws-gloss">{it.payload.gloss}</div>}
                 <textarea className="ag-ws-noteinput" placeholder={t("ws.itemNote")} defaultValue={it.note}
@@ -106,7 +170,13 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
                 <input className="ag-input" value={newTag} placeholder={t("ws.tags.newPh")} aria-label={t("ws.tags.add")} onChange={(e) => setNewTag(e.target.value)} />
                 <button type="submit" className="ag-btn is-gold">＋ {t("ws.tags.add")}</button>
               </form>
-              {tags.length === 0 ? <p className="ag-hint">{t("ws.tags.empty")}</p> : tags.map((tag) => (
+              {tags.length > FILTER_MIN && (
+                <input className="ag-input" type="search" value={tagQuery} placeholder={t("tag.filterPh")} aria-label={t("tag.filterAria")}
+                  style={{ marginBlockEnd: "var(--space-2)" }} onChange={(e) => setTagQuery(e.target.value)} />
+              )}
+              {tags.length === 0 ? <p className="ag-hint">{t("ws.tags.empty")}</p>
+                : shownTagsList.length === 0 ? <p className="ag-hint">{t("tag.filterNone")}</p>
+                : shownTagsList.map((tag) => (
                 <div className="ag-ws-card" key={tag.id}>
                   <div className="ag-ws-cardhead">
                     <span className="ag-tag-dot" style={{ background: tag.color }} />
@@ -121,6 +191,48 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
                     <button type="button" className="ag-btn is-gold" disabled={!tagCounts[tag.id]} onClick={() => onOpenTag?.(tag.id, tag.label)}>↗ {t("ws.tags.openVerses")}</button>
                     <button type="button" className="ag-iconbtn" title={t("ws.rename")} aria-label={t("ws.rename")} onClick={() => setEditing(tag.id)}>✎</button>
                     <button type="button" className="ag-iconbtn is-warn" title={t("ws.delete")} aria-label={t("ws.delete")} onClick={() => ws.removeTag(tag.id)}>🗑</button>
+                    <GroupPicker ws={ws} kind="tags" id={tag.id} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : tab === "fields" ? (
+            <div className="ag-ws-tags">
+              <form className="ag-tag-add" style={{ marginBlockEnd: "var(--space-2)" }} onSubmit={(e) => { e.preventDefault(); const v = newField.trim(); if (v) { ws.addField(v); setNewField(""); } }}>
+                <input className="ag-input" value={newField} placeholder={t("ws.fields.newPh")} aria-label={t("ws.fields.add")} onChange={(e) => setNewField(e.target.value)} />
+                <button type="submit" className="ag-btn is-gold">＋ {t("ws.fields.add")}</button>
+              </form>
+              {fields.length === 0 ? <p className="ag-hint">{t("ws.fields.empty")}</p>
+                : shownFields.length === 0 ? <p className="ag-hint">{t("ws.groups.noMatch")}</p>
+                : shownFields.map((f) => (
+                <div className="ag-ws-card" key={f.id}>
+                  <div className="ag-ws-cardhead">
+                    <span className="ag-badge t-root">⊕</span>
+                    {editing === f.id
+                      ? <input className="ag-input" autoFocus defaultValue={f.name}
+                          onBlur={(e) => { ws.renameField(f.id, e.target.value.trim() || f.name); setEditing(null); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                      : <button type="button" className="ag-ws-title" onClick={() => setEditing(f.id)}>{f.name || "—"}</button>}
+                    <span className="ag-tag-n">{t("ws.fields.count", { n: fmtNum(f.roots.length) })}</span>
+                  </div>
+                  <div className="ag-ws-chips">
+                    {f.roots.map((r) => (
+                      <span key={r} className="ag-tag ag-pm-chip t-root" style={{ fontFamily: "var(--font-quran)" }}>
+                        {r}<button type="button" className="ag-tag-x" aria-label={t("ws.delete")} onClick={() => ws.removeFieldRoot(f.id, r)}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                  <form className="ag-tag-add" onSubmit={(e) => { e.preventDefault(); const r = (fieldRoot[f.id] || "").trim(); if (r) { ws.addFieldRoot(f.id, r); setFieldRoot((m) => ({ ...m, [f.id]: "" })); } }}>
+                    <input className="ag-input ag-input-sm" value={fieldRoot[f.id] || ""} placeholder={t("ws.fields.addRootPh")} aria-label={t("ws.fields.roots")}
+                      style={{ fontFamily: "var(--font-quran)" }} onChange={(e) => setFieldRoot((m) => ({ ...m, [f.id]: e.target.value }))} />
+                    <button type="submit" className="ag-btn ag-btn-xs">＋</button>
+                  </form>
+                  <textarea className="ag-ws-noteinput" placeholder={t("ws.fields.notePh")} defaultValue={f.note}
+                    onBlur={(e) => ws.updateField(f.id, { note: e.target.value })} rows={1} />
+                  <div className="ag-ws-actions">
+                    <button type="button" className="ag-iconbtn" title={t("ws.rename")} aria-label={t("ws.rename")} onClick={() => setEditing(f.id)}>✎</button>
+                    <button type="button" className="ag-iconbtn is-warn" title={t("ws.delete")} aria-label={t("ws.delete")} onClick={() => ws.removeField(f.id)}>🗑</button>
+                    <GroupPicker ws={ws} kind="fields" id={f.id} />
                   </div>
                 </div>
               ))}
@@ -128,7 +240,13 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
           ) : (
             <>
               <button type="button" className="ag-btn is-gold" style={{ width: "100%", marginBlockEnd: "var(--space-2)" }} onClick={() => ws.addNote({})}>＋ {t("ws.addNote")}</button>
-              {notes.length === 0 ? <p className="ag-hint">{t("ws.emptyNotes")}</p> : notes.map((n) => (
+              {notes.length > FILTER_MIN && (
+                <input className="ag-input" type="search" value={noteQuery} placeholder={t("ws.searchNotes")} aria-label={t("ws.searchNotes")}
+                  style={{ marginBlockEnd: "var(--space-2)" }} onChange={(e) => setNoteQuery(e.target.value)} />
+              )}
+              {notes.length === 0 ? <p className="ag-hint">{t("ws.emptyNotes")}</p>
+                : shownNotes.length === 0 ? <p className="ag-hint">{t("ws.noMatch")}</p>
+                : shownNotes.map((n) => (
                 <div className="ag-ws-card" key={n.id}>
                   <div className="ag-ws-cardhead">
                     <input className="ag-input" placeholder={t("ws.noteTitlePh")} defaultValue={n.title}
@@ -141,6 +259,7 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
                     {n.pin
                       ? <button type="button" className="ag-btn" title={t("ws.unpin")} onClick={() => ws.updateNote(n.id, { pin: null })}>📌 {t("ws.pinned")}</button>
                       : <button type="button" className="ag-btn" title={t("ws.pin")} disabled={!canPin} onClick={() => onPinNote(n.id)}>📌 {t("ws.pin")}</button>}
+                    <GroupPicker ws={ws} kind="notes" id={n.id} />
                   </div>
                 </div>
               ))}

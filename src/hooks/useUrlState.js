@@ -18,7 +18,7 @@ export function encodeState(s) {
   if (s.mode && s.mode !== "exact") o.m = s.mode;
   if (s.precision && s.precision !== "loose") o.p = s.precision;
   if (s.activeLexicon && s.activeLexicon !== "maqayis") o.lx = s.activeLexicon;
-  if (s.theme && s.theme !== "dark") o.th = s.theme;
+  if (s.theme && s.theme !== "light") o.th = s.theme;
   if (s.maxBranch && s.maxBranch !== 10) o.b = s.maxBranch;
   if (s.hideStop === false) o.hs = 0;
   if (s.showLoops === false) o.sl = 0;
