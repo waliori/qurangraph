@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useDeferredValue, useRef, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { looseResolve, verseSearch, buildContentIndex, romanResolve } from "./search.js";
 import { latinSkeleton, isLatinQuery, arabicSkeletons } from "./romanize.js";
 import { norm, groupKey, wordGroupKey, rootOf, setRootMap, setLemmaMap, setStopSet, STOP_PARTICLES, STOP_CONTENT_DEFAULT } from "./arabic-utils.js";
@@ -23,6 +24,9 @@ import { SaveButton } from "./components/SaveButton.jsx";
 import { StopWordEditor } from "./components/StopWordEditor.jsx";
 import { ArabicKeyboard } from "./components/ArabicKeyboard.jsx";
 import { SurahSelect } from "./components/SurahSelect.jsx";
+import { ToolbarMenu } from "./components/ToolbarMenu.jsx";
+import { useCompactUI, useMediaQuery } from "./hooks/useMediaQuery.js";
+import { useBottomSheetDrag } from "./hooks/useBottomSheetDrag.js";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
 import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
@@ -108,9 +112,58 @@ export default function QuranGraph() {
   const [precision, setPrecision] = usePersistedState("qg.precision", "loose", (v, f) => (v === "loose" || v === "strict" ? v : f));
   const [activeLexicon, setActiveLexicon] = usePersistedState("qg.lexicon", "maqayis", (v, f) => (typeof v === "string" && v ? v : f));
   const [morphFilter, setMorphFilter] = usePersistedState("qg.morphFilter", EMPTY_MORPH_FILTER, sanitizeMorphFilter);
-  const [theme, setTheme] = usePersistedState("qg.theme", "dark", (v, f) => (v === "dark" || v === "light" ? v : f));
+  const [theme, setTheme] = usePersistedState("qg.theme", "light", (v, f) => (v === "dark" || v === "light" ? v : f));
   const [renderer, setRenderer] = usePersistedState("qg.renderer", "svg", (v, f) => (v === "svg" || v === "canvas" ? v : f));
-  const [kbEnabled, setKbEnabled] = usePersistedState("qg.keyboard", false, (v) => !!v); // floating Arabic keyboard
+  // Floating Arabic keyboard as a 3-state machine: "off" (no transliteration, no panel) ·
+  // "shown" (typing rewrite ON + panel visible) · "hidden" (rewrite ON, panel dismissed to
+  // the edge badge). The old persisted boolean migrates: true → "shown". The full/collapsed
+  // split is a separate, panel-internal concern.
+  const [kbMode, setKbMode] = usePersistedState("qg.keyboard", "off",
+    (v, f) => (v === "off" || v === "shown" || v === "hidden" ? v : v === true ? "shown" : f));
+  const kbActive = kbMode !== "off";
+  // Summon/dismiss shared by the edge badge, the toolbar ⌨ and Alt+K: bring the panel up from
+  // any state; tap again while it's up to turn the whole thing off.
+  const cycleKb = useCallback(() => setKbMode((m) => (m === "shown" ? "off" : "shown")), [setKbMode]);
+  // Global accelerator: Alt+K from anywhere — even with a text field focused (Alt+K isn't an
+  // insertText event, so transliteration ignores it).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyK" || e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        cycleKb();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cycleKb]);
+  // The edge badge is draggable VERTICALLY along the inline-start edge (it stays glued to the
+  // edge — only its height position moves). Stored in px and clamped to the viewport; a small
+  // movement threshold keeps a plain tap = toggle. null → CSS default (vertically centred).
+  const [kbFabTop, setKbFabTop] = usePersistedState("qg.keyboard.fabTop", null, (v, f) => (typeof v === "number" ? v : f));
+  const kbFabDrag = useRef(null);
+  useEffect(() => {
+    const clamp = () => setKbFabTop((tp) => (tp == null ? tp : Math.min(window.innerHeight - 52, Math.max(6, tp))));
+    window.addEventListener("resize", clamp);
+    return () => window.removeEventListener("resize", clamp);
+  }, [setKbFabTop]);
+  const onFabDown = (e) => {
+    kbFabDrag.current = { startY: e.clientY, base: e.currentTarget.getBoundingClientRect().top, moved: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ }
+  };
+  const onFabMove = (e) => {
+    const d = kbFabDrag.current;
+    if (!d) return;
+    if (!d.moved && Math.abs(e.clientY - d.startY) < 5) return; // still a tap, not a drag
+    d.moved = true;
+    setKbFabTop(Math.min(window.innerHeight - 52, Math.max(6, d.base + (e.clientY - d.startY))));
+  };
+  const onFabUp = (e) => {
+    const d = kbFabDrag.current;
+    if (!d) return;
+    kbFabDrag.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ }
+    if (!d.moved) cycleKb(); // it was a tap, not a drag → toggle
+  };
   const [expandedWords, setExpandedWords] = useState(new Set());
   const [expandedVerses, setExpandedVerses] = useState(new Set());
   const [hovered, setHovered] = useState(null);
@@ -152,11 +205,20 @@ export default function QuranGraph() {
   const onNodeClickRef = useRef(null); // latest onNodeClick, so pointerup can fire it (defined below)
   const containerRef = useRef();
   const toolsRef = useRef(null);
+  const toolsPopRef = useRef(null); // the portaled tools sheet on mobile (outside-click exemption)
   const pointersRef = useRef(new Map()); // pointerId → {x, y}  (for pan / pinch)
   const pinchRef = useRef(null);
   const rafRef = useRef(0);
   const movePendingRef = useRef(null);
   const centeredRef = useRef(false);
+  // ── Touch gesture state ──
+  const lastTapRef = useRef({ t: 0, x: 0, y: 0 });  // double-tap-to-zoom detection
+  const longPressRef = useRef(false);               // a long-press preview fired → suppress the trailing click
+  const longPressTimerRef = useRef(0);              // pending long-press timer id
+  const pressStartRef = useRef(null);               // { x, y, onNode } for tap vs drag / empty-tap classification
+  const panSampleRef = useRef(null);                // last pan position, for velocity
+  const panVelRef = useRef({ vx: 0, vy: 0 });        // px/frame at release, for inertia
+  const inertiaRef = useRef(0);                      // pan-inertia rAF id
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showHelp, setShowHelp] = useState(false);
   const [meanings, setMeanings] = useState(null); // active lexicon: root → { c, f } (lazy)
@@ -201,9 +263,19 @@ export default function QuranGraph() {
   const [sugOpen, setSugOpen] = useState(false); // search typeahead dropdown visible
   const [sugIndex, setSugIndex] = useState(-1);  // highlighted suggestion (roving)
   const [readerCollapsed, setReaderCollapsed] = useState(false); // bottom reader dock
+  // On touch the on-canvas dock + reader action buttons start collapsed behind a toggle
+  // (they're large and crowd the small canvas); on desktop they're always shown.
+  const [dockOpen, setDockOpen] = useState(() => !(typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches));
+  const [barHidden, setBarHidden] = useState(false); // mobile: collapse the toolbar to reclaim the canvas
   const [showExpanded, setShowExpanded] = useState(false); // expanded-words list panel
   const [sheetOpen, setSheetOpen] = useState(false); // inspector slide-in (mobile sheet)
   const [exporting, setExporting] = useState(false); // suspends culling so export captures the whole graph
+  const compactUI = useCompactUI(); // touch-first / narrow layout — drives the toolbar overflow menu
+  const sheetLayout = useMediaQuery("(max-width: 860px)"); // the bottom-sheet breakpoint (matches theme.css)
+  // Inspector bottom-sheet drag (peek/full/dismiss) — shared with the modals via the hook.
+  const closeInspector = useCallback(() => { setSelected(null); setActiveWord(null); }, []);
+  const { sheetRef: inspSheetRef, sheetClass: inspSheetClass, sheetStyle: inspSheetStyle, gripProps: inspGripProps } = useBottomSheetDrag(closeInspector);
+  const coarsePointer = useMediaQuery("(pointer: coarse)"); // touch: enlarge node hit areas / enable touch gestures
   const T = THEMES[theme];
 
   // Translate that centres the virtual canvas in the current viewport.
@@ -440,7 +512,12 @@ export default function QuranGraph() {
   // button lives inside the same wrapper, so it still toggles normally).
   useEffect(() => {
     if (!toolsOpen) return;
-    const onDown = (e) => { if (toolsRef.current && !toolsRef.current.contains(e.target) && !e.target.closest?.("#react-joyride-portal")) setToolsOpen(false); };
+    const onDown = (e) => {
+      // The tools panel may be portaled to <body> as a bottom sheet on mobile, so it's
+      // outside toolsRef — exempt it (and the joyride portal) from the outside-click close.
+      if (toolsRef.current?.contains(e.target) || toolsPopRef.current?.contains(e.target) || e.target.closest?.("#react-joyride-portal")) return;
+      setToolsOpen(false);
+    };
     const onKey = (e) => { if (e.key === "Escape") setToolsOpen(false); };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
@@ -738,11 +815,28 @@ export default function QuranGraph() {
   // structure changes. Null (and skipped) in SVG mode, which hit-tests via the DOM.
   useEffect(() => { spatialIndexRef.current = renderer === "canvas" ? buildSpatialIndex(graphNodes, positionsRef.current) : null; }, [renderer, graphNodes, positions]);
   // The node under a client point in canvas mode (world-space hit-test), or null.
+  // On a coarse pointer the slack is widened so a fingertip lands on a node more
+  // forgivingly (stays well under the grid cell, so the 3×3 search still finds it).
   const hitTestAt = useCallback((clientX, clientY) => {
     if (renderer !== "canvas" || !spatialIndexRef.current) return null;
     const w = svgToWorld(clientX, clientY);
-    return hitTest(spatialIndexRef.current, positionsRef.current, w.x, w.y);
-  }, [renderer, svgToWorld]);
+    return hitTest(spatialIndexRef.current, positionsRef.current, w.x, w.y, coarsePointer ? 14 : 4);
+  }, [renderer, svgToWorld, coarsePointer]);
+
+  // ── Pan inertia (touch): coast after a flick, decaying with friction ──
+  const stopInertia = useCallback(() => { if (inertiaRef.current) { cancelAnimationFrame(inertiaRef.current); inertiaRef.current = 0; } }, []);
+  const startInertia = useCallback(() => {
+    let { vx, vy } = panVelRef.current;
+    if (Math.hypot(vx, vy) < 0.6) return; // a slow release / tap shouldn't coast
+    const step = () => {
+      vx *= 0.92; vy *= 0.92; // friction per frame
+      if (Math.hypot(vx, vy) < 0.15) { inertiaRef.current = 0; return; }
+      setTransform((t) => ({ ...t, x: t.x + vx, y: t.y + vy }));
+      inertiaRef.current = requestAnimationFrame(step);
+    };
+    inertiaRef.current = requestAnimationFrame(step);
+  }, []);
+  const clearLongPress = useCallback(() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = 0; } }, []);
   // Begin dragging a node: pin ONLY this node in the sim (grabbed at its current
   // point, not snapped to the cursor). Its linked nodes are left free so they
   // re-gather around it live as it moves, rather than being towed rigidly.
@@ -782,12 +876,17 @@ export default function QuranGraph() {
     return () => el.removeEventListener("wheel", onWheel);
   }, [loading, error, applyZoom]);
 
-  // Cancel any pending rAF on unmount.
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+  // Cancel any pending rAF / timers on unmount.
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (inertiaRef.current) cancelAnimationFrame(inertiaRef.current);
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  }, []);
 
   // ── Unified pointer handling (mouse + touch + pen): pan, node drag, pinch-zoom ──
   const onPointerDown = useCallback((e) => {
     if (e.target.closest("[data-panel]")) return; // let panels handle their own input
+    stopInertia(); // a fresh touch halts any coasting pan
     // Suppress the browser's native text-selection drag while panning/dragging a node
     // (otherwise gliding a node selects the reader/inspector text). Panels are exempt
     // (returned above) so their text stays selectable; restored on pointer up/leave.
@@ -795,6 +894,8 @@ export default function QuranGraph() {
     const pts = pointersRef.current;
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     draggedRef.current = false; // fresh gesture — not a drag until the pointer moves
+    longPressRef.current = false; clearLongPress();
+    panSampleRef.current = null; panVelRef.current = { vx: 0, vy: 0 };
 
     if (pts.size === 2) {
       const [p1, p2] = [...pts.values()];
@@ -808,23 +909,34 @@ export default function QuranGraph() {
       return;
     }
 
-    // Canvas mode: no per-node DOM — hit-test instead. A hit node is grabbed (for a
-    // possible drag) and remembered so pointerup can fire its click; a miss pans.
+    // Identify the node under the press (canvas: hit-test; svg: nearest [data-node]).
+    // On touch, a stationary press on a word/verse arms a long-press preview: it pops the
+    // hover tooltip (the light "glance" desktop gets for free) and suppresses the trailing
+    // tap so it doesn't also open the full sheet.
+    const node = renderer === "canvas"
+      ? hitTestAt(e.clientX, e.clientY)
+      : (() => { const el = e.target.closest("[data-node]"); return el ? nmap[el.getAttribute("data-node")] : null; })();
+    pressStartRef.current = { x: e.clientX, y: e.clientY, onNode: !!node };
+    if (coarsePointer && node && (node.type === "word" || node.type === "verse")) {
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = 0; longPressRef.current = true;
+        setHovered(node.id);
+        if (node.type === "word") setActiveWord(node.lookup || node.wordNorm);
+      }, 450);
+    }
+
+    // Canvas mode: a hit node is grabbed (for a possible drag) and remembered so pointerup
+    // can fire its click; a miss pans.
     if (renderer === "canvas") {
-      const node = hitTestAt(e.clientX, e.clientY);
       pressNodeRef.current = node || null;
       if (node) { if (!node.fixed) startDrag(node.id, e.clientX, e.clientY); return; }
-    } else {
-      const nodeEl = e.target.closest("[data-node]");
-      if (nodeEl) {
-        const node = nmap[nodeEl.getAttribute("data-node")];
-        if (node && !node.fixed) { startDrag(node.id, e.clientX, e.clientY); return; }
-        return;
-      }
+    } else if (node) {
+      if (!node.fixed) startDrag(node.id, e.clientX, e.clientY);
+      return; // node press (fixed or not) never pans
     }
     setIsPanning(true);
     setPanStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
-  }, [transform, nmap, startDrag, renderer, hitTestAt]);
+  }, [transform, nmap, startDrag, renderer, hitTestAt, coarsePointer, stopInertia, clearLongPress]);
 
   // rAF-throttled: pointermove can fire faster than frames; coalesce to one
   // state update per frame so pan/drag stay smooth on large graphs.
@@ -837,6 +949,10 @@ export default function QuranGraph() {
       rafRef.current = 0;
       const cur = movePendingRef.current;
       if (!cur) return;
+
+      // Any real movement cancels a pending long-press (it's a drag/pan, not a hold).
+      const ps = pressStartRef.current;
+      if (longPressTimerRef.current && ps && Math.hypot(cur.x - ps.x, cur.y - ps.y) > 10) clearLongPress();
 
       if (pinchRef.current && pts.size >= 2) {
         const [p1, p2] = [...pts.values()];
@@ -864,6 +980,10 @@ export default function QuranGraph() {
         runSim();
       } else if (isPanning && panStart) {
         setTransform((t) => ({ ...t, x: cur.x - panStart.x, y: cur.y - panStart.y }));
+        // Track per-frame velocity so a flick can coast on release (touch inertia).
+        const prev = panSampleRef.current;
+        if (prev) panVelRef.current = { vx: cur.x - prev.x, vy: cur.y - prev.y };
+        panSampleRef.current = { x: cur.x, y: cur.y };
       } else if (renderer === "canvas") {
         // Idle hover in canvas mode: hit-test and mirror onNodeEnter/onNodeLeave.
         const node = hitTestAt(cur.x, cur.y);
@@ -876,7 +996,7 @@ export default function QuranGraph() {
         }
       }
     });
-  }, [dragId, isPanning, panStart, svgToWorld, runSim, sim, renderer, hitTestAt, selected]);
+  }, [dragId, isPanning, panStart, svgToWorld, runSim, sim, renderer, hitTestAt, selected, clearLongPress]);
 
   // End a node drag: a node that was actually moved sticks where it was dropped
   // (so it doesn't spring back to its parent); a mere press is released.
@@ -891,28 +1011,50 @@ export default function QuranGraph() {
     const pts = pointersRef.current;
     pts.delete(e.pointerId);
     if (pts.size < 2) pinchRef.current = null;
+    clearLongPress();
     if (pts.size === 0) {
-      // Canvas mode: a press that didn't turn into a drag is a click on that node.
-      if (renderer === "canvas" && pressNodeRef.current) {
-        const node = pressNodeRef.current;
-        if (!draggedRef.current) onNodeClickRef.current?.(node, { stopPropagation() {} });
+      const longPressed = longPressRef.current;
+      const ps = pressStartRef.current; pressStartRef.current = null;
+      // A long-press preview already fired → dismiss its tooltip and swallow the tap so it
+      // doesn't also open the sheet (canvas: skip the click here; svg: onNodeClick consumes
+      // longPressRef on the trailing click).
+      if (longPressed) { if (!selected) setHovered(null); }
+      // Canvas mode: a press that didn't turn into a drag (or a long-press) is a node click.
+      else if (renderer === "canvas" && pressNodeRef.current) {
+        if (!draggedRef.current) onNodeClickRef.current?.(pressNodeRef.current, { stopPropagation() {} });
       }
+      if (renderer === "canvas" && longPressed) longPressRef.current = false; // svg leaves it for onNodeClick
       pressNodeRef.current = null;
+
+      // Double-tap empty space → zoom in toward the tap point (map-style). Touch only,
+      // and only an empty, (near-)stationary tap, so it never competes with node selection,
+      // pan, or a desktop mouse's own click semantics.
+      const moved = ps ? Math.hypot(e.clientX - ps.x, e.clientY - ps.y) : 0;
+      if (coarsePointer && !longPressed && ps && !ps.onNode && moved < 8) {
+        const now = Date.now(); const last = lastTapRef.current;
+        if (now - last.t < 300 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 30) {
+          applyZoom(1.8, e.clientX, e.clientY); lastTapRef.current = { t: 0, x: 0, y: 0 };
+        } else lastTapRef.current = { t: now, x: e.clientX, y: e.clientY };
+      }
+
+      const wasPanning = isPanning && !draggedRef.current;
       endDrag(); setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
+      if (wasPanning && coarsePointer) startInertia(); // flick to coast (touch only; no-op below the speed threshold)
       document.body.style.userSelect = ""; // gesture over — text selectable again
     }
-  }, [endDrag, renderer]);
+  }, [endDrag, renderer, selected, isPanning, applyZoom, clearLongPress, startInertia, coarsePointer]);
 
   // Pointer left the canvas mid-gesture → end it (mirrors mouse-leave behaviour).
   const onPointerLeave = useCallback(() => {
     pointersRef.current.clear();
     pinchRef.current = null;
     pressNodeRef.current = null;
+    clearLongPress(); longPressRef.current = false; pressStartRef.current = null;
     if (canvasHoverRef.current) { canvasHoverRef.current = null; setHovered(null); if (!selected) setActiveWord(null); }
     endDrag();
     setDragId(null); dragStartRef.current = null; setIsPanning(false); setPanStart(null);
     document.body.style.userSelect = ""; // gesture over — text selectable again
-  }, [endDrag, selected]);
+  }, [endDrag, selected, clearLongPress]);
 
   const handleWordClick = useCallback((wordNorm, fromVerseKey) => {
     const vk = fromVerseKey || currentKey;
@@ -1235,6 +1377,7 @@ export default function QuranGraph() {
   const onNodeLeave = useCallback(() => { setHovered(null); if (!selected) setActiveWord(null); }, [selected]);
   const onNodeClick = useCallback((n, e) => {
     e.stopPropagation();
+    if (longPressRef.current) { longPressRef.current = false; return; } // it was a long-press preview, not a tap
     if (draggedRef.current) { draggedRef.current = false; return; } // it was a drag, not a click
     if (n.type === "center") { setSelected(null); setActiveWord(null); return; }
     // Overflow meta-node: the verses the per-word cap hid. Open the full list so the
@@ -1614,8 +1757,41 @@ export default function QuranGraph() {
   // will reproduce a re-simulated layout, not this exact one. Tell the user.
   const layoutNotShared = graphNodes.length > POS_LINK_CAP;
 
+  // ── Secondary toolbar actions — one source rendered two ways ──
+  // On wide screens they sit inline as glyph icon buttons; on compact/touch layouts
+  // they collapse into the ⋯ ToolbarMenu (labelled rows, bigger targets). The tour
+  // drives several of these by data-tour, so collapsing is suppressed while it runs.
+  const compact = compactUI && !tourRun;
+  // On touch the dock / reader-action clusters hide behind a toggle to free the small
+  // canvas; the tour needs them visible, so it forces them open.
+  const showDockToggle = compactUI && !tourRun;
+  const dockExpanded = !showDockToggle || dockOpen;
+  const arabicActive = numerals === "arabic" ? true : numerals === "western" ? false : lang === "ar";
+  const githubGlyph = (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+  const secondaryItems = [
+    { key: "corpus", glyph: "≣", label: t("corpus.open"), active: corpusOpen, onClick: () => setCorpusOpen((o) => !o) },
+    { key: "pairing", glyph: "⊞", label: t("work.tools.pairing"), active: !!pairing?.open, onClick: () => setPairing((p) => (p?.open ? { ...p, open: false } : { seed: null, rows: [], cols: [], ...(p || {}), open: true })) },
+    { key: "claims", glyph: "⚖", label: t("work.tools.claims"), active: claimsOpen, badge: ws.claims.length > 0 ? ws.claims.length : null, onClick: () => setClaimsOpen((o) => !o) },
+    { key: "expr", glyph: "⛓", label: t("expr.open"), active: exprOpen, dataTour: "exprBtn", onClick: () => { setExprFocus(null); setExprInitial(null); setExprOpen((o) => !o); } },
+    { key: "help", glyph: "؟", label: t("common.help"), dataTour: "helpBtn", onClick: () => setShowHelp(true) },
+    { key: "github", glyph: githubGlyph, label: t("common.github"), href: "https://github.com/waliori/qurangraph" },
+    { key: "lang", glyph: lang === "ar" ? "EN" : "ع", label: t("common.language"), onClick: () => setLang(lang === "ar" ? "en" : "ar") },
+    { key: "numerals", glyph: arabicActive ? "123" : "١٢٣", label: t("common.numerals"), active: !arabicActive, iconStyle: { fontSize: "var(--text-sm)" }, onClick: () => setNumerals(arabicActive ? "western" : "arabic") },
+    { key: "keyboard", glyph: "⌨", label: t("keyboard.toggle"), active: kbActive, onClick: cycleKb },
+    { key: "theme", glyph: theme === "dark" ? "☀" : "☾", label: t("common.theme"), dataTour: "themeBtn", onClick: () => setTheme((th) => (th === "dark" ? "light" : "dark")) },
+  ];
+  // Workspace also tucks into the ⋯ menu on compact layouts (it stays a first-class inline
+  // button on wide screens, where its saved-count badge is worth the space).
+  const wsCount = ws.items.length + ws.notes.length;
+  const workspaceItem = { key: "workspace", glyph: "✶", label: t("ws.open"), active: wsOpen, badge: wsCount > 0 ? wsCount : null, onClick: () => setWsOpen((o) => !o) };
+  const menuItems = compact ? [workspaceItem, ...secondaryItems] : secondaryItems;
+
   return (
-    <div className="ag-app">
+    <div className={"ag-app" + (compactUI && barHidden ? " bar-hidden" : "")}>
       {/* Recoverable lazy-load failure — dismissible, with retry (replaces the old
           silent .catch that stranded the inspector/graph in a permanent loading state). */}
       {dataErr && (
@@ -1717,7 +1893,8 @@ export default function QuranGraph() {
           <div className="ag-tools" ref={toolsRef}>
             <button type="button" data-tour="tools" className={"ag-iconbtn is-gold" + (toolsOpen ? " is-active" : "")} aria-label={t("common.tools.title")}
               aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>⚙</button>
-            {toolsOpen && (
+            {toolsOpen && (() => {
+              const panel = (
               <div data-tour="toolspop" className="ag-popover" role="dialog" aria-label={t("common.tools.title")}>
                 <h3 className="ag-pop-h">{t("common.tools.title")}</h3>
                 {(() => {
@@ -1788,47 +1965,51 @@ export default function QuranGraph() {
                   onAddExtra={(w) => setStopExtra((p) => (p.includes(w) ? p : [...p, w]))}
                   onRemoveExtra={(w) => setStopExtra((p) => p.filter((x) => x !== w))} />
               </div>
-            )}
+              );
+              // Mobile: portal to <body> as a scrimmed bottom sheet (the .ag-bar
+              // backdrop-filter would otherwise trap an in-place fixed panel). Desktop keeps
+              // the anchored dropdown.
+              return sheetLayout
+                ? createPortal(
+                    <div className="ag-sheet-scrim" onClick={() => setToolsOpen(false)}>
+                      <div className="ag-sheet" ref={toolsPopRef} onClick={(e) => e.stopPropagation()}>
+                        <button type="button" className="ag-sheet-grip" aria-label={t("common.close")} onClick={() => setToolsOpen(false)} />
+                        {panel}
+                      </div>
+                    </div>, document.body)
+                : panel;
+            })()}
           </div>
 
-          <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
-            aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{ws.items.length + ws.notes.length > 0 ? <span className="ag-ws-badge">{ws.items.length + ws.notes.length}</span> : null}</button>
-          <button type="button" className={"ag-iconbtn" + (corpusOpen ? " is-active" : "")} title={t("corpus.open")} aria-label={t("corpus.open")}
-            aria-pressed={corpusOpen} onClick={() => setCorpusOpen((o) => !o)}>≣</button>
-          <button type="button" className={"ag-iconbtn" + (pairing?.open ? " is-active" : "")} title={t("work.tools.pairing")} aria-label={t("work.tools.pairing")}
-            aria-pressed={!!pairing?.open} onClick={() => setPairing((p) => (p?.open ? { ...p, open: false } : { seed: null, rows: [], cols: [], ...(p || {}), open: true }))}>⊞</button>
-          <button type="button" className={"ag-iconbtn" + (claimsOpen ? " is-active" : "")} title={t("work.tools.claims")} aria-label={t("work.tools.claims")}
-            aria-pressed={claimsOpen} onClick={() => setClaimsOpen((o) => !o)}>⚖{ws.claims.length > 0 ? <span className="ag-ws-badge">{ws.claims.length}</span> : null}</button>
-          <button type="button" data-tour="exprBtn" className={"ag-iconbtn" + (exprOpen ? " is-active" : "")} title={t("expr.open")} aria-label={t("expr.open")}
-            aria-pressed={exprOpen} onClick={() => { setExprFocus(null); setExprInitial(null); setExprOpen((o) => !o); }}>⛓</button>
-          <button type="button" data-tour="helpBtn" className="ag-iconbtn" title={t("common.help")} aria-label={t("common.help")}
-            onClick={() => setShowHelp(true)}>؟</button>
-          <a className="ag-iconbtn" href="https://github.com/waliori/qurangraph" target="_blank" rel="noopener noreferrer"
-            title={t("common.github")} aria-label={t("common.github")}>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-            </svg>
-          </a>
-          <button type="button" className="ag-iconbtn" title={t("common.language")} aria-label={t("common.language")}
-            onClick={() => setLang(lang === "ar" ? "en" : "ar")}>{lang === "ar" ? "EN" : "ع"}</button>
-          {/* Numeral system toggle. "auto" follows the language (Arabic→١٢٣, English→123);
-              clicking pins arabic↔western, so either system works under either language.
-              arabicActive mirrors the effective choice in i18n (not the raw "auto" string).
-              Shows the system it switches TO (like the theme button). */}
-          {(() => {
-            const arabicActive = numerals === "arabic" ? true : numerals === "western" ? false : lang === "ar";
-            return (
-              <button type="button" className="ag-iconbtn" style={{ fontSize: "var(--text-sm)" }}
-                title={t("common.numerals")} aria-label={t("common.numerals")} aria-pressed={!arabicActive}
-                onClick={() => setNumerals(arabicActive ? "western" : "arabic")}>{arabicActive ? "123" : "١٢٣"}</button>
-            );
-          })()}
-          <button type="button" className={"ag-iconbtn" + (kbEnabled ? " is-active" : "")} title={t("keyboard.toggle")} aria-label={t("keyboard.toggle")}
-            aria-pressed={kbEnabled} onClick={() => setKbEnabled((k) => !k)}>⌨</button>
-          <button type="button" data-tour="themeBtn" className="ag-iconbtn" title={t("common.theme")} aria-label={t("common.theme")}
-            onClick={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}>{theme === "dark" ? "☀" : "☾"}</button>
+          {/* On wide screens workspace + the secondary glyph buttons sit inline; on compact
+              layouts they all move into the ⋯ menu (rendered as a direct header child below,
+              so the mobile grid can place it on the top row beside search). */}
+          {!compact && (
+            <button type="button" data-tour="workspace" className={"ag-iconbtn" + (wsOpen ? " is-active" : "")} title={t("ws.open")} aria-label={t("ws.open")}
+              aria-pressed={wsOpen} onClick={() => setWsOpen((o) => !o)}>✶{wsCount > 0 ? <span className="ag-ws-badge">{wsCount}</span> : null}</button>
+          )}
+          {!compact && secondaryItems.map((it) => (
+            it.href ? (
+              <a key={it.key} className="ag-iconbtn" href={it.href} target="_blank" rel="noopener noreferrer"
+                title={it.label} aria-label={it.label}>{it.glyph}</a>
+            ) : (
+              <button key={it.key} type="button" data-tour={it.dataTour} className={"ag-iconbtn" + (it.active ? " is-active" : "")}
+                style={it.iconStyle} title={it.label} aria-label={it.label} aria-pressed={it.active || undefined} onClick={it.onClick}>
+                {it.glyph}{it.badge != null ? <span className="ag-ws-badge">{it.badge}</span> : null}
+              </button>
+            )
+          ))}
         </div>
+        {compact && <ToolbarMenu items={menuItems} />}
       </header>
+
+      {/* Mobile pull-tab to collapse/expand the toolbar and reclaim the canvas. */}
+      {compactUI && (
+        <button type="button" className="ag-bar-tab" aria-expanded={!barHidden}
+          aria-label={barHidden ? t("common.bar.show") : t("common.bar.hide")}
+          title={barHidden ? t("common.bar.show") : t("common.bar.hide")}
+          onClick={() => setBarHidden((h) => !h)}>{barHidden ? "▾" : "▴"}</button>
+      )}
 
       {/* ── Body: stage + inspector ── */}
       <div className="ag-body">
@@ -1860,20 +2041,29 @@ export default function QuranGraph() {
             {searchMode !== "exact" && <div className="ag-legend-row"><span className="ag-legend-dot ag-legend-dash" />{searchMode === "root" ? t("common.legend.noRoot") : t("common.legend.noLemma")}</div>}
           </div>
 
-          {/* On-canvas graph controls (fit / zoom / collapse / deselect / back) */}
-          <div data-tour="dock" className="ag-dock" data-panel="1">
-            <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.fit")} aria-label={t("common.dock.fit")} onClick={() => setTransform(fitView())}>⤢</button>
-            <button type="button" className="ag-iconbtn" title={t("common.dock.zoomIn")} aria-label={t("common.dock.zoomIn")} onClick={() => zoomBy(1.2)}>＋</button>
-            <button type="button" className="ag-iconbtn" title={t("common.dock.zoomOut")} aria-label={t("common.dock.zoomOut")} onClick={() => zoomBy(0.83)}>－</button>
-            {(selected || activeWord) && <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.clearSel")} aria-label={t("common.dock.clearSel")} onClick={() => { setSelected(null); setActiveWord(null); }}>✦</button>}
-            {canUndo && <button type="button" className="ag-iconbtn" title={t("common.dock.undoTitle")} aria-label={t("common.dock.undo")} onClick={undo}>↶</button>}
-            {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
-            {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
-            {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
-            <button type="button" data-tour="saveViewBtn" className={"ag-iconbtn" + (graphSaved ? " is-active" : "")} title={graphSaved ? t("ws.saved") : t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>{graphSaved ? "✓" : "✶"}</button>
-            <button type="button" data-tour="copyLinkBtn" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
-            <button type="button" data-tour="exportPngBtn" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
-            <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
+          {/* On-canvas graph controls (fit / zoom / collapse / deselect / back). On touch the
+              cluster collapses behind a ⋮ toggle so it doesn't dominate the small canvas. */}
+          <div data-tour="dock" className={"ag-dock" + (dockExpanded ? "" : " is-collapsed")} data-panel="1">
+            {showDockToggle && (
+              <button type="button" className={"ag-iconbtn ag-dock-toggle" + (dockOpen ? " is-active" : "")}
+                aria-expanded={dockOpen} aria-label={dockOpen ? t("common.dock.toggleHide") : t("common.dock.toggleShow")}
+                title={dockOpen ? t("common.dock.toggleHide") : t("common.dock.toggleShow")}
+                onClick={() => setDockOpen((o) => !o)}>{dockOpen ? "✕" : "⋮"}</button>
+            )}
+            {dockExpanded && (<>
+              <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.fit")} aria-label={t("common.dock.fit")} onClick={() => setTransform(fitView())}>⤢</button>
+              <button type="button" className="ag-iconbtn ag-dock-zoom" title={t("common.dock.zoomIn")} aria-label={t("common.dock.zoomIn")} onClick={() => zoomBy(1.2)}>＋</button>
+              <button type="button" className="ag-iconbtn ag-dock-zoom" title={t("common.dock.zoomOut")} aria-label={t("common.dock.zoomOut")} onClick={() => zoomBy(0.83)}>－</button>
+              {(selected || activeWord) && <button type="button" className="ag-iconbtn is-gold" title={t("common.dock.clearSel")} aria-label={t("common.dock.clearSel")} onClick={() => { setSelected(null); setActiveWord(null); }}>✦</button>}
+              {canUndo && <button type="button" className="ag-iconbtn" title={t("common.dock.undoTitle")} aria-label={t("common.dock.undo")} onClick={undo}>↶</button>}
+              {canRedo && <button type="button" className="ag-iconbtn" title={t("common.dock.redoTitle")} aria-label={t("common.dock.redo")} onClick={redo}>↷</button>}
+              {totalExp > 0 && <button type="button" className="ag-iconbtn is-warn" title={t("common.dock.collapseAll")} aria-label={t("common.dock.collapseAll")} onClick={reset}>↺</button>}
+              {expandedWordNodes.length > 0 && <button type="button" className={"ag-iconbtn" + (showExpanded ? " is-active" : "")} title={t("common.dock.expandedWords")} aria-label={t("common.dock.expandedWords")} aria-pressed={showExpanded} onClick={() => setShowExpanded((s) => !s)}><span style={{ color: "#34d8a8" }}>✷</span> {expandedWordNodes.length}</button>}
+              <button type="button" data-tour="saveViewBtn" className={"ag-iconbtn" + (graphSaved ? " is-active" : "")} title={graphSaved ? t("ws.saved") : t("ws.saveGraph")} aria-label={t("ws.saveGraph")} onClick={saveGraphView}>{graphSaved ? "✓" : "✶"}</button>
+              <button type="button" data-tour="copyLinkBtn" className="ag-iconbtn" title={linkCopied ? t("common.dock.linkCopied") : t("common.dock.copyLink")} aria-label={t("common.dock.copyLink")} onClick={copyLink}>{linkCopied ? "✓" : "⎘"}</button>
+              <button type="button" data-tour="exportPngBtn" className="ag-iconbtn" title={t("common.dock.exportPng")} aria-label={t("common.dock.exportPng")} onClick={() => exportGraph("png")}>⤓</button>
+              <button type="button" className="ag-iconbtn" title={t("common.dock.exportSvg")} aria-label={t("common.dock.exportSvg")} onClick={() => exportGraph("svg")}>❖</button>
+            </>)}
           </div>
 
           {/* Expanded-words list (green-dot words) */}
@@ -1927,7 +2117,7 @@ export default function QuranGraph() {
               {(renderer === "svg" || exporting) && <GraphLayer
                 nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} positions={positions} nmap={nmap} reg={registry} viewport={cullViewport}
                 highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
-                hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme}
+                hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme} coarse={coarsePointer && !exporting}
                 onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />}
             </g>
           </svg>
@@ -1984,21 +2174,36 @@ export default function QuranGraph() {
                     <span className="ag-ayah-surah">{currentVerse.sn}</span>
                     <span className="ag-ayah-num">{currentVerse.a}</span>
                   </span>
-                  <span style={{ display: "flex", gap: 4 }}>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={t("common.insp.ayaAnalyze")} title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: currentKey })}>⊞</button>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={t("surah.badge")} title={t("surah.title", { name: currentVerse.sn })} onClick={() => setSurahLab({ surahId: currentVerse.s })}>▦</button>
-                    <button type="button" data-tour="echoesBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={t("common.insp.rhyme")} title={t("common.insp.rhymeTitle")} onClick={() => setRhyme({ centerKey: currentKey })}>♪</button>
-                    <button type="button" data-tour="contextBtn" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
-                      aria-label={t("common.reader.readContext")} title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
-                    <button type="button" className="ag-iconbtn" style={{ width: 30, height: 30, fontSize: 13 }}
+                  <div className="ag-reader-acts">
+                    {/* On a fine pointer the glyph row shows inline (titles work on hover); on
+                        touch — where titles never fire — the same actions collapse into a
+                        LABELLED ⋯ sheet (ToolbarMenu) so each one carries a text label. The
+                        tour forces the inline row (showDockToggle is false while it runs) so
+                        its data-tour anchors still exist. */}
+                    {showDockToggle ? (
+                      <ToolbarMenu label={t("common.reader.toolsShow")} items={[
+                        { key: "aya", glyph: "⊞", label: t("common.insp.ayaAnalyze"), onClick: () => setAya({ centerKey: currentKey }) },
+                        { key: "surah", glyph: "▦", label: t("surah.title", { name: currentVerse.sn }), onClick: () => setSurahLab({ surahId: currentVerse.s }) },
+                        { key: "phrases", glyph: "⧉", label: t("common.reader.phrases"), onClick: () => openPhrases(currentKey) },
+                        { key: "rhyme", glyph: "♪", label: t("common.insp.rhyme"), onClick: () => setRhyme({ centerKey: currentKey }) },
+                        { key: "context", glyph: "☰", label: t("common.reader.readContext"), onClick: () => setCtx({ centerKey: currentKey }) },
+                      ]} />
+                    ) : (<>
+                      <button type="button" className="ag-iconbtn ag-reader-btn"
+                        aria-label={t("common.insp.ayaAnalyze")} title={t("common.insp.ayaAnalyzeTitle")} onClick={() => setAya({ centerKey: currentKey })}>⊞</button>
+                      <button type="button" className="ag-iconbtn ag-reader-btn"
+                        aria-label={t("surah.badge")} title={t("surah.title", { name: currentVerse.sn })} onClick={() => setSurahLab({ surahId: currentVerse.s })}>▦</button>
+                      <button type="button" data-tour="echoesBtn" className="ag-iconbtn ag-reader-btn"
+                        aria-label={t("common.reader.phrases")} title={t("common.reader.phrases")} onClick={() => openPhrases(currentKey)}>⧉</button>
+                      <button type="button" className="ag-iconbtn ag-reader-btn"
+                        aria-label={t("common.insp.rhyme")} title={t("common.insp.rhymeTitle")} onClick={() => setRhyme({ centerKey: currentKey })}>♪</button>
+                      <button type="button" data-tour="contextBtn" className="ag-iconbtn ag-reader-btn"
+                        aria-label={t("common.reader.readContext")} title={t("common.reader.readContext")} onClick={() => setCtx({ centerKey: currentKey })}>☰</button>
+                    </>)}
+                    <button type="button" className="ag-iconbtn ag-reader-btn"
                       aria-label={readerCollapsed ? t("common.reader.showVerse") : t("common.reader.hideVerse")} aria-expanded={!readerCollapsed}
                       onClick={() => setReaderCollapsed((c) => !c)}>{readerCollapsed ? "▴" : "▾"}</button>
-                  </span>
+                  </div>
                 </div>
                 <div className="ag-reader-body">
                   <div className="ag-reader-text">
@@ -2013,8 +2218,11 @@ export default function QuranGraph() {
         {/* Inspector — selected node detail (side panel ↔ mobile drawer) */}
         <div className={"ag-scrim" + (inspOpen && sheetOpen ? " is-open" : "")} onClick={() => { setSelected(null); setActiveWord(null); }} />
         {selNode && (
-          <aside className={"ag-inspector" + (sheetOpen ? " is-open" : "")} aria-label={t("common.insp.panel")}>
-            <button type="button" className="ag-sheet-grab" aria-label={t("common.insp.closePanel")} onClick={() => { setSelected(null); setActiveWord(null); }} />
+          <aside ref={inspSheetRef}
+            className={"ag-inspector" + (sheetOpen ? " is-open" : "") + inspSheetClass}
+            style={inspSheetStyle}
+            aria-label={t("common.insp.panel")}>
+            <button type="button" className="ag-sheet-grab" aria-label={t("common.sheet.resize")} {...inspGripProps} />
             {selNode.type === "word" ? (
               <>
                 <div className="ag-insp-head">
@@ -2096,7 +2304,7 @@ export default function QuranGraph() {
                     // active mu'jam has no entry for this root — so the user can switch.
                     return (
                       <div className="ag-insp-card t-mean">
-                        <div className="ag-insp-mean" style={!m ? { color: "var(--text-faint)", fontStyle: "italic" } : undefined}>
+                        <div className={"ag-insp-mean" + (meaningOpen && m ? " is-article" : "")} style={!m ? { color: "var(--text-faint)", fontStyle: "italic" } : undefined}>
                           {meanings == null ? t("common.insp.lexLoading")
                             : m ? <>{body}{loadingFull ? " …" : ""}</>
                             : t("common.insp.lexNone")}
@@ -2403,8 +2611,24 @@ export default function QuranGraph() {
       {/* One-click-save confirmation toast */}
       {ws.toastMsg && <div className="ag-toast" role="status" aria-live="polite">{ws.toastMsg}</div>}
 
-      {/* Floating phonetic Arabic keyboard — portals to <body> above all dialogs */}
-      <ArabicKeyboard open={kbEnabled} onClose={() => setKbEnabled(false)} />
+      {/* Always-visible keyboard toggle on compact layouts, where ⌨ otherwise hides in the ⋯
+          menu (which the toolbar pull-tab can collapse). An edge tab on the inline-start —
+          opposite the top-end graph dock and clear of the bottom reader. mousedown-prevent
+          keeps the focused field's caret so it still receives the next keystrokes. */}
+      {compact && (
+        <button type="button" className={"ag-kbd-fab" + (kbActive ? " is-active" : "")}
+          aria-pressed={kbActive} title={t("keyboard.toggle") + " · Alt+K"} aria-label={t("keyboard.toggle")}
+          style={kbFabTop != null ? { insetBlockStart: kbFabTop, transform: "none" } : undefined}
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={onFabDown} onPointerMove={onFabMove} onPointerUp={onFabUp} onPointerCancel={onFabUp}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cycleKb(); } }}>⌨</button>
+      )}
+
+      {/* Floating phonetic Arabic keyboard — portals to <body> above all dialogs. `active` runs
+          the transliteration effect; `open` renders the panel — so "hidden" keeps typing on
+          with no panel. onClose → off, onHide → hidden (dismiss to the badge). */}
+      <ArabicKeyboard active={kbActive} open={kbMode === "shown"}
+        onClose={() => setKbMode("off")} onHide={() => setKbMode("hidden")} />
     </div>
   );
 }

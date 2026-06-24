@@ -145,7 +145,7 @@ body {
 /* ═══════════ Toolbar ═══════════ */
 .ag-bar {
   position: relative; z-index: 30;
-  display: flex; align-items: center; gap: var(--space-4);
+  display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
   padding: var(--space-3) var(--space-4);
   background: color-mix(in oklab, var(--ink-900) 84%, transparent);
   backdrop-filter: blur(16px) saturate(1.15);
@@ -193,17 +193,35 @@ body {
 .ag-input:focus { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-500) 16%, transparent); }
 .ag-search.is-miss .ag-input { border-color: var(--rubric-500); box-shadow: 0 0 0 3px color-mix(in oklab, var(--rubric-500) 18%, transparent); }
 
-.ag-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
+.ag-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; flex-wrap: wrap; }
 
-/* Selects */
-.ag-select { position: relative; }
-.ag-select select {
+/* Selects.
+   A base style for EVERY <select> (not just the .ag-select-wrapped ones): a clean panel
+   trigger with a custom chevron, replacing the OS default that looked foreign in both
+   themes. The chevron sits at the inline-end via an embedded SVG (encoded with the theme's
+   muted ink). .ag-select wrappers draw their own ::after caret, so the base chevron is
+   suppressed inside them to avoid a double arrow. */
+select {
   appearance: none; -webkit-appearance: none;
-  height: 36px; padding-inline: var(--space-3) var(--space-6);
-  background: var(--ink-850); color: var(--text-body);
+  height: 34px; padding-inline: var(--space-3) var(--space-7);
+  background-color: var(--ink-850); color: var(--text-body);
   border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md);
   font-family: var(--font-ui); font-size: var(--text-sm); cursor: pointer; outline: none; direction: inherit;
-  transition: border-color var(--dur-fast) var(--ease-standard);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238d9bb5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left var(--space-3) center; background-size: 11px;
+  transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
+}
+select:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
+select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-500) 16%, transparent); }
+[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%236f6757' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+}
+
+.ag-select { position: relative; }
+.ag-select select {
+  height: 36px; padding-inline: var(--space-3) var(--space-6);
+  background-image: none; /* the wrapper draws ::after instead */
 }
 .ag-select select:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
 .ag-select::after {
@@ -334,6 +352,16 @@ body {
 .ag-btn.is-warn { color: var(--rubric-400); }
 .ag-btn.is-gold { color: var(--gold-400); }
 
+/* Consistent gold focus ring on the pill/icon/segment controls — replaces the UA default
+   (a stray blue glow that bled past these buttons, e.g. the intro language toggle). A tap
+   (no :focus-visible) leaves no ring; only keyboard focus shows it. */
+.ag-btn:focus-visible, .ag-iconbtn:focus-visible, .ag-seg button:focus-visible,
+.ag-combo-btn:focus-visible, .ag-tab:focus-visible, [role="tab"]:focus-visible {
+  outline: 2px solid var(--gold-500); outline-offset: 2px;
+}
+.ag-btn:focus:not(:focus-visible), .ag-iconbtn:focus:not(:focus-visible),
+.ag-seg button:focus:not(:focus-visible), [role="tab"]:focus:not(:focus-visible) { outline: none; }
+
 /* ═══════════ Stage HUD ═══════════ */
 .ag-hud { position: absolute; inset-block-start: var(--space-3); inset-inline-start: var(--space-3);
   z-index: 6; display: flex; gap: var(--space-2); flex-wrap: wrap; pointer-events: none; }
@@ -392,11 +420,41 @@ body {
   padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--ink-700); }
 .ag-input-sm { width: 9rem; max-width: 40vw; }
 
+/* Sūra + āya filter bar for cross-sūra verse lists (occurrences, search, phrases, pairing) */
+.ag-vfilter { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3); border-block-end: var(--bw-hair) solid var(--border-subtle); }
+.ag-vfilter-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ag-vfilter-lab { font-size: var(--text-xs); color: var(--text-faint); }
+.ag-vfilter-field select { max-width: 60vw; }
+.ag-vfilter-aya input { width: 8.5rem; max-width: 34vw; height: 34px; padding-inline: var(--space-3);
+  background: var(--ink-850); color: var(--text-body); border: var(--bw-hair) solid var(--border-default);
+  border-radius: var(--radius-md); font-family: var(--font-ui); font-size: var(--text-sm); outline: none; }
+.ag-vfilter-aya input:focus { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-500) 16%, transparent); }
+.ag-vfilter-count { margin-inline-start: auto; align-self: center; font-size: var(--text-xs); color: var(--text-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (pointer: coarse) { .ag-vfilter-aya input { height: 44px; font-size: 16px; } }
+
+/* Horizontal scroll strips (sparklines): a soft edge-fade cues there's more off-screen. */
+.ag-hscroll { overflow-x: auto; overscroll-behavior-inline: contain;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%); }
+/* Rhyme scheme grid: cap the per-verse cells so a long sūra doesn't wall off the dialog. */
+.ag-scheme-grid { display: flex; flex-wrap: wrap; gap: 4px; max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+
 /* Lexicon gloss — wraps and scrolls instead of being clipped to one line */
 .ag-lex-gloss { color: var(--text-body); white-space: pre-wrap; line-height: 1.8;
   max-height: 9em; overflow-y: auto; padding: var(--space-1) var(--space-2);
   background: color-mix(in oklab, var(--ink-700) 40%, transparent); border-radius: var(--radius-sm);
   border-inline-start: 2px solid var(--ink-600); }
+@media (pointer: coarse) { .ag-lex-gloss { max-height: 14em; } }
+
+/* Full dictionary ARTICLE (DefinitionModal / read-more): a reading layout, not the teal
+   short-gloss style — high-contrast body ink, a comfortable measure (centred on wide
+   sheets, full-width on a phone), generous leading, in the naskh face. */
+.ag-lex-article { color: var(--text-body); font-family: var(--font-quran); font-size: var(--text-base);
+  line-height: 2.05; white-space: pre-wrap; word-break: break-word; max-width: 62ch; margin-inline: auto; }
+@media (pointer: coarse) { .ag-lex-article { font-size: var(--text-lg); line-height: 2.1; } }
 
 /* Significance stars */
 .ag-sig { color: var(--gold-400); letter-spacing: -1px; font-size: 0.8em; vertical-align: 0.1em; }
@@ -493,6 +551,19 @@ body {
   padding: 3px 4px; border-radius: var(--radius-sm); font: inherit; color: inherit;
   transition: background var(--dur-fast) var(--ease-standard); }
 .ag-dist-rowbtn:hover { background: color-mix(in oklab, var(--gold-500) 8%, transparent); }
+/* Phone reflow of the stat/bar rows (shared by Distribution, Compare, AyaLab, CorpusLab,
+   SurahLab, RootLab): the 132px label truncated names and squeezed the bar. Stack instead —
+   name (wraps full-width) + count on line 1, the bar on its own full-width line 2. The empty
+   third cell of label-only stat rows just collapses; the head keeps name + count. */
+@media (max-width: 560px) {
+  .ag-dist-row { grid-template-columns: 1fr auto; column-gap: var(--space-3); row-gap: 3px; }
+  .ag-dist-name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.5; }
+  .ag-dist-num { text-align: end; }
+  .ag-dist-barwrap { grid-column: 1 / -1; }
+  .ag-dist-bar { height: 11px; }
+  /* Compare's paired-bar rows (120px label + bars) → label above the bars. */
+  .ag-cmp-row { grid-template-columns: 1fr; }
+}
 .ag-tag-btn { cursor: pointer; transition: all var(--dur-fast) var(--ease-standard); }
 .ag-tag-btn:hover { border-color: var(--gold-500); color: var(--text-strong); }
 .ag-dist-tags { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; }
@@ -507,6 +578,7 @@ body {
   padding: var(--space-3) var(--space-4); border-block-end: var(--bw-hair) solid var(--border-subtle); }
 .ag-cmp-slot { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .ag-cmp-current { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+.ag-cmp-edit { margin-inline-start: auto; flex: 0 0 auto; }
 .ag-cmp-label { font-family: var(--font-quran); font-size: var(--text-lg); font-weight: var(--fw-semibold);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ag-cmp-empty { color: var(--text-faint); font-size: var(--text-sm); font-style: italic; }
@@ -546,6 +618,21 @@ body {
 .ag-ws-foot .ag-btn { flex: 1; }
 .ag-ws-filter { display: flex; flex-direction: column; gap: 6px; padding: var(--space-2) var(--space-3) 0; }
 .ag-ws-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Group filter chips + inline create / rename-delete (workspace grouping) */
+.ag-ws-groupbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  padding: var(--space-2) var(--space-3); border-block-end: var(--bw-hair) solid var(--border-subtle);
+  max-height: 30dvh; overflow-y: auto; }
+.ag-ws-groupbar .ag-tag-add { flex: 0 0 auto; }
+.ag-ws-groupbar .ag-tag-add .ag-input { width: 8.5rem; }
+.ag-ws-groupedit { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); }
+.ag-ws-groupedit .ag-input { flex: 1 1 auto; min-width: 0; }
+/* Per-card group picker: a ⊕ chip with a checklist popover */
+.ag-ws-grp { position: relative; display: inline-flex; }
+.ag-ws-grpmenu { position: absolute; z-index: 5; inset-inline-end: 0; inset-block-start: calc(100% + 4px);
+  min-width: 160px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 2px; padding: var(--space-2);
+  background: var(--ink-800); border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2); }
 .ag-tag-btn.is-on { background: var(--gold-500); color: #1a1205; border-color: var(--gold-500); font-weight: var(--fw-semibold); }
 
 /* Canvas-anchored sticky notes */
@@ -590,9 +677,13 @@ body {
   border-radius: 50%; margin-block-start: 2px; }
 .ag-ctx-text { font-family: var(--font-quran, var(--font-display)); font-size: var(--text-lg); line-height: 2.1; }
 
-/* Lexicon switcher (inspector meaning card) */
-.ag-lex-select { background: var(--ink-850); color: var(--viridian-400); border: var(--bw-hair) solid var(--border-default);
-  border-radius: var(--radius-sm); font-family: var(--font-ui); font-size: var(--text-xs); padding: 2px 6px; max-width: 200px; cursor: pointer; }
+/* Lexicon switcher (inspector meaning card). background-COLOR (not the `background`
+   shorthand) so it doesn't wipe the global <select> chevron; compact padding with room
+   for that chevron at the inline-end. */
+.ag-lex-select { background-color: var(--ink-850); color: var(--viridian-400); border: var(--bw-hair) solid var(--border-default);
+  border-radius: var(--radius-sm); font-family: var(--font-ui); font-size: var(--text-xs); height: auto;
+  padding-block: 3px; padding-inline: 8px 22px; max-width: 200px; cursor: pointer;
+  background-position: left 7px center; background-size: 9px; }
 
 /* Legend */
 .ag-legend { position: absolute; inset-block-end: var(--space-3); inset-inline-start: var(--space-3);
@@ -626,6 +717,23 @@ body {
   z-index: 12; display: flex; flex-direction: column; gap: 6px; }
 .ag-dock .ag-iconbtn { background: color-mix(in oklab, var(--ink-900) 72%, transparent); backdrop-filter: blur(8px); }
 .ag-dock .ag-iconbtn { width: auto; min-width: 36px; padding-inline: 6px; }
+
+/* Persistent Arabic-keyboard toggle: a half-pill hugging the inline-start edge, vertically
+   centred — always reachable on compact layouts (and from inside modals/their search boxes,
+   hence z-index above the dialog layer). Mirrors the dock's translucent blur. */
+.ag-kbd-fab { position: fixed; inset-block-start: 50%; inset-inline-start: 0; transform: translateY(-50%);
+  z-index: 85; display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 46px; padding: 0; font-size: 18px; line-height: 1; cursor: grab; touch-action: none;
+  color: var(--text-muted); background: color-mix(in oklab, var(--ink-900) 80%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: var(--bw-hair) solid var(--border-subtle); border-inline-start: none;
+  border-start-end-radius: var(--radius-md); border-end-end-radius: var(--radius-md);
+  box-shadow: var(--shadow-2); }
+.ag-kbd-fab:hover { color: var(--text-strong); }
+.ag-kbd-fab:active { cursor: grabbing; }
+.ag-kbd-fab.is-active { color: var(--gold-400);
+  border-color: color-mix(in oklab, var(--gold-500) 40%, transparent);
+  background: color-mix(in oklab, var(--gold-500) 16%, var(--ink-900)); }
 
 /* Expanded-words list panel (anchored beside the dock) */
 .ag-expanded { position: absolute; inset-block-start: var(--space-3); inset-inline-end: 56px; z-index: 12;
@@ -697,11 +805,16 @@ body {
   background: var(--ink-850); border-inline-start: var(--bw-hair) solid var(--border-subtle);
   box-shadow: var(--shadow-2);
 }
-/* Drag handle — only shown when the inspector is a bottom sheet (mobile). */
-.ag-sheet-grab { display: none; width: 42px; height: 4px; flex: 0 0 auto; align-self: center;
-  margin: var(--space-2) auto 0; border: 0; padding: 0; border-radius: var(--radius-pill);
-  background: var(--ink-600); cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
-.ag-sheet-grab:hover { background: var(--ink-400); }
+/* Drag handle — a full-width strip (big drag target) drawn with a centred pill, shown only
+   when the dialog is a bottom sheet (mobile). touch-action:none so dragging it resizes the
+   sheet instead of scrolling the page. */
+.ag-sheet-grab { display: none; position: relative; width: 100%; height: 30px; flex: 0 0 auto;
+  border: 0; padding: 0; margin: 0; background: transparent; cursor: grab; touch-action: none; }
+.ag-sheet-grab::before { content: ""; position: absolute; inset-block-start: 11px; inset-inline-start: 50%;
+  transform: translateX(-50%); width: 44px; height: 5px; border-radius: var(--radius-pill);
+  background: var(--ink-600); transition: background var(--dur-fast) var(--ease-standard); }
+.ag-sheet-grab:hover::before, .ag-sheet-grab:active::before { background: var(--ink-400); }
+.ag-sheet-grab:active { cursor: grabbing; }
 .ag-insp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
   padding: var(--space-5) var(--space-5) var(--space-4); border-block-end: var(--bw-hair) solid var(--border-subtle); }
 .ag-insp-title { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
@@ -726,14 +839,25 @@ body {
 .ag-insp-card-h > .ag-insp-card-lab { min-width: 0; flex: 1 1 auto; }
 .ag-insp-card-h .ag-lex-select { max-width: 100%; }
 .ag-insp-card-lab { font-size: var(--text-xs); color: var(--text-faint); }
-.ag-insp-cite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px;
+.ag-insp-cite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2);
+  margin-block-start: var(--space-3); padding-block-start: var(--space-3);
+  border-block-start: var(--bw-hair) solid var(--border-subtle);
   font-size: var(--text-xs); color: var(--text-faint); line-height: 1.6; }
+/* On a phone the export/read-more buttons wrap to their own full-width row (the meta
+   stays on the line above), so nothing gets crushed. */
+@media (max-width: 560px) { .ag-insp-cite > span:last-child { flex-basis: 100%; justify-content: flex-start; } }
 .ag-insp-cite-pg { font-family: var(--font-mono); color: var(--gold-400); white-space: nowrap;
   border: var(--bw-hair) solid color-mix(in oklab, var(--gold-500) 30%, transparent); border-radius: var(--radius-sm); padding: 1px 6px; }
 .ag-insp-cite-ed { min-width: 0; }
 .ag-insp-mean { font-size: var(--text-base); line-height: 1.9; color: var(--viridian-400); }
 /* Bright teal washes out on the light parchment — use a deep, readable tone there. */
 [data-theme="light"] .ag-insp-mean { color: #1c3b34; }
+/* Expanded FULL article (read-more): switch from the teal short-gloss accent to a
+   high-contrast reading style — body ink, naskh face, generous leading. */
+.ag-insp-mean.is-article { color: var(--text-body); font-family: var(--font-quran);
+  line-height: 2.05; white-space: pre-wrap; word-break: break-word; }
+[data-theme="light"] .ag-insp-mean.is-article { color: var(--text-body); }
+@media (pointer: coarse) { .ag-insp-mean.is-article { font-size: var(--text-lg); } }
 [data-theme="light"] .ag-insp-card.t-mean { background: color-mix(in oklab, var(--viridian-500) 10%, var(--panel)); }
 .ag-insp-verse { font-family: var(--font-quran); font-size: var(--text-xl); line-height: 2; color: var(--text-body); }
 .ag-insp-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -762,9 +886,16 @@ body {
 .ag-modal-head { display: flex; align-items: center; gap: var(--space-3);
   flex: 0 0 auto; position: sticky; top: 0; z-index: 2; background: var(--ink-850);
   padding: var(--space-4) var(--space-5); border-block-end: var(--bw-hair) solid var(--border-subtle); }
+.ag-modal-back { order: -1; flex: 0 0 auto; }
 .ag-modal-title { display: flex; align-items: center; gap: var(--space-3); flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
 .ag-modal-actions { display: flex; align-items: center; gap: var(--space-2); flex: 0 1 auto; min-width: 0;
   flex-wrap: wrap; justify-content: flex-end; }
+/* Workbench lenses: a labelled cluster, set off from the export buttons by a divider. */
+.ag-modal-lenses { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ag-lenses-label { font-size: var(--text-xs); color: var(--text-faint); font-weight: 600; white-space: nowrap; }
+.ag-modal-sep { align-self: stretch; inline-size: var(--bw-hair); min-block-size: 22px;
+  background: var(--border-subtle); margin-inline: 2px; }
+.ag-lenses-hint { font-size: var(--text-xs); color: var(--text-faint); padding: 6px var(--space-2) 0; }
 .ag-modal-close { flex: 0 0 auto; }
 .ag-modal-word { font-family: var(--font-quran); font-size: var(--text-2xl); color: var(--text-strong); margin: 0; line-height: 1.2; }
 .ag-modal-count { font-size: var(--text-sm); color: var(--text-muted); }
@@ -792,15 +923,23 @@ body {
      (+ notch) is always a tappable strip of scrim above the sheet for tap-to-close,
      so a tall dialog never becomes truly full-screen. */
   .ag-modal-scrim { padding: 0; align-items: flex-end; }
-  .ag-modal { max-height: calc(100dvh - 44px - env(safe-area-inset-top));
+  /* Bottom sheet with the SAME peek/full/drag behaviour as the inspector (see
+     useBottomSheetDrag): opens at peek, drag the grab handle up for full / down to
+     dismiss. Height-based so the scroll body equals the visible area. */
+  .ag-modal { height: 56dvh; max-height: 92dvh;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    padding-block-end: env(safe-area-inset-bottom); }
+    padding-block-end: env(safe-area-inset-bottom);
+    transition: height var(--dur-base) var(--ease-out); }
+  .ag-modal.is-full { height: 92dvh; }
+  .ag-modal.is-dragging { transition: none; }
   .ag-modal-text { font-size: var(--text-base); }
-  /* Reflow the head so the ✕ always rides the first row beside the title (anchored to the
-     top with flex-start), and the action buttons drop to their own full-width row(s) and
-     wrap — a modal with many actions can never shove the ✕ past the edge. */
-  .ag-modal-head { flex-wrap: wrap; align-items: flex-start; }
-  .ag-modal-title { order: 0; }
+  /* Reflow the head so back + title + ✕ stay together on ONE compact row, and the action
+     buttons drop to their own full-width row(s) below. The title gets flex-basis:0 (not its
+     content width) so a long Arabic title can't push the ✕ onto a row of its own — that
+     wasted a whole ~44px strip on phones. Tighter padding/gap than desktop reclaims more. */
+  .ag-modal-head { flex-wrap: wrap; align-items: flex-start; gap: var(--space-2);
+    padding: var(--space-3) var(--space-4); }
+  .ag-modal-title { order: 0; flex: 1 1 0; }
   .ag-modal-close { order: 1; }
   .ag-modal-actions { order: 2; flex-basis: 100%; justify-content: flex-start; }
 }
@@ -837,29 +976,52 @@ body {
 
 /* ═══════════ Responsive ═══════════ */
 @media (max-width: 860px) {
-  .ag-bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); }
+  /* Two-row mobile toolbar grid: row 1 = brand · search (grows) · ⋯ menu;
+     row 2 = the primary controls (mode · sūra/āya picker · graph tools). The long tail
+     of secondary actions lives in the ⋯ menu, so the bar stays compact (≤2 rows) instead
+     of wrapping into a four-row wall that ate the canvas. */
+  .ag-bar {
+    display: grid; align-items: center; gap: var(--space-2) var(--space-3);
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "brand search menu" "controls controls controls";
+    padding: var(--space-2) var(--space-3);
+  }
+  .ag-brand { grid-area: brand; }
+  .ag-ver { display: none; }
   .ag-wordmark i { display: none; }
-  .ag-search { order: 3; flex-basis: 100%; max-width: none; margin: 0; }
-  /* Let the controls shrink and WRAP their children instead of overflowing off the
-     edge: on a narrow screen the row would otherwise be clipped past the viewport
-     (the leftmost icons in RTL). Shrink/wrap only engage when the width actually
-     runs out, so wider phones/tablets keep the whole bar on one row. */
-  .ag-controls { margin-inline-start: auto; column-gap: var(--space-2); row-gap: var(--space-2);
+  .ag-search { grid-area: search; order: 0; flex-basis: auto; max-width: none; margin: 0; }
+  .ag-bar > .ag-menu { grid-area: menu; }
+  .ag-controls { grid-area: controls; margin: 0; column-gap: var(--space-2); row-gap: var(--space-2);
     flex-shrink: 1; flex-wrap: wrap; }
+  /* Keep row 2 on one line on typical phones: a slimmer sūra picker buys the room. */
+  .ag-combo-btn { max-width: 132px; }
 
-  /* Inspector → bottom sheet: slides up from the bottom edge, rounded top,
-     with a grab handle and scrim. Far friendlier than a side drawer on a phone. */
+  /* Inspector → bottom sheet: slides up from the bottom edge, rounded top, with a grab
+     handle and scrim. Two snap points — it opens at PEEK (≈half height, a glance) and
+     drags up to FULL; a drag down past threshold dismisses it (see the sheet pointer
+     handlers in QuranGraph). dvh (not vh) tracks the visible area under the browser
+     chrome so a tall sheet never pushes its head off the top. */
+  /* Snap is HEIGHT-based, not transform-based: the sheet's height IS the visible area, so
+     the inner scroll region equals what you see and every row is reachable (a translated
+     tall sheet hid its lower half below the fold, where content couldn't be scrolled into
+     view). Peek ≈ half height; drag up to full; drag down to dismiss. */
   .ag-inspector {
     position: fixed; inset-inline: 0; inset-block-end: 0; top: auto; width: 100%; max-width: none;
-    max-height: 86vh; z-index: 60;
+    height: 54dvh; max-height: 92dvh; z-index: 60;
     border-inline-start: 0; border-top: var(--bw-hair) solid var(--border-default);
     border-start-start-radius: var(--radius-lg); border-start-end-radius: var(--radius-lg);
     box-shadow: 0 -24px 70px rgba(0,0,0,.6); overflow: hidden;
-    transform: translateY(100%); transition: transform var(--dur-base) var(--ease-out);
+    transform: translateY(100%);
+    transition: transform var(--dur-base) var(--ease-out), height var(--dur-base) var(--ease-out);
     padding-block-end: env(safe-area-inset-bottom);
   }
-  .ag-inspector.is-open { transform: translateY(0); }
+  .ag-inspector.is-open { transform: translateY(0); }         /* peek (default height above) */
+  .ag-inspector.is-open.is-full { height: 90dvh; }            /* dragged up to full */
+  .ag-inspector.is-dragging { transition: none; }             /* follow the finger 1:1 */
+  /* The grab handle + the whole head are the drag surface; pad the handle so the thin
+     bar is still a comfortable target, and show the move cursor. */
   .ag-sheet-grab { display: block; }
+  .ag-insp-head { touch-action: none; }
   .ag-insp-head { padding-block-start: var(--space-3); }
   .ag-scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(4,6,12,.6);
     opacity: 0; pointer-events: none; transition: opacity var(--dur-base) var(--ease-out); }
@@ -886,8 +1048,39 @@ body {
   .ag-modal-title { row-gap: 4px; }
   .ag-dist-tags { gap: 4px; }
   .ag-dist-bars { overflow-x: auto; }
-  .ag-cmp-slots { flex-direction: column; }
-  .ag-cmp-swap { transform: rotate(90deg); align-self: center; }
+  /* Compare slots: stacked while PICKING (the form needs the width), but once both terms are
+     set they collapse to compact chips → lay them horizontally (term · ⇄ · term) to reclaim
+     vertical space for the results. */
+  .ag-cmp-slots { grid-template-columns: 1fr; }
+  .ag-cmp-slots:not(.is-ready) .ag-cmp-swap { transform: rotate(90deg); align-self: center; }
+  .ag-cmp-slots.is-ready { grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-2); }
+  .ag-cmp-slots.is-ready .ag-cmp-current { gap: 4px; min-width: 0; flex-wrap: wrap; }
+  .ag-cmp-slots.is-ready .ag-cmp-label { min-width: 0; }
+}
+
+/* Lab/analysis tab bars (role="tablist") become a horizontal scroll strip on phones
+ * instead of wrapping into a tall multi-row block that buried the content below. */
+@media (max-width: 640px) {
+  /* Tabs become a full-width horizontal scroll strip. CRITICAL: flex-shrink:0 — the strip
+     lives inside a flex-column scroll body (.ag-dist-body etc.), and its own overflow-x:auto
+     makes its flex min-height resolve to 0, so without this the column crushed it to a 6px
+     sliver. The buttons keep their content size and the row scrolls sideways when it overflows. */
+  .ag-seg[role="tablist"] { display: flex; width: 100%; max-width: 100%; box-sizing: border-box;
+    flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
+  .ag-seg[role="tablist"]::-webkit-scrollbar { display: none; }
+  .ag-seg[role="tablist"] button { flex: 0 0 auto; white-space: nowrap; }
+  /* Modal header action cluster: scroll sideways rather than wrapping under the title. */
+  .ag-modal-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  .ag-modal-actions::-webkit-scrollbar { display: none; }
+  .ag-modal-actions > * { flex: 0 0 auto; }
+
+  /* Affordance that these strips scroll: a soft fade on both inline edges hints there's
+     more to swipe (the industry-standard "edge bleed"); paired with the partial next item
+     that the overflow naturally reveals. */
+  .ag-seg[role="tablist"], .ag-modal-actions {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
 }
 
 /* Shared-phrase (المتشابهات) modal */
@@ -1141,15 +1334,24 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
 .ag-role-chip { margin-inline-start: auto; align-self: center; font-size: var(--text-xs, 11px); color: var(--viridian-400);
   border: var(--bw-hair) solid color-mix(in oklab, var(--viridian-400) 40%, transparent); border-radius: var(--radius-pill); padding: 1px 7px; white-space: nowrap; }
 .ag-tag-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+/* Capped + scrollable so a large tag/claim set never runs off the screen (works the same
+   on phone and desktop); the filter input below sticks to the top while the list scrolls. */
 .ag-occ-menu { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2);
-  background: var(--ink-800); border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md); margin: 4px 0 8px; }
+  background: var(--ink-800); border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-md); margin: 4px 0 8px;
+  max-height: min(300px, 48dvh); overflow-y: auto; overscroll-behavior: contain; }
+.ag-occ-menu-filter { position: sticky; inset-block-start: -2px; z-index: 1; margin-block-end: 2px;
+  background: var(--ink-800); width: 100%; }
 .ag-occ-menu-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ag-occ-menu-label { flex: 1 1 auto; color: var(--text-faint); font-size: var(--text-sm); font-family: var(--font-quran); }
 .ag-tag-pick { cursor: pointer; }
 
 /* Role breakdown panel + coding bar */
 .ag-role-panel, .ag-tag-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2);
-  padding: var(--space-2) var(--space-3); border-block-end: var(--bw-hair) solid var(--border-default); }
+  padding: var(--space-2) var(--space-3); border-block-end: var(--bw-hair) solid var(--border-default); flex: 0 0 auto; }
+/* The coding bar lists every tag — cap + scroll so a large set doesn't push the verse list down.
+   flex-shrink:0 (above) is REQUIRED: overflow-y:auto makes its flex min-height 0, so without it
+   the modal's flex column crushes the bar to a sliver. */
+.ag-tag-bar { max-height: min(140px, 26dvh); overflow-y: auto; overscroll-behavior: contain; align-content: flex-start; }
 .ag-role-head { font-size: var(--text-sm); color: var(--text-faint); font-weight: 600; }
 .ag-role-tally { font-size: var(--text-sm); border: var(--bw-hair) solid var(--border-default); border-radius: var(--radius-pill); padding: 2px 9px; }
 .ag-role-tally b { color: var(--text-strong); }
@@ -1182,10 +1384,38 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
 .ag-pm-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 4px; }
 .ag-pm-chip { display: inline-flex; align-items: center; gap: 5px; }
 .ag-pm-add { display: inline-flex; gap: 4px; align-items: center; }
-.ag-pm-grid-wrap { overflow: auto; }
+/* Matrix (grid view): scroll within a capped box, with sticky header row + row-label column
+   so you never lose your place while panning a wide grid. */
+.ag-pm-grid-wrap { overflow: auto; max-width: 100%; max-height: 56vh; }
 .ag-pm-grid { border-collapse: collapse; font-size: var(--text-sm); }
 .ag-pm-grid th { color: var(--text-faint); font-weight: 600; padding: 4px 8px; white-space: nowrap; font-family: var(--font-quran); }
+.ag-pm-grid thead th { position: sticky; inset-block-start: 0; z-index: 2; background: var(--ink-850); }
+.ag-pm-grid th.ag-pm-row { position: sticky; inset-inline-start: 0; z-index: 2; background: var(--ink-850); }
+.ag-pm-grid thead th:first-child { inset-inline-start: 0; z-index: 3; }
 .ag-pm-col, .ag-pm-row { position: relative; }
+/* Collapsed term summary (frees vertical space for the result) */
+.ag-pm-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2);
+  padding-block-end: var(--space-2); border-block-end: var(--bw-hair) solid var(--border-subtle); }
+.ag-pm-editbtn { flex: 0 0 auto; }
+.ag-pm-summchips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+.ag-pm-summchip { font-family: var(--font-quran); font-size: var(--text-sm); color: var(--text-strong);
+  background: color-mix(in oklab, var(--viridian-500) 12%, transparent);
+  border: var(--bw-hair) solid color-mix(in oklab, var(--viridian-500) 28%, transparent);
+  border-radius: var(--radius-pill); padding: 1px 9px; }
+.ag-pm-summx { color: var(--text-faint); }
+/* Ranked-pairs list (phone-friendly view of the matrix) */
+.ag-pm-viewtoggle { margin-block-end: var(--space-2); }
+.ag-pm-list { list-style: none; margin: 0; padding: var(--space-2); display: flex; flex-direction: column; gap: 5px; }
+.ag-pm-listrow { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  background: var(--ink-800); border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 10px var(--space-3); cursor: pointer; color: var(--text-body); font: inherit; text-align: start;
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
+.ag-pm-listrow:hover { background: var(--ink-700); border-color: color-mix(in oklab, var(--gold-500) 35%, var(--border-default)); }
+.ag-pm-listpair { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; min-width: 0;
+  font-family: var(--font-quran); font-size: var(--text-base); color: var(--text-strong); }
+.ag-pm-listx { color: var(--text-faint); }
+.ag-pm-listn { flex: 0 0 auto; font-family: var(--font-mono); font-weight: var(--fw-semibold);
+  color: var(--viridian-400); font-variant-numeric: tabular-nums; }
 .ag-pm-tot { display: block; font-size: 10px; color: var(--text-faint); font-family: var(--font-ui); }
 .ag-pm-cell { padding: 0; }
 .ag-pm-cell button { width: 100%; min-width: 46px; height: 38px; background: color-mix(in oklab, var(--viridian-400) 12%, transparent);
@@ -1237,3 +1467,122 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
 .ag-claim-badge.is-s { color: var(--viridian-400); border-color: color-mix(in oklab, var(--viridian-400) 40%, transparent); }
 .ag-claim-badge.is-o { color: var(--rubric-400); border-color: color-mix(in oklab, var(--rubric-400) 40%, transparent); }
 .ag-claim-listrow .ag-claim-ctrl { flex: 0 0 auto; padding-inline-end: var(--space-2); }
+
+/* ═══════════ Mobile / touch ergonomics ═══════════ */
+
+/* Toolbar pull-tab (phones): a small notch under the header that collapses/expands the
+ * whole toolbar to reclaim vertical space for the graph. Hidden on desktop. */
+.ag-bar-tab {
+  display: none; align-self: center; flex: 0 0 auto; z-index: 29;
+  width: 64px; height: 17px; margin: 0 auto; padding: 0;
+  border: var(--bw-hair) solid var(--border-subtle); border-block-start: 0;
+  border-end-start-radius: var(--radius-md); border-end-end-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink-900) 84%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  color: var(--text-muted); font-size: 11px; line-height: 1; cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.ag-bar-tab:hover { color: var(--text-strong); }
+@media (max-width: 860px) {
+  .ag-bar-tab { display: block; }
+  .ag-app.bar-hidden > .ag-bar { display: none; }
+}
+
+/* Toolbar overflow menu (⋯) — labelled rows for the secondary actions that collapse
+ * off the bar on compact/touch layouts. Reuses the .ag-popover surface. */
+.ag-menu-pop { width: 232px; padding: var(--space-2); gap: 2px; }
+.ag-menu-item {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%;
+  background: none; border: 0; border-radius: var(--radius-md); cursor: pointer;
+  padding: 10px var(--space-3); color: var(--text-body); font: inherit; font-size: var(--text-sm);
+  text-align: start; text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.ag-menu-item:hover { background: var(--ink-700); color: var(--text-strong); }
+.ag-menu-item.is-active { background: color-mix(in oklab, var(--gold-500) 16%, transparent); color: var(--gold-400); }
+.ag-menu-glyph { flex: 0 0 auto; width: 22px; font-size: 16px; color: var(--gold-400);
+  display: inline-flex; align-items: center; justify-content: center; }
+.ag-menu-item.is-active .ag-menu-glyph { color: var(--gold-400); }
+.ag-menu-label { flex: 1 1 auto; min-width: 0; }
+.ag-menu-item .ag-ws-badge { margin-inline-start: auto; }
+
+/* Reader-dock action buttons — sized via class (not inline style) so the coarse-pointer
+ * rules below can enlarge them, and so the row can wrap on very narrow phones. */
+.ag-reader-acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.ag-reader-btn { width: 30px; height: 30px; font-size: 13px; }
+
+/* Touch devices: comfortable hit targets (Apple HIG 44px / Material 48dp) and 16px
+ * inputs so iOS Safari never zooms the page on focus. Keyed on a coarse PRIMARY pointer
+ * so a desktop mouse is unaffected even at a narrow window width. */
+@media (pointer: coarse) {
+  .ag-iconbtn { width: 44px; height: 44px; font-size: 17px; }
+  .ag-reader-btn { width: 42px; height: 42px; font-size: 15px; }
+  .ag-seg button { padding: 11px 13px; }
+  .ag-input { height: 44px; }
+  .ag-search-btn { width: 34px; height: 34px; }
+  .ag-select select, .ag-combo-btn { height: 44px; }
+  .ag-modal-close, .ag-ws-actions .ag-iconbtn { width: 42px; height: 42px; }
+  .ag-combo-opt { padding: 11px var(--space-2); }
+  .ag-menu-item { padding: 13px var(--space-3); }
+  .ag-dist-rowbtn { padding: 9px 4px; }
+  .ag-tag-x, .ag-sticky-x, .ag-expanded-x, .ag-kb-x, .ag-claim-ref-go {
+    min-width: 30px; min-height: 30px; }
+  /* Pinch-zoom replaces the +/- buttons on touch — drop them to slim the dock column. */
+  .ag-dock-zoom { display: none; }
+
+  /* ≥16px on every text field — the iOS focus-zoom threshold. */
+  .ag-input, .ag-combo-input, .ag-ws-noteinput, .ag-claim-statement,
+  .ag-sticky-bodyin, .ag-sticky-titlein, .ag-select select, .ag-combo-btn,
+  .ag-jump input, input[type="text"], input[type="search"], textarea { font-size: 16px; }
+}
+
+@media (max-width: 860px) {
+  /* The on-canvas dock can stack many buttons; cap it to the viewport and scroll inside
+     so it never collides with the reader/sheet at the bottom. Hidden scrollbar — it reads
+     as a floating control cluster, not a scroll pane. */
+  .ag-dock { max-height: calc(100dvh - 150px); overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: none; }
+  .ag-dock::-webkit-scrollbar { display: none; }
+
+
+}
+@keyframes ag-sheet-rise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── Portaled bottom sheet (toolbar ⋯ menu + ⚙ graph-tools on mobile) ──
+ * These triggers live inside .ag-bar, whose backdrop-filter makes it the containing block
+ * for position:fixed descendants — so an in-place fixed sheet pinned to the bar, not the
+ * viewport. The fix is to PORTAL the panel to <body> (see ToolbarMenu / the tools popover)
+ * and present it here as a scrimmed bottom sheet. */
+.ag-sheet-scrim {
+  position: fixed; inset: 0; z-index: 95; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(4,6,12,.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  animation: ag-fade var(--dur-base) var(--ease-out);
+}
+.ag-sheet {
+  width: 100%; max-width: 680px; max-height: 84dvh; display: flex; flex-direction: column;
+  background: var(--ink-800); border-top: var(--bw-hair) solid var(--border-default);
+  border-start-start-radius: var(--radius-lg); border-start-end-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3); overflow: hidden;
+  padding-block-end: env(safe-area-inset-bottom);
+  animation: ag-sheet-rise var(--dur-base) var(--ease-out);
+}
+.ag-sheet-grip { width: 56px; height: 18px; flex: 0 0 auto; align-self: center; padding: 7px 0; border: 0;
+  background: var(--ink-600); background-clip: content-box; border-radius: var(--radius-pill);
+  cursor: grab; touch-action: none; }
+.ag-sheet-grip:active { cursor: grabbing; }
+/* The portaled panel keeps its inner layout/padding but drops its own positioning,
+ * border and height cap — the .ag-sheet owns those now. */
+.ag-sheet > .ag-popover, .ag-sheet > .ag-menu-pop {
+  position: static; inset: auto; width: 100%; max-width: 100%; max-height: none;
+  border: 0; box-shadow: none; border-radius: 0; animation: none;
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+}
+
+/* Landscape phones: too little vertical room for a peek sheet — open straight to full,
+ * and trim the reader so the canvas keeps as much height as possible. */
+@media (max-width: 900px) and (orientation: landscape) {
+  /* Too little vertical room for a peek — open near-full straight away. */
+  .ag-inspector { height: 90dvh; max-height: 94dvh; }
+  .ag-inspector.is-open.is-full { height: 94dvh; }
+  .ag-reader-text { font-size: var(--text-lg); line-height: 1.8; }
+}

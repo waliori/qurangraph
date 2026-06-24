@@ -66,10 +66,30 @@ export const ar = {
   "common.github": " المصدر على GitHub",
   "common.theme": "تبديل السمة",
 
+  // Mobile overflow menu (secondary toolbar actions tucked behind ⋯ on small screens)
+  "common.menu.more": "المزيد من الأدوات",
+  "common.menu.title": "أدوات إضافية",
+  "common.dock.toggleShow": "إظهار أدوات الرسم",
+  "common.dock.toggleHide": "إخفاء أدوات الرسم",
+  "common.reader.toolsShow": "إظهار أدوات الآية",
+  "common.reader.toolsHide": "إخفاء أدوات الآية",
+  "common.bar.hide": "إخفاء الشريط العلوي",
+  "common.bar.show": "إظهار الشريط العلوي",
+  "common.sheet.resize": "تغيير حجم اللوحة (اسحب لأعلى/أسفل)",
+  "common.filter.surah": "السورة",
+  "common.filter.allSurahs": "كل السور",
+  "common.filter.aya": "الآية",
+  "common.filter.ayaPh": "آية أو مدى ١-١٠",
+  "common.filter.clear": "مسح",
+  "common.filter.showing": "{n} من {total}",
+  "common.filter.total": "{total} آية",
+  "common.filter.noMatch": "لا آية تطابق هذا المرشّح",
+
   // Floating Arabic keyboard
   "keyboard.toggle": "لوحة المفاتيح العربية (اكتب بالحروف اللاتينية)",
   "keyboard.title": "لوحة مفاتيح عربية",
   "keyboard.close": "إغلاق لوحة المفاتيح",
+  "keyboard.hide": "إخفاء اللوحة (يبقى الكتابة مفعّلاً)",
   "keyboard.collapse": "إخفاء المفاتيح",
   "keyboard.expand": "إظهار المفاتيح",
   "keyboard.space": "مسافة",
@@ -120,6 +140,7 @@ export const ar = {
 
   // Expanded-words list
   "common.close": "إغلاق",
+  "common.back": "رجوع",
   "common.expanded.goToWord": "انتقل إلى الكلمة",
   "common.expanded.collapse": "طيّ",
 
@@ -193,8 +214,8 @@ export const ar = {
   "common.insp.lexNone": "لا يوجد تعريف لهذا الجذر في هذا المعجم — جرّب معجمًا آخر.",
   "common.insp.chooseLex": "اختر المعجم",
   "common.insp.lexFallback": "معجم لغوي",
-  "common.insp.more": "المزيد ▼",
-  "common.insp.less": "أقل ▲",
+  "common.insp.more": "المقالة كاملة ▼",
+  "common.insp.less": "اختصار ▲",
   "common.insp.from": "من:",
   "common.insp.sharedWords": "كلمات مشتركة",
   "common.insp.collapseWords": "طي الكلمات",
@@ -328,10 +349,30 @@ export const en = {
   "common.github": "Source code on GitHub",
   "common.theme": "Toggle theme",
 
+  // Mobile overflow menu (secondary toolbar actions tucked behind ⋯ on small screens)
+  "common.menu.more": "More tools",
+  "common.menu.title": "More tools",
+  "common.dock.toggleShow": "Show graph controls",
+  "common.dock.toggleHide": "Hide graph controls",
+  "common.reader.toolsShow": "Show verse tools",
+  "common.reader.toolsHide": "Hide verse tools",
+  "common.bar.hide": "Hide toolbar",
+  "common.bar.show": "Show toolbar",
+  "common.sheet.resize": "Resize panel (drag up/down)",
+  "common.filter.surah": "Sūra",
+  "common.filter.allSurahs": "All sūras",
+  "common.filter.aya": "Āya",
+  "common.filter.ayaPh": "āya or range 1-10",
+  "common.filter.clear": "Clear",
+  "common.filter.showing": "{n} of {total}",
+  "common.filter.total": "{total} verses",
+  "common.filter.noMatch": "No verse matches this filter",
+
   // Floating Arabic keyboard
   "keyboard.toggle": "Arabic keyboard (type with Latin letters)",
   "keyboard.title": "Arabic keyboard",
   "keyboard.close": "Close keyboard",
+  "keyboard.hide": "Hide panel (typing stays on)",
   "keyboard.collapse": "Hide keys",
   "keyboard.expand": "Show keys",
   "keyboard.space": "Space",
@@ -382,6 +423,7 @@ export const en = {
 
   // Expanded-words list
   "common.close": "Close",
+  "common.back": "Back",
   "common.expanded.goToWord": "Go to word",
   "common.expanded.collapse": "Collapse",
 
@@ -455,7 +497,7 @@ export const en = {
   "common.insp.lexNone": "No definition for this root in this dictionary — try another one.",
   "common.insp.chooseLex": "Choose dictionary",
   "common.insp.lexFallback": "Dictionary",
-  "common.insp.more": "More ▼",
+  "common.insp.more": "Full article ▼",
   "common.insp.less": "Less ▲",
   "common.insp.from": "From:",
   "common.insp.sharedWords": "Shared words",

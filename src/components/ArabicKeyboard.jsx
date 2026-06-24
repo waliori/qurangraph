@@ -14,8 +14,13 @@ import { isEditable, insertAtCaret, replaceBeforeCaret, backspace } from "../key
  *     use mousedown→preventDefault so the field keeps focus (and its caret) while you click.
  *
  * Draggable by its header; remembers nothing across reloads (it always reopens bottom-centre).
+ *
+ * Two independent props split the on-screen panel from its effect: `active` runs the
+ * transliteration (physical typing rewrite + focus tracking), `open` renders the panel. So
+ * `active && !open` is the "hidden" state — typing stays rewritten with no panel on screen
+ * (dismissed to the edge badge). `onHide` requests that state; `onClose` turns it all off.
  */
-export function ArabicKeyboard({ open, onClose }) {
+export function ArabicKeyboard({ open, active, onClose, onHide }) {
   const { t } = useI18n();
   const lastEditable = useRef(null);
   const [pos, setPos] = useState(null); // {left, top} once dragged; null → CSS default (bottom-centre)
@@ -31,9 +36,10 @@ export function ArabicKeyboard({ open, onClose }) {
     return isEditable(active) ? active : null;
   }, []);
 
-  // Physical-keyboard transliteration + focus tracking — only while open.
+  // Physical-keyboard transliteration + focus tracking — runs whenever the keyboard is active,
+  // including the "hidden" state where no panel is rendered.
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const onFocusIn = (e) => { if (isEditable(e.target)) lastEditable.current = e.target; };
     const onBeforeInput = (e) => {
       const el = e.target;
@@ -61,7 +67,7 @@ export function ArabicKeyboard({ open, onClose }) {
       document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("beforeinput", onBeforeInput, true);
     };
-  }, [open]);
+  }, [active]);
 
   // Keep the panel on-screen after a window resize once it's been dragged.
   useEffect(() => {
@@ -119,6 +125,10 @@ export function ArabicKeyboard({ open, onClose }) {
           aria-label={t(collapsed ? "keyboard.expand" : "keyboard.collapse")} title={t(collapsed ? "keyboard.expand" : "keyboard.collapse")}
           onPointerDown={(e) => e.stopPropagation()} onClick={() => setCollapsed((c) => !c)}>{collapsed ? "▴" : "▾"}</button>
         <span className="ag-kb-title">{t("keyboard.title")}</span>
+        {onHide && (
+          <button type="button" className="ag-kb-x" aria-label={t("keyboard.hide")} title={t("keyboard.hide")}
+            onPointerDown={(e) => e.stopPropagation()} onClick={onHide}>—</button>
+        )}
         <button type="button" className="ag-kb-x" aria-label={t("keyboard.close")} title={t("keyboard.close")}
           onPointerDown={(e) => e.stopPropagation()} onClick={onClose}>✕</button>
       </div>
