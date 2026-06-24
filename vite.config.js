@@ -40,7 +40,9 @@ function versionHtmlPlugin() {
 // policy tight — if you ever edit that stub in index.html, recompute the hash.
 const PLAUSIBLE = "https://plausible.walidlahnine.com"
 const PLAUSIBLE_STUB_HASH = "'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='"
-const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH}; connect-src 'self' ${PLAUSIBLE}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
+// No-flash theme bootstrap inline script in index.html (sets data-theme before paint).
+const THEME_BOOT_HASH = "'sha256-bUMmeNNa7nKi6t2ICaDVWulLf+Qa0OEHcGPPqrP0gfE='"
+const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH} ${THEME_BOOT_HASH}; connect-src 'self' ${PLAUSIBLE}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
 
 function cspPlugin() {
   return {

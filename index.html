@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#070a12" />
+    <meta name="theme-color" content="#e3d9bf" />
+    <!-- No-flash theme bootstrap: set data-theme from the stored preference (default
+         light) before the stylesheet paints, so a fresh load never flashes the dark
+         field. Also syncs the mobile address-bar colour. Allowlisted in the build CSP
+         by its sha256 hash (see vite.config.js) — if you edit this, recompute the hash. -->
+    <script>(function(){try{var t=JSON.parse(localStorage.getItem("qg.theme"));t=t==="dark"?"dark":"light";document.documentElement.setAttribute("data-theme",t);var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",t==="dark"?"#070a12":"#e3d9bf")}catch(e){document.documentElement.setAttribute("data-theme","light")}})()</script>
     <meta name="description" content="آيات.network — مستكشف تفاعلي لشبكة الكلمات والجذور في القرآن الكريم." />
 
     <!-- SEO: canonical + crawl directives -->
