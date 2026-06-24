@@ -6,6 +6,7 @@ import { exportCsvFile, exportJsonFile, exportTextFile, buildConcordance, buildR
 import { wordGroupKey } from "../arabic-utils.js";
 import { roleAt, roleBreakdown, ROLE_AR, ROLE_EN } from "../analytics/role.js";
 import { useVirtualRows } from "../hooks/useVirtualRows.js";
+import { useVerseFilter } from "./VerseFilter.jsx";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 
@@ -21,21 +22,26 @@ import { useWorkspace } from "../hooks/useWorkspace.js";
 export function OccurrencesModal({ occ, verseData, searchMode, precision = "loose", morph, theme, onNavigate, onBack, onClose }) {
   const { t, tn, lang } = useI18n();
   const ws = useWorkspace();
-  const n = occ?.keys?.length || 0;
-  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, listProps, rowProps, moveTo } =
-    useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${n}` });
-  const [jumpQ, setJumpQ] = useState("");
-  const [jumpMiss, setJumpMiss] = useState(false);
+  // Full occurrence set drives the header count, exports and citation (a stable fact);
+  // the sūra/āya filter scopes only the VIEW (list + role breakdown).
+  const allKeys = useMemo(() => occ?.keys || [], [occ]);
+  const total = allKeys.length;
+  const { filtered: keys, controls: filterControls, filterKey } = useVerseFilter(allKeys, verseData);
+  const n = keys.length;
+  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, listProps, rowProps } =
+    useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${filterKey}|${n}` });
   const [roleOn, setRoleOn] = useState(false);
   const [coding, setCoding] = useState(false);
   const [menuVk, setMenuVk] = useState(null);   // open tag menu for this verse
   const [pinVk, setPinVk] = useState(null);     // open claim-pin menu for this verse
   const [newTag, setNewTag] = useState("");
   const [newClaim, setNewClaim] = useState(""); // statement typed when pinning to a brand-new claim
+  const [tagFilter, setTagFilter] = useState("");     // filter the tag-assign menu when many tags exist
+  const [claimFilter, setClaimFilter] = useState(""); // filter the claim-pin menu when many claims exist
+  const FILTER_MIN = 8; // show a search box once a list is longer than this
   const ROLE = lang === "en" ? ROLE_EN : ROLE_AR;
 
   const primary = occ?.lookup;
-  const keys = useMemo(() => occ?.keys || [], [occ]);
 
   // The word positions of the term in a verse — occ.hi (expressions/construction) when supplied,
   // else the mode-grouped positions, else an exact-skeleton fallback. One source for highlight,
@@ -62,17 +68,6 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   }, [ws.tagAssign, keys]);
 
   if (!occ) return null;
-  // Jump to a verse reference within this occurrence list. Accepts "s:a" (e.g. 2:255) or
-  // a bare āya number when the list is a single sūra. Finds its row and scrolls/focuses it.
-  const onJump = (e) => {
-    e.preventDefault();
-    const q = jumpQ.trim();
-    if (!q) return;
-    let idx = -1;
-    if (q.includes(":")) idx = occ.keys.indexOf(q);
-    else { const suras = new Set(occ.keys.map((k) => k.split(":")[0])); if (suras.size === 1) idx = occ.keys.indexOf(`${[...suras][0]}:${q}`); }
-    if (idx >= 0) { moveTo(idx); setJumpMiss(false); } else setJumpMiss(true);
-  };
   const pinToClaim = (vk, side, claimId, statement) => {
     let id = claimId;
     let label;
@@ -119,9 +114,17 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             {vkTags.map((id) => { const tag = ws.tags.find((x) => x.id === id); return tag ? <span key={id} className="ag-tag-dot" style={{ background: tag.color }} title={tag.label} /> : null; })}
           </span>
         </div>
-        {pinVk === vk && (
+        {pinVk === vk && (() => {
+          const fq = claimFilter.trim();
+          const shownClaims = fq ? ws.claims.filter((c) => (c.statement || "").includes(fq)) : ws.claims;
+          return (
           <div className="ag-occ-menu" role="menu">
-            {ws.claims.map((c) => (
+            {ws.claims.length > FILTER_MIN && (
+              <input className="ag-input ag-input-sm ag-occ-menu-filter" type="search" value={claimFilter}
+                placeholder={t("claim.filterPh")} aria-label={t("claim.filterAria")} onChange={(e) => setClaimFilter(e.target.value)} />
+            )}
+            {ws.claims.length > 0 && shownClaims.length === 0 && <span className="ag-hint">{t("claim.filterNone")}</span>}
+            {shownClaims.map((c) => (
               <div key={c.id} className="ag-occ-menu-row">
                 <span className="ag-occ-menu-label">{c.statement?.slice(0, 28) || t("claim.title")}</span>
                 <button type="button" className="ag-btn ag-btn-xs" onClick={() => pinToClaim(vk, "support", c.id)}>＋{t("claim.support")}</button>
@@ -136,44 +139,57 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
               <button type="button" className="ag-btn ag-btn-xs" title={t("claim.pinOppose")} onClick={() => pinToClaim(vk, "oppose", null, newClaim)}>＋{t("claim.oppose")}</button>
             </div>
           </div>
-        )}
-        {menuVk === vk && coding && (
+          ); })()}
+        {menuVk === vk && coding && (() => {
+          const fq = tagFilter.trim();
+          const shownTags = fq ? ws.tags.filter((tag) => tag.label.includes(fq)) : ws.tags;
+          return (
           <div className="ag-occ-menu" role="menu">
             {ws.tags.length === 0 && <span className="ag-hint">{t("tag.none")}</span>}
-            {ws.tags.map((tag) => (
+            {ws.tags.length > FILTER_MIN && (
+              <input className="ag-input ag-input-sm ag-occ-menu-filter" type="search" value={tagFilter}
+                placeholder={t("tag.filterPh")} aria-label={t("tag.filterAria")} onChange={(e) => setTagFilter(e.target.value)} />
+            )}
+            {ws.tags.length > 0 && shownTags.length === 0 && <span className="ag-hint">{t("tag.filterNone")}</span>}
+            {shownTags.map((tag) => (
               <label key={tag.id} className="ag-occ-menu-row ag-tag-pick">
                 <input type="checkbox" checked={vkTags.includes(tag.id)} onChange={() => ws.toggleTag(vk, tag.id)} />
                 <span className="ag-tag-dot" style={{ background: tag.color }} />{tag.label}
               </label>
             ))}
           </div>
-        )}
+          ); })()}
       </li>
     );
   }
 
   return (
     <ModalShell open={!!occ} share onClose={onClose} closeLabel={t("occ.close")}
-      onEscape={() => (occ?.back && onBack ? onBack() : onClose())}
+      back={occ.back && onBack ? onBack : undefined} backLabel={t("occ.backToDistribution")}
       ariaLabel={t("occ.title", { label: occ.label })}
       title={<>
-        {occ.back && onBack && <button type="button" className="ag-iconbtn" title={t("occ.backToDistribution")} aria-label={t("occ.back")} onClick={onBack}>→</button>}
         <span className={"ag-badge " + (occ.mode === "root" ? "t-root" : occ.mode === "lemma" ? "t-lemma" : "t-word")}>{occ.mode === "root" ? t("occ.badge.root") : occ.mode === "lemma" ? t("occ.badge.lemma") : t("occ.badge.word")}</span>
         <h2 className="ag-modal-word">{occ.label}</h2>
-        <span className="ag-modal-count">{tn("occ.versesCount", n)}</span>
+        <span className="ag-modal-count">{tn("occ.versesCount", total)}</span>
         {occ.morphNote && <span className="ag-chip is-morph" title={t("occ.morphNoteTitle")}>⚙ {occ.morphNote}</span>}
       </>}
       actions={<>
-            <button type="button" className={"ag-btn" + (roleOn ? " is-active" : "")} aria-pressed={roleOn}
-              title={t("role.show")} disabled={!morph} onClick={() => setRoleOn((o) => !o)}>⚖ {t("role.toggle")}</button>
-            <button type="button" className={"ag-btn" + (coding ? " is-active" : "")} aria-pressed={coding}
-              title={t("tag.toggle")} onClick={() => setCoding((o) => !o)}>🏷 {t("tag.toggle")}</button>
+            {/* Workbench lenses, grouped + labelled so they read as analysis tools — not
+                more export buttons — and a divider keeps them off the export cluster. */}
+            <span className="ag-modal-lenses">
+              <span className="ag-lenses-label">{t("lenses.label")}</span>
+              <button type="button" className={"ag-btn" + (roleOn ? " is-active" : "")} aria-pressed={roleOn}
+                title={t("role.show")} disabled={!morph} onClick={() => setRoleOn((o) => !o)}>⚖ {t("role.toggle")}</button>
+              <button type="button" className={"ag-btn" + (coding ? " is-active" : "")} aria-pressed={coding}
+                title={t("tag.toggle")} onClick={() => setCoding((o) => !o)}>🏷 {t("tag.toggle")}</button>
+            </span>
+            <span className="ag-modal-sep" aria-hidden="true" />
             <SaveButton item={{ type: "occ", title: occ.label, payload: { lookup: occ.lookup, label: occ.label, mode: occ.mode } }} />
             <button type="button" className="ag-btn" title={t("occ.exportCsv")}
-              onClick={() => exportCsvFile([[t("occ.col.sura"), t("occ.col.aya"), t("occ.col.ref"), t("occ.col.text")], ...keys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `${t("occ.file.verses", { label: occ.label })}.csv`)}>⤓ CSV</button>
+              onClick={() => exportCsvFile([[t("occ.col.sura"), t("occ.col.aya"), t("occ.col.ref"), t("occ.col.text")], ...allKeys.map((k) => { const v = verseData[k]; return [v.s, v.a, `${v.sn} ${v.a}`, v.text]; })], `${t("occ.file.verses", { label: occ.label })}.csv`)}>⤓ CSV</button>
             <button type="button" className="ag-btn" title={t("occ.exportKwic")}
               onClick={() => exportCsvFile(buildConcordance(
-                keys,
+                allKeys,
                 (k) => verseData[k]?.words,
                 (w) => wordGroupKey(w, occ.mode) === occ.lookup,
                 (k) => { const v = verseData[k]; return { s: v.s, a: v.a, ref: `${v.sn} ${v.a}` }; },
@@ -182,8 +198,8 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
               ), `${t("occ.file.context", { label: occ.label })}.csv`)}>⤓ {t("occ.kwicBtn")}</button>
             <button type="button" className="ag-btn" title={t("occ.exportJson")}
               onClick={() => exportJsonFile({
-                term: occ.label, lookup: occ.lookup, mode: occ.mode, count: n,
-                verses: keys.map((k) => { const v = verseData[k]; return { sura: v.s, ayah: v.a, ref: `${v.sn} ${v.a}`, text: v.text }; }),
+                term: occ.label, lookup: occ.lookup, mode: occ.mode, count: total,
+                verses: allKeys.map((k) => { const v = verseData[k]; return { sura: v.s, ayah: v.a, ref: `${v.sn} ${v.a}`, text: v.text }; }),
               }, `${t("occ.file.verses", { label: occ.label })}.json`)}>⤓ JSON</button>
             <button type="button" className="ag-btn" title={t("common.cite.resultTitle")}
               onClick={() => {
@@ -191,7 +207,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
                 const bib = buildResultBibtex({
                   key: `ayatnet_occ_${(occ.lookup || "term").replace(/[^A-Za-z0-9؀-ۿ]/g, "").slice(0, 16)}`,
                   title: t("common.cite.occTitle", { label: occ.label, mode: t(`common.graphMode.${mode}`) }),
-                  note: t("common.cite.note", { count: n }),
+                  note: t("common.cite.note", { count: total }),
                   url: typeof location !== "undefined" ? location.href : "",
                   year: new Date().getFullYear(), keywords: [occ.lookup, occ.label],
                 });
@@ -225,15 +241,10 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
             </form>
           </div>
         )}
-        {n > 20 && (
-          <form className="ag-jump" onSubmit={onJump} role="search">
-            <label className="ag-range-lab" htmlFor="occ-jump">{t("occ.jump")}</label>
-            <input id="occ-jump" className={"ag-input ag-input-sm" + (jumpMiss ? " is-miss" : "")} type="search"
-              inputMode="numeric" value={jumpQ} placeholder={t("occ.jumpPh")} aria-label={t("occ.jump")}
-              onChange={(e) => { setJumpQ(e.target.value); if (jumpMiss) setJumpMiss(false); }} />
-            <button type="submit" className="ag-btn">{t("occ.jumpGo")}</button>
-            {jumpMiss && <span className="ag-hint" style={{ color: "var(--danger-400, #e88)" }}>{t("occ.jumpMiss")}</span>}
-          </form>
+        {!roleOn && !coding && <div className="ag-lenses-hint">{t("lenses.hint")}</div>}
+        {filterControls}
+        {n === 0 && (
+          <div className="ag-state"><span>{t("common.filter.noMatch")}</span></div>
         )}
         <ul className="ag-modal-list" ref={scrollRef} onScroll={onScroll} {...listProps} aria-label={t("occ.title", { label: occ.label })}>
           <li className="ag-vspace" aria-hidden="true" style={{ height: padTop }} />
