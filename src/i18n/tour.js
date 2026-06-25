@@ -13,7 +13,10 @@ export const ar = {
   "tour.close": "إغلاق الجولة",
   "tour.textSmaller": "نص أصغر",
   "tour.textLarger": "نص أكبر",
+  "tour.minimize": "تصغير البطاقة (للتفاعل مع التطبيق)",
+  "tour.expand": "إعادة فتح البطاقة",
   "tour.yourTurn": "دورك — جرّبها بنفسك",
+  "tour.dragHint": "💡 اسحب هذه البطاقة من شريطها العلويّ لتحريكها، أو صغّرها بزرّ «—» للتفاعل مع التطبيق ثم أعِدها.",
   "tour.dontShow": "لا تعرض هذه الجولة عند فتح التطبيق",
   "tour.progress": "{c} من {n}",
   "tour.ariaLabel": "جولة تعريفية بالميزات",
@@ -134,8 +137,8 @@ export const ar = {
   "tour.downloadBody": "اضغط زرّ التنزيل (⤓) لحفظ صورة PNG للشبكة على جهازك (وزرّ «❖» يصدّرها SVG متّجهة). جرّبه الآن.",
 
   // 20 — Open workspace
-  "tour.wsOpenTitle": "افتح مساحة العمل",
-  "tour.wsOpenBody": "اضغط على زرّ «✶» في الشريط العلوي لفتح مساحة العمل وترى ما حفظته.",
+  "tour.wsOpenTitle": "مساحة العمل",
+  "tour.wsOpenBody": "هذه مساحة العمل: كلّ ما تحفظه — كلمات وتعابير ودعاوى وملاحظات — يتجمّع هنا، ويمكنك تصديره أو استيراده لاحقًا.",
 
   // 21 — Workspace detail
   "tour.wsViewTitle": "مساحة العمل",
@@ -148,6 +151,39 @@ export const ar = {
   // 22 — Theme / language / offline
   "tour.themeTitle": "المظهر واللغة ودون اتصال",
   "tour.themeBody": "أخيرًا، بدّل المظهر بين الفاتح والداكن (وبدّل اللغة من الزرّ المجاور). والتطبيق قابل للتثبيت، ويعمل دون إنترنت بعد أول زيارة.",
+
+  // Mobile-only: describe the word panel's analysis (no modal chain on phones)
+  "tour.dictMTitle": "معجم الكلمة وتحليلها",
+  "tour.dictMBody": "لوحة الكلمة تعرض معناها من ستّة معاجم كلاسيكية (اضغط «المقالة كاملة» للنصّ الكامل)، مع أزرار: توزيعها على السور، ومقارنتها بكلمةٍ أخرى، وكلّ آياتها. ومن شريط القراءة بالأسفل: العبارات المشتركة (المتشابهات)، والفاصلة، والسياق.",
+  // Mobile show-&-tell: the tour opens each of these for you
+  "tour.corpusTitle": "كشّاف القرآن",
+  "tour.corpusBody": "هذه نافذة «كشّاف القرآن»: تصفّح تكرار الكلمات وصرفها وأضدادها، والآيات المتشابهة، والقَسَم والشرط عبر المصحف كاملًا. (فتحناها لك من القائمة المنسدلة.)",
+  "tour.claimsTitle": "لوحة الدعاوى",
+  "tour.claimsBody": "وهذه «لوحة الدعاوى»: اطرح قراءةً ثمّ أرفِق آياتٍ تؤيّدها أو تعارضها لبناء حجّةٍ بالشواهد.",
+  "tour.mMenusTitle": "قوائم منزلقة على الهاتف",
+  "tour.mMenusBody": "على الهاتف تتجمّع الأدوات الإضافية خلف زرّ «المزيد»، وتنزلق القوائم من الأسفل. منها تصل إلى مصفوفة الاقتران والكشّافات ولوحة الدعاوى.",
+  "tour.mKeyboardTitle": "لوحة المفاتيح العربية",
+  "tour.mKeyboardBody": "اكتب العربية بحروفٍ لاتينية في أيّ حقل: تظهر لوحةٌ على الشاشة وتُحوَّل كتابتك فورًا (مثل noor ← نور).",
+  "tour.mSheetTitle": "نوافذ قابلة للتكبير",
+  "tour.mSheetBody": "تفتح النوافذ بارتفاعٍ جزئيّ على الهاتف؛ اسحب شريطها العلويّ لأعلى لملء الشاشة، أو لأسفل لإغلاقها.",
+
+  // Mobile-only variants — the show-and-tell tour reuses several desktop steps, but their
+  // copy was written for clicking/hovering; these phrasings fit the phone (auto-advance,
+  // touch, the «More» menu) without changing the desktop tour's wording.
+  "tour.welcomeMTitle": "أهلًا بك في آيات.network",
+  "tour.welcomeMBody": "هذه الأداة تعرض القرآن كشبكةٍ من الكلمات: تختار آية، فتظهر الآيات الأخرى التي تشاركها كلماتها — روابط لغويّة فقط، بلا ترجمةٍ أو تفسير. لا تحتاج خلفيّةً مسبقة؛ سنمرّ معًا على مثالٍ واحد. حين تفتح الجولة شيئًا فهو للاطّلاع فقط — اقرأه ثمّ انقر «التالي». اسحب هذه البطاقة من شريطها العلويّ أو صغّرها (—) للوصول إلى التطبيق تحتها؛ ومن الأعلى تبدّل السمة واللغة وحجم النصّ.",
+  "tour.searchMTitle": "البحث",
+  "tour.searchMBody": "حقل البحث: اكتب كلمةً أو جذرًا أو رقم آيةٍ مثل «2:255» للانتقال إليها مباشرةً. (حمّلنا لك آية الكرسيّ.)",
+  "tour.graphMTitle": "هذه آية الكرسي",
+  "tour.graphMBody": "العقدة الذهبية هي الآية، تحيط بها كلماتها. اسحب الخلفية للتحريك، وقرّب بإصبعين للتكبير.",
+  "tour.exprMTitle": "كشّاف التعابير",
+  "tour.exprMBody": "كشّاف التعابير: وحداتٌ من عدّة كلماتٍ لا كلماتٍ مفردة — الأفعال وحروف جرّها (كمصفوفة)، والمصاحبات، والإضافات، والتعابير الاصطلاحية. وتظهر أيضًا داخل بطاقة الكلمة وكشّاف الجذر وكشّاف الآية.",
+  "tour.workbenchMTitle": "ورشة البحث",
+  "tour.workbenchMBody": "هناك ورشة بحثٍ كاملة — لوحة الدعاوى (⚖)، وعدسات الترميز والإعراب داخل قوائم المواضع، ومصفوفة الاقتران (⊞)، وكشّاف القرآن (≣). تصل إليها من قائمة «المزيد».",
+
+  // Research workbench (newer features, summarised)
+  "tour.workbenchTitle": "ورشة البحث",
+  "tour.workbenchBody": "وراء ما رأيت، يقدّم التطبيق ورشةً أعمق: «لوحة الدعاوى» (⚖) لبناء حجّةٍ بشواهد مؤيِّدة ومعارِضة، وعدسات الترميز والإعراب في قوائم المواضع، و«مصفوفة الاقتران» (⊞)، و«كشّاف القرآن» (≣) لتصفّح التكرار والصرف والأضداد والقَسَم والشرط عبر المصحف. جرّبها من شريط الأدوات.",
 
   // 23 — Finish
   "tour.finishTitle": "أتممت دراسة كاملة!",
@@ -165,7 +201,10 @@ export const en = {
   "tour.close": "Close tour",
   "tour.textSmaller": "Smaller text",
   "tour.textLarger": "Larger text",
+  "tour.minimize": "Minimize card (to use the app)",
+  "tour.expand": "Reopen the card",
   "tour.yourTurn": "Your turn — give it a try",
+  "tour.dragHint": "💡 Drag this card by its top bar to move it — or tap «—» to minimize it, use the app, then bring it back.",
   "tour.dontShow": "Don't show this on startup",
   "tour.progress": "{c} of {n}",
   "tour.ariaLabel": "Feature tour",
@@ -286,8 +325,8 @@ export const en = {
   "tour.downloadBody": "Click the download button (⤓) to save a PNG image of the network to your device («❖» exports a vector SVG). Try it now.",
 
   // 20 — Open workspace
-  "tour.wsOpenTitle": "Open your Workspace",
-  "tour.wsOpenBody": "Click the «✶» button in the top bar to open your Workspace and see what you saved.",
+  "tour.wsOpenTitle": "Your Workspace",
+  "tour.wsOpenBody": "This is your Workspace: everything you save — words, expressions, claims and notes — collects here, ready to export or import later.",
 
   // 21 — Workspace detail
   "tour.wsViewTitle": "Your Workspace",
@@ -300,6 +339,37 @@ export const en = {
   // 22 — Theme / language / offline
   "tour.themeTitle": "Theme, language & offline",
   "tour.themeBody": "Finally, toggle the theme between light and dark (and the language from its neighbouring button). The app is installable and works offline after your first visit.",
+
+  // Mobile-only: describe the word panel's analysis (no modal chain on phones)
+  "tour.dictMTitle": "A word's dictionary & analysis",
+  "tour.dictMBody": "The word panel shows its meaning from six classical lexicons (tap “Full article” for the whole entry), plus buttons for its distribution across sūras, comparison with another word, and all of its verses. From the reader dock below: look-alike phrases (mutashābihāt), rhyme, and context.",
+  // Mobile show-&-tell: the tour opens each of these for you
+  "tour.corpusTitle": "Corpus explorer",
+  "tour.corpusBody": "This is the Corpus explorer: browse word frequency, morphology and antonyms, look-alike verses, and oaths & conditionals across the whole text. (We opened it for you from the slide-up menu.)",
+  "tour.claimsTitle": "Claim board",
+  "tour.claimsBody": "And this is the Claim board: state a reading, then attach āyāt that support or challenge it to build an argument from evidence.",
+  "tour.mMenusTitle": "Slide-up menus on phones",
+  "tour.mMenusBody": "On a phone the extra tools tuck behind a “More” button, and menus slide up from the bottom. From here you reach the pairing matrix, the explorers, and the claim board.",
+  "tour.mKeyboardTitle": "The Arabic keyboard",
+  "tour.mKeyboardBody": "Type Arabic with Latin letters in any field: an on-screen keyboard appears and your typing converts instantly (e.g. noor → نور).",
+  "tour.mSheetTitle": "Resizable sheets",
+  "tour.mSheetBody": "Dialogs open at a partial height on a phone — drag their top bar up to fill the screen, or down to dismiss.",
+
+  // Mobile-only variants of a few shared steps (auto-advance, touch, the «More» menu).
+  "tour.welcomeMTitle": "Welcome to آيات.network",
+  "tour.welcomeMBody": "This tool shows the Qur'an as a network of words: you pick a verse, and it reveals the other verses that share its words — linguistic links only, no translation or exegesis. No background needed; we'll walk through one example. When the tour opens something, it's just to look at — read it, then tap Next. Drag this card by its top bar, or minimize it (—), to reach the app underneath; from the top you can also switch theme, language, and text size.",
+  "tour.searchMTitle": "Search",
+  "tour.searchMBody": "The search bar — type a word, a root, or a verse number like «2:255» to jump straight there. (We've loaded Āyat al-Kursī for you.)",
+  "tour.graphMTitle": "This is Āyat al-Kursī",
+  "tour.graphMBody": "The gold node is the verse, ringed by its words. Drag the background to pan, and pinch with two fingers to zoom.",
+  "tour.exprMTitle": "Expressions explorer",
+  "tour.exprMBody": "The Expressions explorer — multi-word units, not single words: verbs and their governed prepositions (as a matrix), collocations, iḍāfa constructs, and idioms. They also surface inside the word card, the root lab, and the āya lab.",
+  "tour.workbenchMTitle": "Research workbench",
+  "tour.workbenchMBody": "There's a full research workbench — the Claim board (⚖), the Coding & Parsing lenses inside occurrence lists, the Pairing matrix (⊞), and the Corpus explorer (≣). Reach them from the «More» menu.",
+
+  // Research workbench (newer features, summarised)
+  "tour.workbenchTitle": "Research workbench",
+  "tour.workbenchBody": "Beyond what you've seen, there's a deeper workbench: the Claim board (⚖) to argue a reading with supporting & challenging āyāt, the Coding & Parsing lenses inside occurrence lists, the Pairing matrix (⊞), and the Corpus explorer (≣) for frequency, morphology, antonyms, and oaths & conditionals across the whole text. Try them from the toolbar.",
 
   // 23 — Finish
   "tour.finishTitle": "You completed a full study!",

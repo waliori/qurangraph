@@ -161,6 +161,26 @@ export const CHANGELOG = [
           },
           {
             kind: "improve",
+            text: { ar: "أخفِ كلّ الأشرطة وتفرّغ للرسم", en: "Hide every bar and focus on the canvas" },
+            detail: {
+              ar: "على الهاتف انقر اللسان (▾) أعلى الشاشة ليختفي شريط الأدوات بالكامل فيملأ الرسمُ الشاشة؛ انقره ثانيةً ليعود.",
+              en: "On a phone, tap the little tab (▾) at the very top to collapse the whole toolbar — the graph fills the screen; tap it again to bring it back.",
+            },
+            media: { mobile: "changelog/hide-header-mobile.mp4" },
+            mediaAlt: { ar: "إخفاء شريط الأدوات لعرض الرسم بملء الشاشة", en: "Hiding the toolbar for a full-screen canvas" },
+          },
+          {
+            kind: "improve",
+            text: { ar: "تبويبات النوافذ تنزلق أفقيًّا عند طولها", en: "Long dialog tab rows slide sideways" },
+            detail: {
+              ar: "حين تكثر تبويبات نافذةٍ على الهاتف فلا تتزاحم: اسحب صفّ التبويبات يمينًا ويسارًا للوصول إليها كلّها.",
+              en: "When a dialog has more tabs than fit on a phone they no longer cram together — swipe the tab row left and right to reach them all.",
+            },
+            media: { mobile: "changelog/tabs-slide-mobile.mp4" },
+            mediaAlt: { ar: "سحب صفّ التبويبات أفقيًّا داخل نافذة", en: "Swiping a dialog's tab row sideways" },
+          },
+          {
+            kind: "improve",
             text: { ar: "زرّ رجوعٍ موحَّدٌ في كلّ النوافذ", en: "One back button, the same in every dialog" },
             detail: {
               ar: "عند التنقّل داخل نافذةٍ أو بينها يظهر سهم رجوعٍ في المكان نفسه دائمًا (→ بالعربية، ← بالإنجليزية)، ويستجيب لمفتاح Esc.",
@@ -182,7 +202,7 @@ export const CHANGELOG = [
               en: "Type several words to search the whole text; matches light up inside the verse, and the empty search box lists your recent searches.",
             },
             steps: [
-              { ar: "اكتب عبارةً من كلمتين فأكثر في حقل البحث (مثل «إذا جاء»).", en: "Type a phrase of two or more words in the search box (e.g. “when comes”)." },
+              { ar: "اكتب عبارةً من كلمتين فأكثر في حقل البحث (مثل «إذا جاء»).", en: "Type a phrase of two or more words in the search box (e.g. «إذا جاء»)." },
               { ar: "افتح النتائج؛ تظهر الآيات والكلمات المطابقة مُبرَزةً بلونٍ ظاهر.", en: "Open the results; matching verses appear with the words highlighted." },
               { ar: "انقر حقل البحث وهو فارغ لترى آخر عمليّاتك وتعيد تشغيل أيٍّ منها.", en: "Click the empty search box to see recent searches and re-run any of them." },
             ],
@@ -219,7 +239,7 @@ export const CHANGELOG = [
             text: { ar: "القَسَم والشرط في مستكشف المدوّنة", en: "Oaths & conditionals, corpus-wide" },
             detail: {
               ar: "تصفّح مواضع القَسَم (تالله، وَالـ…) والشرط (إذا، لو، لولا) عبر المصحف كاملًا — من تبويب «البلاغة» في مستكشف المدوّنة (≣).",
-              en: "Browse every oath (tāḷḷāhi, wa-al-…) and conditional (idhā, law, lawlā) across the whole text — from the “Rhetoric” tab in the corpus explorer (≣).",
+              en: "Browse every oath (تالله، وَالـ…) and conditional (إذا، لو، لولا) across the whole text — from the “Rhetoric” tab in the corpus explorer (≣).",
             },
             media: { desktop: "changelog/oaths-desktop.mp4" },
             mediaAlt: { ar: "تبويب البلاغة: تبديل بين القَسَم والشرط", en: "The rhetoric tab toggling between oaths and conditionals" },

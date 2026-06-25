@@ -15,7 +15,7 @@ import { useI18n } from "../i18n/index.js";
  * descendants, so an in-bar sheet pinned to the toolbar instead of the viewport. Tapping
  * the scrim or the grip — or Escape — closes it.
  */
-export function ToolbarMenu({ items, label, glyph = "⋯" }) {
+export function ToolbarMenu({ items, label, glyph = "⋯", dataTour }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const trigLabel = label || t("common.menu.more");
@@ -32,7 +32,7 @@ export function ToolbarMenu({ items, label, glyph = "⋯" }) {
 
   return (
     <div className="ag-tools ag-menu">
-      <button type="button" className={"ag-iconbtn" + (open || anyActive ? " is-active" : "")}
+      <button type="button" data-tour={dataTour} className={"ag-iconbtn" + (open || anyActive ? " is-active" : "")}
         aria-haspopup="menu" aria-expanded={open} aria-label={trigLabel} title={trigLabel}
         onClick={() => setOpen((o) => !o)}>{glyph}</button>
       {open && createPortal(

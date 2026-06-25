@@ -1457,6 +1457,7 @@ export default function QuranGraph() {
   const tourSettle = useCallback(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), []);
   const tourReset = useCallback(() => {
     setToolsOpen(false); setWsOpen(false); setSheetOpen(false); setShowHelp(false);
+    setBarHidden(false); // never start a step with the top toolbar collapsed away
     setSelected(null); setActiveWord(null);
     setDist(null); setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
   }, []);
@@ -1468,6 +1469,11 @@ export default function QuranGraph() {
     if (cfg.mode) setSearchMode(cfg.mode); // pin the grouping mode so counts are accurate
     setToolsOpen(!!cfg.tools); setWsOpen(!!cfg.ws);
     setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
+    setExprOpen(false); setExprFocus(null); setCorpusOpen(false); setPairing(null); setClaimsOpen(false); // close show-&-tell panels between steps
+    // The ⋯ slide-up menu keeps its open-state inside ToolbarMenu, so our state resets
+    // can't reach it; left open it would bleed into every later step. Unless THIS step is
+    // the one opening it, dismiss any stray sheet by clicking its scrim.
+    if (!cfg.openMenu) document.querySelectorAll(".ag-sheet-scrim").forEach((s) => s.click());
     if (cfg.selectId) {
       const n = nmap[cfg.selectId];
       setSelected(cfg.selectId); setActiveWord(n?.lookup || n?.wordNorm || null); setSheetOpen(true);
@@ -1479,8 +1485,20 @@ export default function QuranGraph() {
         setExpandedWords((prev) => { if (!prev.has(expKey)) return prev; const nw = new Set(prev); nw.delete(expKey); return nw; });
       }
     } else { setSelected(null); setActiveWord(null); setSheetOpen(false); }
+    setKbMode(cfg.kb ? "shown" : "off"); // reset the keyboard between steps (open only on its own step)
+    // ── Show-&-tell (mobile): the tour DRIVES the app itself — opening modals directly via
+    // state (robust; clicking through the slide-up menu was ending the tour) — so each step
+    // narrates a LIVE view with no tap required. ──
+    if (cfg.open === "expr") setExprOpen(true);
+    else if (cfg.open === "corpus") setCorpusOpen(true);
+    else if (cfg.open === "claims") setClaimsOpen(true);
+    else if (cfg.open === "pairing") setPairing({ open: true, seed: null, rows: [], cols: [] });
     await tourSettle();
-  }, [currentKey, navigate, nmap, setSearchMode, setExpandedWords, tourSettle]);
+    // Optional: open a sliding menu / click a control (with a small retry for late-rendering ones).
+    const clickReady = async (sel) => { for (let i = 0; i < 10; i++) { const el = document.querySelector(sel); if (el) { el.click(); return true; } await new Promise((r) => setTimeout(r, 80)); } return false; };
+    if (cfg.openMenu) { await clickReady(cfg.openMenu); await tourSettle(); }
+    if (cfg.click) { await clickReady(cfg.click); await tourSettle(); }
+  }, [currentKey, navigate, nmap, setSearchMode, setExpandedWords, setKbMode, tourSettle]);
 
   const tourSteps = useMemo(() => {
     const center = (key, content) => ({ target: '[data-tour="stage"]', placement: "center", title: t(`tour.${key}Title`), content: content ?? t(`tour.${key}Body`), before: tourBefore({}) });
@@ -1524,7 +1542,7 @@ export default function QuranGraph() {
     const earthId = tourEx?.earthId;
     const lit = { hideOverlay: true }; // modal/canvas steps: keep the page & modal bright + interactive
     const noRing = { data: { noRing: true } }; // large "subject" panels: card explains, no ring
-    return [
+    const steps = [
       center("welcome"),                                                                              // 0
       center("basics", basicsContent),                                                                // 1 plain-language idea
       center("colors", colorsContent),                                                                // 2
@@ -1556,9 +1574,56 @@ export default function QuranGraph() {
       info('[data-tour="wsdrawer"]', "wsView", { ws: true }, "left", { ...lit, ...noRing }),          // 24 workspace detail
       action('[data-tour="helpBtn"]', "help", {}, "modal:help", "bottom", lit),                        // 25 open & close help
       action('[data-tour="themeBtn"]', "theme", { ws: false }, "theme", "bottom"),                    // 26 theme/lang
-      center("finish"),                                                                               // 27
+      center("workbench"),                                                                            // 27 newer research features (claims, lenses, pairing, corpus)
+      center("finish"),                                                                               // 28
     ];
-  }, [t, tourEx, tourBefore]);
+    // PHONES get a shorter, robust path. The desktop tour drills into the inspector and a
+    // chain of FULL-SCREEN modals, where a floating card has nowhere to go on a small screen
+    // (it covers the control you must tap, and the open dialog can't be closed). The mobile
+    // tour teaches the core flow with a few simple taps, then DESCRIBES the rest (analysis +
+    // workbench) via centered cards — no modal chain, nothing to get stuck behind.
+    if (coarsePointer) {
+      // SHOW & TELL: the tour DRIVES the app itself — it opens the sliding menus, the modals
+      // and the keyboard — so each step narrates a LIVE view with no taps required. The card
+      // is pinned to the top (CSS), and each feature auto-opens as a bottom-sheet peek below
+      // it, so the card AND the dialog are always fully visible. `tell` = a non-gated step
+      // whose before-hook opens the thing it describes (cfg.click / cfg.openMenu / cfg.kb).
+      const OVR = '[data-tour="moreTools"]'; // the slide-up "more tools" menu (locale-independent)
+      // Every tell step targets the STAGE (always present), never the modal it opens.
+      // If it targeted the modal, the user closing that dialog would make the target
+      // vanish → joyride fires TARGET_NOT_FOUND → auto-skips the next few steps. Pointing
+      // at the stage keeps the tour alive no matter what the user closes. `mcard` pins the
+      // card top (default) or bottom — bottom for steps about the TOP toolbar, so the card
+      // never sits on top of the very control it's describing.
+      // `ring` = the element to highlight (separate from the stage target, so closing a
+      // dialog never breaks the tour — see the ring effect in Tour.jsx).
+      const tell = (key, cfg = {}) => ({
+        target: '[data-tour="stage"]', placement: "center",
+        title: t(`tour.${key}Title`), content: t(`tour.${key}Body`), before: tourBefore({ navEx: true, ...cfg }),
+        ...lit, data: { noRing: true, mcard: cfg.mcard, ring: cfg.ring },
+      });
+      return [
+        center("welcomeM"),                                                       // mobile-tailored copy (see tour.js *M keys)
+        center("basics", basicsContent),
+        center("colors", colorsContent),
+        tell("searchM", { mcard: "bottom", ring: '[data-tour="search"]' }),       // search box in the top toolbar
+        tell("modes", { mode: "exact", mcard: "bottom", ring: '[data-tour="modes"]' }), // mode chips in the toolbar
+        tell("graphM", { ring: `[data-node="v:${TOUR_EX.key}"]` }),               // ring the focal verse node (card on top, node sits below it)
+        tell("inspector", { selectId: earthId, ring: ".ag-inspector" }),          // auto-select a word → its panel
+        tell("dictM", { selectId: earthId, ring: ".ag-inspector" }),              // its dictionary & analysis
+        tell("exprM", { open: "expr", ring: ".ag-modal" }),                       // auto-open expressions explorer
+        tell("corpus", { open: "corpus", ring: ".ag-modal" }),                    // corpus explorer
+        tell("claims", { open: "claims", ring: ".ag-modal" }),                    // claim board
+        tell("mMenus", { openMenu: OVR, ring: ".ag-sheet" }),                     // the slide-up "more tools" menu
+        tell("mKeyboard", { kb: true, ring: ".ag-keyboard" }),                    // the Arabic keyboard
+        tell("mSheet", { open: "expr", ring: ".ag-modal" }),                      // resizable sheets gesture
+        tell("wsOpen", { ws: true, ring: '[data-tour="wsdrawer"]' }),             // workspace
+        center("workbenchM"),
+        center("finish"),
+      ];
+    }
+    return steps;
+  }, [t, tourEx, tourBefore, coarsePointer]);
 
   // ── Gating: advance an action step once the user performs the action ──
   const gateRef = useRef({});
@@ -1753,10 +1818,14 @@ export default function QuranGraph() {
   // On wide screens they sit inline as glyph icon buttons; on compact/touch layouts
   // they collapse into the ⋯ ToolbarMenu (labelled rows, bigger targets). The tour
   // drives several of these by data-tour, so collapsing is suppressed while it runs.
-  const compact = compactUI && !tourRun;
+  // The DESKTOP tour drives these inline buttons by data-tour, so it suppresses the ⋯
+  // collapse (keeps them reachable). The MOBILE tour is show-and-tell — it never clicks a
+  // toolbar target, and it deliberately demonstrates the phone's collapsed chrome (the ⋯
+  // sliding menu, the dock toggle), so on touch we KEEP compact mode on while it runs.
+  const compact = compactUI && (!tourRun || coarsePointer);
   // On touch the dock / reader-action clusters hide behind a toggle to free the small
-  // canvas; the tour needs them visible, so it forces them open.
-  const showDockToggle = compactUI && !tourRun;
+  // canvas; the desktop tour forces them open, the mobile tour shows the toggle itself.
+  const showDockToggle = compactUI && (!tourRun || coarsePointer);
   const dockExpanded = !showDockToggle || dockOpen;
   const arabicActive = numerals === "arabic" ? true : numerals === "western" ? false : lang === "ar";
   const githubGlyph = (
@@ -1992,7 +2061,7 @@ export default function QuranGraph() {
             )
           ))}
         </div>
-        {compact && <ToolbarMenu items={menuItems} />}
+        {compact && <ToolbarMenu items={menuItems} dataTour="moreTools" />}
       </header>
 
       {/* Mobile pull-tab to collapse/expand the toolbar and reclaim the canvas. */}
@@ -2576,7 +2645,8 @@ export default function QuranGraph() {
         onClose={() => { setExprOpen(false); setExprInitial(null); }} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)}
-        onStartTour={() => { setShowHelp(false); startTour(); }} />}
+        onStartTour={() => { setShowHelp(false); startTour(); }}
+        onOpenChangelog={() => { setShowHelp(false); setWhatsNewIntro(false); setWhatsNew(CHANGELOG); }} />}
 
       {/* "What's new" changelog — also the first-run welcome (intro mode adds tour-style
           chrome and hands off to the tour). Auto-opens after a deploy; re-openable from Help. */}

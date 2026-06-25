@@ -545,6 +545,11 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
 .ag-cl-media-fig.is-mobile { max-width: 200px; }
 .ag-cl-media-fig.is-mobile .ag-cl-media { max-height: 380px; width: auto; }
 .ag-cl-media-label { font-size: 10px; font-weight: var(--fw-semibold); letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); }
+/* Demo clips embedded in the Help guide: a tidy wrapping row of modest thumbnails
+   under a section, separated by a hairline rule. */
+.ag-help-clips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3); border-block-start: var(--bw-hair) solid var(--border-subtle); }
+.ag-help-clips .ag-cl-media-group { flex: 1 1 240px; max-width: 300px; margin-block-start: 0; }
 
 /* Stop-word editor */
 .ag-stop-add { display: flex; gap: var(--space-2); }
@@ -1148,10 +1153,39 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
   /* Fill the floater wrapper, which owns the width (see STYLES in Tour.jsx). */
   width: 100%; max-width: 100%;
   background: var(--ink-800); color: var(--text-body);
-  border: var(--bw-hair) solid var(--border-subtle); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3); padding: 8px 16px 16px; text-align: start;
+  /* A gold rim + soft outer glow so the card is easy to spot wherever it sits — it
+     moves between top and bottom per step, and a plain card was easy to lose. */
+  border: 1px solid var(--gold-500); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3), 0 0 0 1px color-mix(in oklab, var(--gold-500) 30%, transparent),
+    0 0 22px -4px color-mix(in oklab, var(--gold-500) 45%, transparent);
+  padding: 8px 16px 16px; text-align: start;
   font-family: var(--font-ui);
+  /* Replays on every step (the card remounts per step) — the little pop draws the eye
+     to its new position. */
+  animation: ag-tour-pop .26s var(--ease-out);
 }
+@keyframes ag-tour-pop {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* The floater wrapper is invisible chrome — only the card itself should catch clicks,
+   so the area around/below it stays live (the app behind the tour is interactive). */
+.react-joyride__floater { pointer-events: none; }
+.ag-tour { pointer-events: auto; }
+/* Minimized: collapse the card to a small title pill in a top corner so the WHOLE app
+   behind the tour is reachable (change a tab, shrink a sheet…). Restore via the ▢ button. */
+.ag-tour.is-min { width: auto; max-width: 84vw; padding-block-end: 8px; }
+.ag-tour.is-min .ag-tour-body,
+.ag-tour.is-min .ag-tour-tip,
+.ag-tour.is-min .ag-tour-hint,
+.ag-tour.is-min .ag-tour-dots,
+.ag-tour.is-min .ag-tour-dont,
+.ag-tour.is-min .ag-tour-nav { display: none; }
+.ag-tour.is-min .ag-tour-head .ag-tour-tool:not(.ag-tour-min-btn) { display: none; }
+.ag-tour.is-min .ag-tour-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62vw; margin-block: 4px 0; }
+body.qg-tour-min .react-joyride__floater { position: fixed !important;
+  inset: max(10px, env(safe-area-inset-top, 0px)) 3vw auto auto !important;
+  width: auto !important; max-width: none !important; transform: none !important; }
 /* The whole header + title strip is the drag surface (controls inside opt out). */
 .ag-tour-drag { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ag-tour-drag:active { cursor: grabbing; }
@@ -1226,6 +1260,10 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
   50% { box-shadow: 0 0 0 4px var(--gold-400), 0 0 18px 5px color-mix(in oklab, var(--gold-400) 60%, transparent);
         filter: drop-shadow(0 0 8px var(--gold-400)); }
 }
+.ag-tour-tip { margin: 8px 0 0; padding: 7px 10px; border-radius: 8px;
+  background: color-mix(in oklab, var(--gold-500) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gold-500) 30%, transparent);
+  color: var(--text-muted, #9aa3b2); font-size: calc(var(--text-xs) * var(--tour-scale, 1)); line-height: 1.4; }
 .ag-tour-colors > p { margin: 0 0 10px; }
 .ag-tour-basics-svg { width: 100%; max-width: 280px; height: auto; display: block; margin: 0 auto 10px; }
 .ag-tour-basics > p { margin: 0 0 8px; }
@@ -1538,6 +1576,18 @@ html.qg-tour-active input, html.qg-tour-active textarea { user-select: text; -we
  * inputs so iOS Safari never zooms the page on focus. Keyed on a coarse PRIMARY pointer
  * so a desktop mouse is unaffected even at a narrow window width. */
 @media (pointer: coarse) {
+  /* Tour on phones is "show & tell": the card is PINNED to the top, full-width, while the
+     feature it narrates auto-opens as a bottom-sheet (peek) below it — so both the card and
+     the dialog are always fully visible. !important beats react-floater's inline transform. */
+  .react-joyride__floater { position: fixed !important; inset: max(10px, env(safe-area-inset-top, 0px)) 3vw auto 3vw !important;
+    transform: none !important; width: auto !important; max-width: none !important; }
+  /* Steps that point at the TOP toolbar pin the card to the BOTTOM instead, so the card
+     never hides the very control it describes (set per-step via body.qg-tour-mbottom). */
+  body.qg-tour-mbottom .react-joyride__floater { inset: auto 3vw max(10px, env(safe-area-inset-bottom, 0px)) 3vw !important; }
+  /* No transform:none here — the card keeps its own translate() so it stays draggable;
+     the floater (above) is what's pinned, the card just rides on top of it. */
+  .ag-tour { max-height: 52dvh; display: flex; flex-direction: column; width: 100%; max-width: 100%; }
+  .ag-tour-body { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
   .ag-iconbtn { width: 44px; height: 44px; font-size: 17px; }
   .ag-reader-btn { width: 42px; height: 42px; font-size: 15px; }
   .ag-seg button { padding: 11px 13px; }

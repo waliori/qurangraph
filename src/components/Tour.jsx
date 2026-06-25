@@ -49,7 +49,7 @@ function TourTooltip(props) {
 function TourCard({
   index, size, step, isLastStep,
   backProps, primaryProps, skipProps, closeProps, tooltipProps,
-  dontShow, onDontShow, fontScale, onFontScale, theme, onToggleTheme, lang, onToggleLang, dir, t,
+  dontShow, onDontShow, fontScale, onFontScale, theme, onToggleTheme, lang, onToggleLang, minimized, onToggleMin, dir, t,
 }) {
   const gated = !!step.data?.gated;
   const cardRef = useRef(null);
@@ -64,6 +64,8 @@ function TourCard({
   const [scale, setScale] = useState(fontScale);
   const [themeView, setThemeView] = useState(theme);
   const [langView, setLangView] = useState(lang);
+  // Local mirror (instant UI), synced up to persist across the per-step remount.
+  const [minView, setMinView] = useState(minimized);
 
   // Clamp a desired offset so the whole card stays within the viewport (8px
   // margin). `off` is the currently-applied offset, so the card's base position
@@ -105,7 +107,7 @@ function TourCard({
   const toggleLang = () => { onToggleLang?.(); setLangView((v) => (v === "ar" ? "en" : "ar")); };
 
   return (
-    <div ref={cardRef} className="ag-tour" dir={dir} {...tooltipProps} aria-label={t("tour.ariaLabel")}
+    <div ref={cardRef} className={"ag-tour" + (minView ? " is-min" : "")} dir={dir} {...tooltipProps} aria-label={t("tour.ariaLabel")}
       style={{ transform: `translate(${off.x}px, ${off.y}px)`, "--tour-scale": scale }}>
       <div className="ag-tour-drag"
         onPointerDown={onGrabDown} onPointerMove={onGrabMove} onPointerUp={onGrabUp} onPointerCancel={onGrabUp}>
@@ -118,11 +120,16 @@ function TourCard({
             title={t("tour.textSmaller")} aria-label={t("tour.textSmaller")}>A−</button>
           <button type="button" className="ag-tour-tool" onClick={() => bumpScale(SCALE_STEP)} disabled={scale >= SCALE_MAX}
             title={t("tour.textLarger")} aria-label={t("tour.textLarger")}>A+</button>
+          <button type="button" className="ag-tour-tool ag-tour-min-btn"
+            onClick={() => { const v = !minView; setMinView(v); onToggleMin?.(v); }}
+            title={t(minView ? "tour.expand" : "tour.minimize")} aria-label={t(minView ? "tour.expand" : "tour.minimize")}>{minView ? "▢" : "—"}</button>
           <button type="button" className="ag-tour-x" {...closeProps} title={t("tour.close")} aria-label={t("tour.close")}>✕</button>
         </div>
         {step.title && <div className="ag-tour-title">{step.title}</div>}
       </div>
       <div className="ag-tour-body">{step.content}</div>
+
+      {index < 2 && <p className="ag-tour-tip">{t("tour.dragHint")}</p>}
 
       {gated && <div className="ag-tour-hint"><span className="ag-tour-pulse" aria-hidden="true" />{t("tour.yourTurn")}</div>}
 
@@ -163,8 +170,22 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
     setFontScale(v);
     try { localStorage.setItem("qg.tourScale", String(v)); } catch { /* private mode */ }
   }, []);
+  // Minimize collapses the card to a small corner pill so the whole app behind the tour
+  // becomes interactive (change a tab, shrink a sheet…) — then restore to keep reading.
+  // Lifted here (not in the per-step card, which remounts) so it persists across steps.
+  const [minimized, setMinimized] = useState(false);
 
-  useEffect(() => { if (run) endedRef.current = false; }, [run]);
+  useEffect(() => {
+    if (run) { endedRef.current = false; return; }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMinimized(false); // a fresh run always starts expanded
+  }, [run]);
+  // While minimized, a body class shrinks the floater to a corner pill (CSS), freeing the
+  // rest of the screen — the floater itself stops eating clicks so the app behind is live.
+  useEffect(() => {
+    document.body.classList.toggle("qg-tour-min", run && minimized);
+    return () => document.body.classList.remove("qg-tour-min");
+  }, [run, minimized]);
   const setDS = useCallback((v) => { dontShowRef.current = v; setDontShow(v); }, []);
 
   const handleEvent = useCallback((data) => {
@@ -192,8 +213,8 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
   const Tooltip = useCallback(
     (props) => <TourTooltip {...props} dontShow={dontShow} onDontShow={setDS}
       fontScale={fontScale} onFontScale={changeScale} theme={theme} onToggleTheme={onToggleTheme}
-      lang={lang} onToggleLang={onToggleLang} dir={dir} t={t} />,
-    [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, lang, onToggleLang, dir, t],
+      lang={lang} onToggleLang={onToggleLang} minimized={minimized} onToggleMin={setMinimized} dir={dir} t={t} />,
+    [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, lang, onToggleLang, minimized, dir, t],
   );
 
   // Pulse a ring on the current step's target element (the dimmed overlay alone
@@ -202,9 +223,12 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
   useEffect(() => {
     if (!run) return undefined;
     const step = steps[stepIndex];
-    // Skip centred steps and large "subject" panels (data.noRing) — ring only
-    // specific controls/nodes, not whole panels.
-    const sel = step && step.placement !== "center" && !step.data?.noRing && typeof step.target === "string" ? step.target : null;
+    // `data.ring` names the element to highlight explicitly — used by the mobile
+    // show-and-tell steps, which target the (always-present) stage so the tour can't
+    // break, yet still want to spotlight the control/sheet they describe. Otherwise
+    // ring the step's own target, skipping centred steps and large noRing panels.
+    const sel = step?.data?.ring
+      || (step && step.placement !== "center" && !step.data?.noRing && typeof step.target === "string" ? step.target : null);
     if (!sel) return undefined;
     let el = null, timer = 0, tries = 0;
     const apply = () => {
@@ -214,6 +238,15 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
     };
     timer = window.setTimeout(apply, 40);
     return () => { window.clearTimeout(timer); if (el) el.classList.remove("qg-tour-target"); };
+  }, [run, stepIndex, steps]);
+
+  // Mobile: pin the card to the bottom of the screen for steps that describe the top
+  // toolbar (data.mcard === "bottom"), so the card doesn't cover the control it explains.
+  // Default (top) is the CSS baseline; we only toggle the override class.
+  useEffect(() => {
+    const on = run && steps[stepIndex]?.data?.mcard === "bottom";
+    document.body.classList.toggle("qg-tour-mbottom", !!on);
+    return () => document.body.classList.remove("qg-tour-mbottom");
   }, [run, stepIndex, steps]);
 
   if (!steps?.length) return null;

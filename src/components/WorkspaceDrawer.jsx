@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 import { useI18n } from "../i18n/index.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
@@ -37,7 +38,8 @@ function GroupPicker({ ws, kind, id }) {
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     document.addEventListener("mousedown", onDoc);
-    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); document.removeEventListener("mousedown", onDoc); };
+    document.addEventListener("touchstart", onDoc);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); document.removeEventListener("mousedown", onDoc); document.removeEventListener("touchstart", onDoc); };
   }, [open]);
   if (ws.groups.length === 0) return null;
   const toggle = () => {
@@ -47,7 +49,7 @@ function GroupPicker({ ws, kind, id }) {
       const below = window.innerHeight - r.bottom;
       const up = below < 260 && r.top > below;
       setPos({
-        right: Math.max(8, Math.round(window.innerWidth - r.right)),
+        right: Math.max(8, Math.min(Math.round(window.innerWidth - r.right), window.innerWidth - 178)),
         top: up ? "auto" : Math.round(r.bottom + 4),
         bottom: up ? Math.round(window.innerHeight - r.top + 4) : "auto",
       });
@@ -59,7 +61,10 @@ function GroupPicker({ ws, kind, id }) {
     <div className="ag-ws-grp">
       <button ref={btnRef} type="button" className={"ag-btn ag-btn-xs" + (mine.length ? " is-active" : "")} aria-expanded={open}
         title={t("ws.groups.assign")} onClick={toggle}>⊕{mine.length ? ` ${mine.length}` : ""}</button>
-      {open && pos && (
+      {open && pos && createPortal(
+        // Portaled to <body> so the drawer's backdrop-filter (which makes any fixed
+        // descendant resolve against the DRAWER, not the viewport — the "menu shows
+        // outside the panel" bug) can't capture it. Now position:fixed is truly viewport-anchored.
         <div className="ag-ws-grpmenu" role="menu" style={{ position: "fixed", left: "auto", right: pos.right, top: pos.top, bottom: pos.bottom }}>
           {ws.groups.length > 8 && (
             <input className="ag-input ag-input-sm ag-ws-grpmenu-filter" value={gq} autoFocus
@@ -72,7 +77,8 @@ function GroupPicker({ ws, kind, id }) {
             </label>
           ))}
           {list.length === 0 && <span className="ag-hint" style={{ padding: "2px 4px" }}>{t("tag.filterNone")}</span>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

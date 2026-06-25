@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ModalShell } from "./ModalShell.jsx";
+import { MediaGroup } from "./ClipMedia.jsx";
 import { useI18n } from "../i18n/index.js";
 import { loadSources } from "../data-loader.js";
 import { CURRENT_VERSION } from "../changelog.js";
@@ -93,7 +94,7 @@ function semIllo(t) {
   );
 }
 
-const sec = (title, illo, items) => (
+const sec = (title, illo, items, clipsNode) => (
   <section className="ag-help-sec" key={title}>
     <h3 className="ag-help-h">{title}</h3>
     {illo}
@@ -102,20 +103,34 @@ const sec = (title, illo, items) => (
         <div className="ag-help-row" key={t}><dt className="ag-help-t">{t}</dt><dd className="ag-help-d">{d}</dd></div>
       ))}
     </dl>
+    {clipsNode}
   </section>
 );
 
-export function HelpModal({ open, onClose, onStartTour }) {
+export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
   const { t } = useI18n();
   // Lazy-load the build's source-provenance manifest the first time Help opens; null
   // when the build didn't emit one (older builds), in which case the section is hidden.
   const [sources, setSources] = useState(null);
   useEffect(() => { if (open && !sources) loadSources().then(setSources).catch(() => {}); }, [open, sources]);
 
+  // Short demo clips (reused from the What's-New captures) shown under the relevant
+  // section. `clip(alt, desktop, mobile)` builds one media group; a missing file hides
+  // itself. `clips(...)` lays several side by side.
+  const clip = (alt, desktop, mobile) => ({ alt, media: { ...(desktop ? { desktop } : {}), ...(mobile ? { mobile } : {}) } });
+  const clips = (...arr) => (
+    <div className="ag-help-clips">
+      {arr.map((c, i) => <MediaGroup key={i} media={c.media} alt={c.alt} t={t} />)}
+    </div>
+  );
+
   return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("help.close")} ariaLabel={t("help.dialogAria")}
       title={<><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></>}
-      actions={onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}>
+      actions={<>
+        {onOpenChangelog && <button type="button" className="ag-btn" onClick={onOpenChangelog}>✦ {t("changelog.openFromHelp")}</button>}
+        {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
+      </>}>
         <div className="ag-help-body">
           {hero(t)}
 
@@ -123,7 +138,7 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.modeWord"), <>{t("help.modeWordD1")} {ex("يستغفرون", BLUE)} {t("help.modeWordD2")}</>],
             [t("help.modeLemma"), <>{t("help.modeLemmaD1")} {ex("استغفر", GOLD)} + {ex("يستغفرون", GOLD)} {t("help.modeLemmaD2")} {ex("غفور", RED)} {t("help.modeLemmaD3")}</>],
             [t("help.modeRoot"), <>{t("help.modeRootD1")} {ex("غفر", GREEN)}: {ex("استغفر", GREEN)}، {ex("مغفرة", GREEN)}، {ex("غفور", GREEN)}…</>],
-          ])}
+          ], clips(clip(t("help.modeLemma"), "changelog/lemma-desktop.mp4")))}
 
           {sec(t("help.precisionTitle"), null, [
             [t("help.lenient"), <>{t("help.lenientD1")} {ex("آية", GREEN)} <b style={{ color: GREEN }}>=</b> {ex("اية", GREEN)}{t("help.lenientD2")}{ex("صلاة", GREEN)} <b style={{ color: GREEN }}>=</b> {ex("صلوه", GREEN)}.</>],
@@ -134,18 +149,26 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.search"), <>{t("help.searchD1")} {ex("السلام", GOLD)} {t("help.searchFinds")} {ex("ٱلسَّلَٰم", GOLD)}، {ex("الربا", GOLD)} {t("help.searchFinds")} {ex("ٱلرِّبَوٰا", GOLD)}، {ex("الصلاة", GOLD)} {t("help.searchFinds")} {ex("ٱلصَّلَوٰة", GOLD)}. {t("help.searchD2")}</>],
             [t("help.phraseSearch"), t("help.phraseSearchD")],
             [t("help.verseRef"), <>{t("help.verseRefD1")} {ex("2:255", "var(--text-body)")} {t("help.verseRefD2")}</>],
-          ])}
+          ], clips(
+            clip(t("help.search"), "changelog/search-forgiving-desktop.mp4"),
+            clip(t("help.phraseSearch"), "changelog/phrase-desktop.mp4", "changelog/phrase-mobile.mp4"),
+            clip(t("help.verseRef"), "changelog/sura-picker-desktop.mp4"),
+          ))}
 
           {sec(t("help.keyboardTitle"), null, [
             [t("help.keyboardKbd"), t("help.keyboardKbdD")],
-          ])}
+          ], clips(clip(t("help.keyboardKbd"), "changelog/keyboard-desktop.mp4", "changelog/keyboard-mobile.mp4")))}
 
           {sec(t("help.navTitle"), null, [
             [t("help.expandCollapse"), t("help.expandCollapseD")],
             [t("help.pan"), t("help.panD")],
             [t("help.context"), <>{t("help.contextD1")} {ex("☰", "var(--text-body)")} {t("help.contextD2")}</>],
             [t("help.undoRedo"), <>{ex("Ctrl+Z", "var(--text-body)")} {t("help.undoRedoD1")}{ex("Ctrl+Y", "var(--text-body)")} {t("help.undoRedoD2")}</>],
-          ])}
+          ], clips(
+            clip(t("help.pan"), "changelog/graph-desktop.mp4"),
+            clip(t("help.context"), null, "changelog/reader-menu-mobile.mp4"),
+            clip(t("help.pan"), null, "changelog/hide-header-mobile.mp4"),
+          ))}
 
           {sec(t("help.colorsTitle"), null, [
             [t("help.colorCenter"), <><span className="ag-help-dot" style={{ background: GOLD }} /> {t("help.colorCenterD")}</>],
@@ -163,7 +186,7 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.hiddenWords"), <>{t("help.hiddenWordsD1")}{ex("علي", "var(--text-faint)")} ≠ {ex("عليهم", "var(--text-faint)")}{t("help.hiddenWordsD2")}</>],
             [t("help.versesPerWord"), t("help.versesPerWordD")],
             [t("help.renderer"), t("help.rendererD")],
-          ])}
+          ], clips(clip(t("help.morphFilter"), "changelog/morphfilter-desktop.mp4")))}
 
           {sec(t("help.analysisTitle"), null, [
             [t("help.morphAnalysis"), t("help.morphAnalysisD")],
@@ -174,7 +197,12 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.opposites"), <>{t("help.oppositesD1")} {ex("صدق", GREEN)} <span style={{ color: "var(--text-faint)" }}>↔</span> {ex("كذب", RED)} {t("help.oppositesD2")}</>],
             [t("help.corpusExplorer"), <>{t("help.corpusExplorerD1")}{ex("الرحمن", GOLD)}، {ex("السلام", GOLD)}{t("help.corpusExplorerD2")}</>],
             [t("help.citations"), t("help.citationsD")],
-          ])}
+          ], clips(
+            clip(t("help.morphAnalysis"), "changelog/inspector-desktop.mp4"),
+            clip(t("help.distribution"), "changelog/distribution-desktop.mp4"),
+            clip(t("help.corpusExplorer"), "changelog/corpus-desktop.mp4"),
+            clip(t("help.opposites"), "changelog/antonyms-desktop.mp4"),
+          ))}
 
           {sec(t("help.semTitle"), semIllo(t), [
             [t("help.rootLab"), <>{t("help.rootLabD1")}<b style={{ color: GREEN }}>{t("help.rootLabDeriv")}</b>{t("help.rootLabDerivD")}<b style={{ color: GREEN }}>{t("help.rootLabKin")}</b>{t("help.rootLabKinD")}<b style={{ color: RED }}>{t("help.rootLabOpp")}</b>{t("help.rootLabOppD")}<b style={{ color: GOLD }}>{t("help.rootLabLex")}</b>{t("help.rootLabLexD")}<b style={{ color: GREEN }}>{t("help.rootLabSem")}</b>{t("help.rootLabSemD")}
@@ -189,7 +217,13 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.expr"), <>{t("help.exprD")}
               <b style={{ color: GREEN }}>{t("help.exprGov")}</b>{t("help.exprGovD")}<b style={{ color: GREEN }}>{t("help.exprColloc")}</b>{t("help.exprCollocD")}<b style={{ color: GREEN }}>{t("help.exprComp")}</b>{t("help.exprCompD")}<b style={{ color: PURPLE }}>{t("help.exprIdiom")}</b>{t("help.exprIdiomD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("آمَنَ بـ", GOLD)} {ex("أقام الصلاة", GOLD)} {ex("سبيل الله", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.exprWhere")}</span></span></>],
-          ])}
+          ], clips(
+            clip(t("help.ayaLab"), "changelog/verselab-desktop.mp4"),
+            clip(t("help.surahLab"), "changelog/surah-lab-desktop.mp4"),
+            clip(t("help.rhyme"), "changelog/fasila-desktop.mp4"),
+            clip(t("help.expr"), "changelog/expressions-desktop.mp4"),
+            clip(t("help.exprGov"), "changelog/valency-desktop.mp4"),
+          ))}
 
           {sec(t("help.workbenchTitle"), <p className="ag-help-intro ag-hint">{t("help.workbenchIntro")}</p>, [
             [t("help.wbClaim"), t("help.wbClaimD")],
@@ -197,7 +231,12 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.wbRole"), t("help.wbRoleD")],
             [t("help.wbConstruction"), t("help.wbConstructionD")],
             [t("help.wbPairing"), t("help.wbPairingD")],
-          ])}
+          ], clips(
+            clip(t("help.wbClaim"), "changelog/claims-desktop.mp4", "changelog/claims-mobile.mp4"),
+            clip(t("help.wbCoding"), "changelog/coding-desktop.mp4"),
+            clip(t("help.wbRole"), "changelog/role-lens-desktop.mp4"),
+            clip(t("help.wbPairing"), "changelog/pairing-desktop.mp4"),
+          ))}
 
           {sec(t("help.shareTitle"), null, [
             [t("help.workspace"), <>{ex("★", GOLD)} {t("help.workspaceD")}</>],
@@ -205,7 +244,11 @@ export function HelpModal({ open, onClose, onStartTour }) {
             [t("help.export"), t("help.exportD")],
             [t("help.offline"), t("help.offlineD")],
             [t("help.language"), t("help.languageD")],
-          ])}
+          ], clips(
+            clip(t("help.workspace"), "changelog/workspace-desktop.mp4"),
+            clip(t("help.shareLink"), "changelog/share-desktop.mp4"),
+            clip(t("help.language"), "changelog/language-desktop.mp4"),
+          ))}
 
           {sec(t("help.methodologyTitle"), null, [
             [t("help.methodCurated"), <>{t("help.methodCuratedD1")}{ex(t("help.corpus"), GREEN)}{t("help.methodCuratedD2")}<b>{t("help.methodCuratedBold")}</b>{t("help.methodCuratedD3")}</>],
