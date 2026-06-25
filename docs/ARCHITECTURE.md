@@ -188,14 +188,26 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
 - `letters.js` — `MUQATTAAT` (the 29 disjoined-letter openings) + `surahLetterProfile`
   (opening-letter over-representation vs the corpus).
 - `corpus.js` — `rootFrequency`, `hapaxRoots`, `browseByMorph` (corpus-wide catalogues).
-- `relations.js` — runtime readers over the precomputed lexical-relations map: `oppositesOf` /
-  `affinityOf` / `verseAntithesis` / `oppositesCatalogue` (الطباق + affinity).
+- `relations.js` — runtime readers over the lexical-relations map: `oppositesOf` /
+  `candidatesOf` / `verseAntithesis` / `oppositesCatalogue` / `candidatesCatalogue`
+  (الطباق — curated opposites plus machine-found, un-curated candidates).
 - `names.js` — `divineNames` (a conservative أسماء الله index, keyed by attested surface form).
 - `expressions.js` — runtime readers over the precomputed multi-word inventory (`expressions.json`):
   `indexExpressions` (reverse indices by head/root/verb), `frameContrast` (a head's
   governed-preposition contrast + the bare residual), `headRows` (the government matrix),
   `expressionsForRoot` (a root's frames / collocations / compounds, for the inline lenses),
   `indexByVerse` (verse → its expressions), `occVerses` / `distBySura` (التعدية · المصاحبات · الإضافة).
+- `assoc.js` — the shared association math (single source for runtime + the offline miner):
+  `g2` (signed Dunning log-likelihood), `pmi`, `logDice`, `association`, `sigTier`.
+- `construction.js` — `frameOccIndex` + `definiteOf`: the morphology-filtered construction
+  query (Form + voice + governed particle + a definiteness heuristic).
+- `role.js` — `roleAt` + `roleBreakdown` (الموقع التركيبي: a syntactic-role *proxy* from case
+  tags + local adjacency, with a confidence flag — not a dependency parse).
+- `pairing.js` — `pairingMatrix` + `flattenPairs` (co-occurrence grid over two term sets).
+- `valency.js` — `valencyProfile` (a verb's governed prepositions + nominal co-arguments,
+  reshaped from the expressions inventory).
+- `field.js` — `fieldStats` (aggregate a user-built semantic field's distribution).
+- `rhetoric.js` — `rhetoricScan` (oaths القسم + conditionals الشرط, gated on morphology Forms).
 
 ---
 
@@ -207,9 +219,13 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
 | `usePersistedState` | localStorage state with a sanitizer; corrupt-/quota-safe. |
 | `useUrlState` | encode/decode the full app state to the URL hash (compact keys, only non-defaults, sorted Sets, optional node positions). `readUrlState`/`writeUrlState` (debounced `replaceState`). |
 | `useExplorationHistory` | undo/redo of discrete exploration steps (≤120), keyboard-bound. |
-| `useWorkspace` | the notebook: items + notes CRUD, dedupe, export/import, toast. |
+| `useWorkspace` | the notebook: items, notes, tags, fields, groups, and claims CRUD, dedupe, export/import, toast. |
 | `useModalFocus` | WAI-ARIA dialog focus trap (Esc, Tab wrap, focus restore). |
 | `useVirtualRows` | measured-row virtualization for the long lists (occurrences, context). |
+| `useFields` / `useMyExpressions` / `useProposals` | semantic-field sets, user-saved expressions, and coding/claim proposals (workspace-backed). |
+| `useSearchHistory` | recent searches surfaced in the empty search box. |
+| `useBottomSheetDrag` | the drag-to-resize gesture for mobile bottom-sheet dialogs. |
+| `useMediaQuery` / `useReveal` | compact-layout detection and idle-deferred reveal of heavy lists. |
 
 ---
 
@@ -221,8 +237,10 @@ missing key falls back to Arabic, then to the raw key), so a component rendered
 without the provider still shows Arabic. `index.js` exposes `useI18n()` →
 `{ lang, dir, t, setLang }` and flips the document `lang`/`dir`. Strings are split
 into namespaced topic modules (`common`, `help`, `occ`, `dist`, `cmp`, `ctx`,
-`phrase`, `morph`, `stop`, `ws`) merged in `strings.js`. Only the app chrome is
-translated — never the Qurʾān, morphology, or glosses.
+`phrase`, `morph`, `stop`, `ws`, `lab`, `work`, `tour`, `ui`, `changelog`, `intro`)
+merged in `strings.js`. Only the app chrome is translated — never the Qurʾān,
+morphology, or glosses. (The release content in `changelog.js` carries its own
+per-entry `{ ar, en }` strings rather than going through `t()`.)
 
 ---
 
@@ -259,14 +277,22 @@ src/
     PhraseModal · DefinitionModal · HelpModal              analysis/reading modals
     RhymeModal · RootLabModal · AyaLabModal · SurahLabModal · CorpusLabModal
     ExpressionsModal                                       the labs & explorers
-    MorphologyFilter · StopWordEditor                      tool panels
+    ConstructionModal · PairingModal · ClaimBoard          the research workbench
+    MorphologyFilter · StopWordEditor · VerseFilter        tool panels
+    SurahSelect · ToolbarMenu · ModalShell · DisclosurePanel   shared chrome
     WorkspaceDrawer · StickyNotes                          the notebook UI
+    ArabicKeyboard.jsx                                     phonetic Latin→Arabic input
+    Tour.jsx · WhatsNewModal.jsx                           onboarding + changelog
     ErrorBoundary.jsx
-  hooks/   usePersistedState · useUrlState · useExplorationHistory
-           useWorkspace · useModalFocus · useVirtualRows
-  analytics/  stats · phrases · rhyme · surah · verse · derivation · kinship ·
-              iltifat · diff · letters · corpus · relations · names · expressions
-  i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/ws/lab/tour
+  keyboard/  translit.js (Latin→Arabic map) · editable.js (in-field rewrite)
+  hooks/   usePersistedState · useUrlState · useExplorationHistory · useCorpusIndices
+           useWorkspace · useModalFocus · useVirtualRows · useFields · useMyExpressions
+           useProposals · useSearchHistory · useBottomSheetDrag · useMediaQuery · useReveal
+  analytics/  stats · assoc · phrases · rhyme · surah · verse · derivation · kinship ·
+              iltifat · diff · letters · corpus · relations · names · expressions ·
+              construction · role · pairing · valency · field · rhetoric
+  i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/
+           ws/lab/work/tour/ui/changelog/intro
 scripts/   data pipeline (see DATA.md)
 ```
 

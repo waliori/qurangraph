@@ -56,9 +56,16 @@ morphology, and lexicon glosses are never translated.
   occurrences, distributions, comparisons, lexicon entries, verses, and phrases;
   write free-text notes and pin **sticky notes** onto graph nodes; export/import
   the whole workspace as JSON.
-- **Shareable deep-link URLs** (encode the entire graph state, including the exact
-  node layout), **PNG/SVG export**, **undo/redo** of exploration, and full
-  keyboard/screen-reader accessibility.
+- **Research workbench** — turn browsing into an argument: a **construction query**
+  (pin a root to one Form/voice/particle/definiteness), a **syntactic-role** lens, a
+  **pairing matrix** (co-occurrence grid that makes the empty cell visible), a
+  **coding** lens (tag verses into your own categories), and a **claim board** (the
+  supporting-vs-challenging ledger), all evidenced by verses and exportable.
+- **Phonetic Arabic keyboard** — type Latin and get Arabic in any field
+  (`noor → نور`), with a draggable, three-state floating panel (`Alt+K`).
+- **Shareable deep-link URLs** (encode the entire graph state, including any open
+  analysis view and the exact node layout), **PNG/SVG export**, **undo/redo** of
+  exploration, and full keyboard/screen-reader accessibility.
 - Pan, zoom, drag nodes, light/dark themes — all in the browser, offline-capable.
 
 ## The Qurʾān text

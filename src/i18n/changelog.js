@@ -13,6 +13,9 @@ export const ar = {
   "changelog.kindNew": "جديد",
   "changelog.kindImprove": "تحسين",
   "changelog.kindFix": "إصلاح",
+  // Platform labels on the demo media (shown when both a desktop and a phone clip exist)
+  "changelog.platDesktop": "على الحاسوب",
+  "changelog.platMobile": "على الهاتف",
 };
 
 export const en = {
@@ -26,4 +29,6 @@ export const en = {
   "changelog.kindNew": "New",
   "changelog.kindImprove": "Improved",
   "changelog.kindFix": "Fixed",
+  "changelog.platDesktop": "On desktop",
+  "changelog.platMobile": "On phone",
 };

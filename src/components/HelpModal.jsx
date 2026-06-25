@@ -105,7 +105,7 @@ const sec = (title, illo, items) => (
   </section>
 );
 
-export function HelpModal({ open, onClose, onStartTour, onWatchIntro, onWhatsNew }) {
+export function HelpModal({ open, onClose, onStartTour }) {
   const { t } = useI18n();
   // Lazy-load the build's source-provenance manifest the first time Help opens; null
   // when the build didn't emit one (older builds), in which case the section is hidden.
@@ -115,11 +115,7 @@ export function HelpModal({ open, onClose, onStartTour, onWatchIntro, onWhatsNew
   return (
     <ModalShell open={open} onClose={onClose} closeLabel={t("help.close")} ariaLabel={t("help.dialogAria")}
       title={<><span className="ag-badge t-verse">{t("help.badge")}</span><h2 className="ag-modal-word" style={{ fontFamily: "var(--font-display)" }}>{t("help.title")}</h2></>}
-      actions={<>
-        {onWhatsNew && <button type="button" className="ag-btn" onClick={onWhatsNew}>✦ {t("changelog.openFromHelp")}</button>}
-        {onWatchIntro && <button type="button" className="ag-btn" onClick={onWatchIntro}>▶ {t("intro.watch")}</button>}
-        {onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}
-      </>}>
+      actions={onStartTour && <button type="button" className="ag-btn is-gold" onClick={onStartTour}>↗ {t("tour.start")}</button>}>
         <div className="ag-help-body">
           {hero(t)}
 
@@ -136,7 +132,12 @@ export function HelpModal({ open, onClose, onStartTour, onWatchIntro, onWhatsNew
 
           {sec(t("help.findTitle"), null, [
             [t("help.search"), <>{t("help.searchD1")} {ex("السلام", GOLD)} {t("help.searchFinds")} {ex("ٱلسَّلَٰم", GOLD)}، {ex("الربا", GOLD)} {t("help.searchFinds")} {ex("ٱلرِّبَوٰا", GOLD)}، {ex("الصلاة", GOLD)} {t("help.searchFinds")} {ex("ٱلصَّلَوٰة", GOLD)}. {t("help.searchD2")}</>],
+            [t("help.phraseSearch"), t("help.phraseSearchD")],
             [t("help.verseRef"), <>{t("help.verseRefD1")} {ex("2:255", "var(--text-body)")} {t("help.verseRefD2")}</>],
+          ])}
+
+          {sec(t("help.keyboardTitle"), null, [
+            [t("help.keyboardKbd"), t("help.keyboardKbdD")],
           ])}
 
           {sec(t("help.navTitle"), null, [
@@ -188,6 +189,14 @@ export function HelpModal({ open, onClose, onStartTour, onWatchIntro, onWhatsNew
             [t("help.expr"), <>{t("help.exprD")}
               <b style={{ color: GREEN }}>{t("help.exprGov")}</b>{t("help.exprGovD")}<b style={{ color: GREEN }}>{t("help.exprColloc")}</b>{t("help.exprCollocD")}<b style={{ color: GREEN }}>{t("help.exprComp")}</b>{t("help.exprCompD")}<b style={{ color: PURPLE }}>{t("help.exprIdiom")}</b>{t("help.exprIdiomD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("آمَنَ بـ", GOLD)} {ex("أقام الصلاة", GOLD)} {ex("سبيل الله", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.exprWhere")}</span></span></>],
+          ])}
+
+          {sec(t("help.workbenchTitle"), <p className="ag-help-intro ag-hint">{t("help.workbenchIntro")}</p>, [
+            [t("help.wbClaim"), t("help.wbClaimD")],
+            [t("help.wbCoding"), t("help.wbCodingD")],
+            [t("help.wbRole"), t("help.wbRoleD")],
+            [t("help.wbConstruction"), t("help.wbConstructionD")],
+            [t("help.wbPairing"), t("help.wbPairingD")],
           ])}
 
           {sec(t("help.shareTitle"), null, [

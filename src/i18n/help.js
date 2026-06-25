@@ -199,7 +199,7 @@ export const ar = {
 
   // ── مستكشف المدوّنة ──
   "help.corpusExplorer": "مستكشف المدوّنة (≣)",
-  "help.corpusExplorerD1": "من زر «≣» في الشريط: تردُّد الجذور والنوادر (ما يَرِد مرّةً واحدة)، وفهرسٌ صرفيّ، وفهرس الطباق، وأسماء الله الحسنى مرتبطةً بجذورها (",
+  "help.corpusExplorerD1": "من زر «≣» في الشريط: تردُّد الجذور والنوادر (ما يَرِد مرّةً واحدة)، وفهرسٌ صرفيّ، وفهرس الطباق، والمتشابهات اللفظية، والبلاغة (القَسَم والشرط)، وحقولك الدلالية، وأسماء الله الحسنى مرتبطةً بجذورها (",
   "help.corpusExplorerD2": ")، مع تبديلٍ بين تطابق الكلمة وتطابق الجذر.",
 
   // ── عدسات تحليل الجذر الإضافية ──
@@ -235,7 +235,7 @@ export const ar = {
 
   // ── مساحة العمل ──
   "help.workspace": "مساحة العمل (★)",
-  "help.workspaceD": "زر ★ يحفظ أي عنصر (توزيع، أو قائمة آيات، أو مدخل معجم، أو جذر…) في لوحةٍ جانبية تبقى محفوظةً بين الجلسات.",
+  "help.workspaceD": "زر ★ يحفظ أيّ عنصر (توزيع، قائمة آيات، مدخل معجم، تعبير، مصفوفة…) في لوحةٍ جانبية فيها تبويبات: المحفوظات والملاحظات والوسوم والحقول والمجموعات والدعاوى — تبقى بين الجلسات وتُصدَّر/تُستورَد كلّها بصيغة JSON. والملاحظة تُثبَّت على الرسم فتصير ملاحظةً لاصقة.",
 
   // Data sources / provenance
   "help.sourcesTitle": "مصادر البيانات وإصداراتها",
@@ -243,6 +243,29 @@ export const ar = {
   "help.sourcesBuilt": "تاريخ البناء: {date}.",
   "help.sourcesSkipped": "— لم يُحمَّل في هذا البناء",
   "help.sourcesOpen": "افتح المصدر على GitHub (في تبويب جديد)",
+
+  // ── ورشة البحث ──
+  "help.workbenchTitle": "ورشة البحث",
+  "help.workbenchIntro": "أدواتٌ تحوّل التصفّح إلى حجّة، كلٌّ مبنيٌّ على المدوّنة وموثَّقٌ بآياته:",
+  "help.wbClaim": "لوحة الدعاوى (⚖)",
+  "help.wbClaimD": "اطرح دعوى ثمّ أرفِق آياتٍ تؤيّدها أو تعارضها في عمودين؛ ثبِّت أيّ آيةٍ من قائمة المواضع بزرّ ⚐، ثمّ صدّر القضيّة كاملةً Markdown أو JSON.",
+  "help.wbCoding": "الترميز (🏷)",
+  "help.wbCodingD": "عدسةٌ على أيّ قائمة مواضع: أنشئ فئاتٍ موضوعيةً وامنح كلّ آيةٍ وسومها، مع عدّادٍ حيٍّ لكلّ فئة.",
+  "help.wbRole": "الموقع التركيبيّ (⚖)",
+  "help.wbRoleD": "عدسةٌ على قائمة المواضع تُظهر الدور الإعرابيّ لكلّ موضع (مضاف إليه · مفعول به · مجرور بحرف…) وخلاصةً مجمّعة — استدلالٌ تقريبيّ من وسوم الإعراب والجوار، للتمييز لا للقطع.",
+  "help.wbConstruction": "الاستعلام التركيبيّ (⧉)",
+  "help.wbConstructionD": "من مختبر الجذر: ثبِّت الجذر على بناءٍ واحد (وزن، معلوم/مجهول، حرف الجرّ، تعريف المفعول) وافتح تلك المواضع وحدها — تمييز «أشرك بـ» من «أشرك مع».",
+  "help.wbPairing": "مصفوفة الاقتران (⊞)",
+  "help.wbPairingD": "شبكةُ تقاطعٍ بين مجموعتين من الحدود تُظهر الخليّة الفارغة (ما لا يجتمع)؛ ازرع محورًا من عائلة جذرٍ أو حقلٍ محفوظ، واضغط خليّةً لقراءة آياتها.",
+
+  // ── لوحة المفاتيح العربية ──
+  "help.keyboardTitle": "لوحة المفاتيح العربية",
+  "help.keyboardKbd": "الكتابة باللاتينية",
+  "help.keyboardKbdD": "زرّ ⌨ (أو Alt+K) يشغّل لوحةً عائمةً تحوّل ما تكتبه لاتينيًّا إلى عربيٍّ في أيّ حقل (noor ← نور). ثلاث حالات: مُطفأة، وظاهرة (مع لوحة التشكيل والرموز)، ومخفيّة (الكتابة تعمل واللوحة مطويّةٌ إلى شارةٍ قابلةٍ للسحب). للحروف المُعجَمة استعمل الفاصلة العليا: ’t ← ث، ’d ← ذ.",
+
+  // ── البحث بعبارة ──
+  "help.phraseSearch": "البحث بعبارة",
+  "help.phraseSearchD": "اكتب عدّة كلماتٍ للبحث في كامل المصحف، فتُبرَز المطابقات داخل نصّ الآية؛ والحقل الفارغ يعرض آخر عمليّات بحثك.",
 
   // Footer
   "help.footer": "أداة بحثية قرآنية محضة — كل الروابط لغوية (كلمة/صيغة/جذر)، دون تفسير أو ترجمة.",
@@ -447,7 +470,7 @@ export const en = {
 
   // ── Corpus explorer ──
   "help.corpusExplorer": "Corpus explorer (≣)",
-  "help.corpusExplorerD1": "From the ≣ toolbar button: root frequencies and hapax (once-only roots), a grammar catalogue, an opposites index, and the 99 divine names linked to their roots (",
+  "help.corpusExplorerD1": "From the ≣ toolbar button: root frequencies and hapax (once-only roots), a grammar catalogue, an opposites index, look-alike verses, rhetoric (oaths & conditionals), your semantic fields, and the 99 divine names linked to their roots (",
   "help.corpusExplorerD2": "), with a word/root match toggle.",
 
   // ── Extra root-analysis lenses ──
@@ -483,7 +506,7 @@ export const en = {
 
   // ── Workspace ──
   "help.workspace": "Workspace (★)",
-  "help.workspaceD": "The ★ button saves any item (a distribution, a verse list, a lexicon entry, a root…) into a side drawer that persists across sessions.",
+  "help.workspaceD": "The ★ button saves any item (a distribution, a verse list, a lexicon entry, an expression, a matrix…) into a side drawer with tabs for saved items, notes, tags, fields, groups and claims — kept across sessions and exported/imported as one JSON. A note can be pinned onto the graph as a sticky note.",
 
   // Footer
   // Data sources / provenance
@@ -492,6 +515,29 @@ export const en = {
   "help.sourcesBuilt": "Built: {date}.",
   "help.sourcesSkipped": "— not fetched in this build",
   "help.sourcesOpen": "Open the source on GitHub (new tab)",
+
+  // ── Research workbench ──
+  "help.workbenchTitle": "Research workbench",
+  "help.workbenchIntro": "Tools that turn browsing into an argument — each built on the corpus and evidenced by its verses:",
+  "help.wbClaim": "Claim board (⚖)",
+  "help.wbClaimD": "State a claim, then attach āyāt that support or challenge it in two columns; pin any verse from an occurrences list with ⚐, then export the whole case as Markdown or JSON.",
+  "help.wbCoding": "Coding (🏷)",
+  "help.wbCodingD": "A lens on any occurrences list: create thematic categories and tag each verse into them, with a live count per category.",
+  "help.wbRole": "Syntactic role (⚖)",
+  "help.wbRoleD": "A lens on an occurrences list showing each token's role (muḍāf ilayhi · object · genitive-by-particle…) and an aggregate — an honest heuristic from case tags + adjacency, for distinguishing, not deciding.",
+  "help.wbConstruction": "Construction query (⧉)",
+  "help.wbConstructionD": "From the root lab: pin a root to one construction (Form, voice, governed particle, object definiteness) and open just those tokens — the ašraka bi- vs ašraka maʿa distinction.",
+  "help.wbPairing": "Pairing matrix (⊞)",
+  "help.wbPairingD": "A co-occurrence grid over two term sets that makes the empty cell visible (what never co-occurs); seed an axis from a root's family or a saved field, and click a cell to read its verses.",
+
+  // ── Arabic keyboard ──
+  "help.keyboardTitle": "Arabic keyboard",
+  "help.keyboardKbd": "Type Arabic in Latin",
+  "help.keyboardKbdD": "The ⌨ button (or Alt+K) turns on a floating keyboard that rewrites your Latin typing to Arabic in any field (noor → نور). Three states: off, shown (with the diacritics & symbols panel), and hidden (typing still works, the panel folded to a draggable edge badge). For extra letters use an apostrophe: t’ → ث, d’ → ذ.",
+
+  // ── Phrase search ──
+  "help.phraseSearch": "Phrase search",
+  "help.phraseSearchD": "Type several words to search the whole text; matches are highlighted inside the verse, and the empty box lists your recent searches.",
 
   "help.footer": "A purely Quranic research tool — all links are linguistic (word / lemma / root), with no exegesis or translation.",
 };

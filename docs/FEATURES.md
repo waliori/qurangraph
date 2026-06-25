@@ -64,8 +64,16 @@ near-identical spellings (آية/اية, ة↔ه, ى↔ي); *strict* keeps them 
   `2 255`). On a near-miss it offers a "did you mean …" suggestion instead of
   silently matching a different word.
 - **Mode** — Word / Lemma / Root (above).
-- **Sūrah / Āyah** selectors — pick the centre verse.
+- **Sūrah / Āyah** selectors — pick the centre verse. The sūrah picker is a
+  searchable combobox: type a number, an Arabic name, a Latin name, or a reference
+  like `59:7`.
 - **⚙ Tools** popover — see below.
+- **Corpus-wide buttons** — **≣ Corpus explorer**, **⛓ Expressions explorer**,
+  **⊞ Pairing matrix**, and **⚖ Claim board** (the claim badge shows its count).
+  On narrow screens these (and the secondary tools) collapse into a single **⋯
+  overflow menu** with labelled rows.
+- **⌨ Arabic keyboard** — toggle the phonetic Latin→Arabic keyboard (also `Alt+K`);
+  see *Arabic keyboard* below.
 - **✶ Workspace** — open the saved-items + notes drawer (badge shows the count).
 - **؟ Help** — the illustrated visual guide.
 - **Language** — toggle Arabic ⇄ English (flips the whole UI RTL↔LTR).
@@ -90,6 +98,15 @@ near-identical spellings (آية/اية, ة↔ه, ى↔ي); *strict* keeps them 
   groups: high-frequency **content** defaults (الله, رب…), your own **custom**
   words, and grammatical **particles** (only hidden when the master toggle is on).
   A gold chip = currently hidden; click to toggle. Add custom words inline.
+
+### Arabic keyboard
+
+A floating **phonetic keyboard** lets you type Arabic with Latin letters in *any*
+field (search, filters, note bodies) — `noor → نور`. It has **three states**: off,
+shown (the on-screen panel for diacritics and symbols is visible), and hidden
+(typing still transliterates, but the panel folds to a small **edge badge** you can
+**drag** anywhere). Toggle it with the **⌨** button or `Alt+K`. For the dotted
+letters use an apostrophe: `t’ → ث`, `d’ → ذ`.
 
 ---
 
@@ -167,7 +184,9 @@ recentre.
 How a term spreads across the 114 sūrahs (true token frequency — three hits in one
 āyah count as three). A bar per sūrah (click to list that sūrah's occurrences),
 plus a ranked **collocates** section (neighbouring words by count / PMI / signed
-log-likelihood; click to drill in), and a **direct neighbours** section — the word
+log-likelihood / log-dice, with a window control — whole-verse, ±1, or ±5 tokens,
+and a left/right/symmetric asymmetry toggle; click to drill in), and a **direct
+neighbours** section — the word
 sitting *immediately* before / after / either side of the term across the whole
 corpus (true adjacency / bigram frequency, counted per occurrence; particles kept,
 since the immediate grammatical neighbour is the point here). Save to workspace;
@@ -221,9 +240,22 @@ Sūra altitude: profile (length, distinct roots, dominant rhyme, and the disjoin
 with another sūra.
 
 ### Corpus explorer (≣)
-The bird's-eye view: every root by **frequency** + the **hapax legomena**; a **grammar** catalogue
-("every Form VIII verb", "every passive"); the **opposites** catalogue (all antithesis pairs); and
-a **divine-names** index. Everything exports.
+The bird's-eye view, six facets:
+
+- **Frequency** — every root by token count, plus the **hapax legomena** (roots that
+  occur once); switch between word / lemma / root matching.
+- **Grammar** — a morphology catalogue ("every Form VIII verb", "every passive"),
+  with the same advanced person/number/mood/case constraints as the graph filter.
+- **Relations** — the **opposites** (ṭibāq) catalogue: all antithesis pairs, with a
+  toggle between the curated list and machine-found **candidates**.
+- **Look-alikes** (المتشابهات) — near-identical verse pairs across the whole corpus.
+- **Rhetoric** — corpus-wide **oaths** (قسم) and **conditionals** (الشرط), each with
+  its markers and verses.
+- **Fields** — your saved **semantic fields**, each aggregated into one sūra-by-sūra
+  distribution.
+
+The **divine-names** (asmāʾ) index links the 99 names to their roots. Everything
+exports (CSV / JSON).
 
 ### Expressions explorer (⛓)
 Multi-word units, not single words — mined offline from the corpus morphology, four facets:
@@ -282,16 +314,25 @@ each evidenced by its verses.
 
 ## Workspace (the notebook)
 
-Everything is stored locally in your browser — nothing is ever uploaded.
+Everything is stored locally in your browser — nothing is ever uploaded. The drawer
+has tabs for **Saved**, **Notes**, **Tags**, **Fields**, and **Groups**, and an
+**export / import** of the whole workspace as **JSON** (backup or sharing).
 
 - **Saved items** — graph snapshots, comparisons, occurrence lists, distributions,
-  lexicon entries, verses, words, and phrases. Filter by type, search by title/
-  note, annotate, rename, reorder, delete, and re-open (each type reopens its
-  view). Export/import the whole workspace as **JSON** for backup or sharing.
+  lexicon entries, verses, words, phrases, expressions, and pairing matrices. Filter
+  by type, search by title/note, annotate, rename, reorder, delete, and re-open
+  (each type reopens its own view).
 - **Notes** — free-text title + body. **Pin** a note to the current graph and it
   becomes a **sticky note** floating over the canvas, anchored to a node (or the
   centre), tracking pan/zoom. Drag its grip, or nudge it with arrow keys; edit
   inline; ✕ unpins.
+- **Tags** — colour-coded categories you create and assign to saved items and notes
+  (the same scheme drives the **Coding** lens, below).
+- **Fields** — named **semantic fields** (sets of roots) you build, reusable as an
+  axis seed in the pairing matrix and as a facet in the corpus explorer.
+- **Groups** — colour-coded folders to organise items, notes, tags, and fields.
+- **Claims** from the claim board live here too, with their support/challenge
+  ledgers, and travel in the JSON export.
 
 ---
 

@@ -53,7 +53,6 @@ const ClaimBoard = lazyNamed(() => import("./components/ClaimBoard.jsx"), "Claim
 const HelpModal = lazyNamed(() => import("./components/HelpModal.jsx"), "HelpModal");
 const WorkspaceDrawer = lazyNamed(() => import("./components/WorkspaceDrawer.jsx"), "WorkspaceDrawer");
 const Tour = lazyNamed(() => import("./components/Tour.jsx"), "Tour");
-const IntroVideoModal = lazyNamed(() => import("./components/IntroVideoModal.jsx"), "IntroVideoModal");
 const WhatsNewModal = lazyNamed(() => import("./components/WhatsNewModal.jsx"), "WhatsNewModal");
 import { CHANGELOG, CURRENT_VERSION, unseenSince } from "./changelog.js";
 import { usePersistedState } from "./hooks/usePersistedState.js";
@@ -1430,10 +1429,11 @@ export default function QuranGraph() {
    * "don't show on startup" (qg.tourHide). */
   const [tourRun, setTourRun] = useState(false);
   const [tourIndex, setTourIndex] = useState(0);
-  // First-run presentation video (qg.introHide), independent of the tour's flag.
-  // `introAutoRef` distinguishes the auto first-run open (which hands off to the
-  // tour on close) from a manual replay opened from Help (which just closes).
-  const [introOpen, setIntroOpen] = useState(false);
+  // The "what's new" dialog doubles as the first-run welcome (it replaced the intro
+  // video). `whatsNewIntro` adds the tour-style chrome; `introAutoRef` distinguishes
+  // the auto first-run open (which hands off to the tour on close) from a manual
+  // replay opened from Help (which just closes). Hide flag stays qg.introHide.
+  const [whatsNewIntro, setWhatsNewIntro] = useState(false);
   const introAutoRef = useRef(false);
   // "What's new" changelog. `whatsNew` holds the entries to display (null = closed).
   // `qg.lastSeenVersion` records the newest release the user has acknowledged, so
@@ -1670,33 +1670,25 @@ export default function QuranGraph() {
 
   const tourHidden = () => { try { return localStorage.getItem("qg.tourHide") === "1"; } catch { return false; } };
   const persistIntroHide = (dontShow) => { if (dontShow) { try { localStorage.setItem("qg.introHide", "1"); } catch { /* private mode */ } } };
-  // Dismiss the intro video. On the auto first-run open this hands off to the
-  // interactive tour (the chosen "video → tour" flow) unless the tour is disabled;
-  // when replayed from Help it just closes.
-  const closeIntro = (dontShow) => {
-    setIntroOpen(false);
-    persistIntroHide(dontShow);
+
+  // Shared close. In intro mode it persists the "don't show on startup" choice and —
+  // on the AUTO first-run open — hands off to the tour, matching the old video → tour
+  // flow. `dontShow` is undefined in plain mode.
+  const closeWhatsNew = (dontShow) => {
+    const wasIntro = whatsNewIntro;
     const auto = introAutoRef.current; introAutoRef.current = false;
-    if (auto && !tourHidden()) startTour();
+    setWhatsNew(null); setWhatsNewIntro(false); setLastSeenVersion(CURRENT_VERSION);
+    if (wasIntro) { persistIntroHide(dontShow); if (auto && !tourHidden()) startTour(); }
   };
-  // "Start the interactive tour" button inside the video — always launches it.
-  const startTourFromIntro = (dontShow) => {
-    setIntroOpen(false);
-    persistIntroHide(dontShow);
+  // "Start the interactive tour" button inside the intro — always launches it.
+  const startTourFromWhatsNew = (dontShow) => {
     introAutoRef.current = false;
-    startTour();
+    setWhatsNew(null); setWhatsNewIntro(false); setLastSeenVersion(CURRENT_VERSION);
+    persistIntroHide(dontShow); startTour();
   };
-  // Replay the intro from Help (manual; closing won't auto-start the tour).
-  const openIntro = () => { introAutoRef.current = false; setShowHelp(false); setIntroOpen(true); };
 
-  // Open the "what's new" dialog from Help with the FULL release history, and
-  // mark everything seen on close. Auto-open (deploy gate) passes only the unseen
-  // slice — see the first-run effect below.
-  const openWhatsNew = () => { setShowHelp(false); setWhatsNew(CHANGELOG); };
-  const closeWhatsNew = () => { setWhatsNew(null); setLastSeenVersion(CURRENT_VERSION); };
-
-  // Auto-open once, after data is ready, unless dismissed for good. The intro
-  // video comes first; the tour follows when the video closes (see closeIntro).
+  // Auto-open once, after data is ready, unless dismissed for good. First run shows
+  // the welcome (intro-mode What's New); the tour follows on close (see closeWhatsNew).
   const autoTourRef = useRef(false);
   useEffect(() => {
     if (autoTourRef.current || loading || error || !currentVerse) return;
@@ -1714,7 +1706,7 @@ export default function QuranGraph() {
     const unseen = lastSeenVersion == null ? [] : unseenSince(lastSeenVersion);
     /* eslint-disable react-hooks/set-state-in-effect */
     if (lastSeenVersion == null) setLastSeenVersion(CURRENT_VERSION);
-    if (!introHidden) { introAutoRef.current = true; setIntroOpen(true); }
+    if (!introHidden) { introAutoRef.current = true; setWhatsNewIntro(true); setWhatsNew(CHANGELOG); }
     else if (unseen.length) setWhatsNew(unseen);
     else if (!tourHidden()) startTour();
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -1795,7 +1787,7 @@ export default function QuranGraph() {
       {/* Recoverable lazy-load failure — dismissible, with retry (replaces the old
           silent .catch that stranded the inspector/graph in a permanent loading state). */}
       {dataErr && (
-        <div role="alert" style={{ position: "fixed", insetInlineStart: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--surface-3, #1b2233)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
+        <div role="alert" style={{ position: "fixed", insetInlineStart: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--ink-850)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
           <span>{t(`common.dataErr.${dataErr}`)}</span>
           <button type="button" className="ag-btn is-gold" style={{ padding: "2px 10px" }} onClick={retryLoads}>{t("common.dataErr.retry")}</button>
           <button type="button" className="ag-iconbtn" style={{ width: 24, height: 24, fontSize: 12 }} aria-label={t("common.dataErr.dismiss")} onClick={() => setDataErr(null)}>✕</button>
@@ -1819,7 +1811,7 @@ export default function QuranGraph() {
             onFocus={() => setSugOpen(true)} onBlur={() => setSugOpen(false)} onKeyDown={onSearchKey} />
           {sugOpen && !tourLockSearch && !query.trim() && searchHistory.items.length > 0 && (
             <div className="ag-search-recents" role="listbox" aria-label={t("common.search.recent")}
-              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
+              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--ink-850)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 8px", color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>
                 <span>{t("common.search.recent")}</span>
                 <button type="button" className="ag-btn ag-btn-xs" onMouseDown={(e) => e.preventDefault()} onClick={() => searchHistory.clear()}>{t("common.search.clearHistory")}</button>
@@ -1845,11 +1837,11 @@ export default function QuranGraph() {
           )}
           {sugOpen && !tourLockSearch && query.trim() && searchSuggestions.length > 0 && (
             <div id="ag-search-listbox" role="listbox" aria-label={t("common.search.suggestions")}
-              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--surface-3, #1b2233)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
+              style={{ position: "absolute", insetInlineStart: 0, insetBlockStart: "calc(100% + 4px)", zIndex: 40, background: "var(--ink-850)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: 4, boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", display: "flex", flexDirection: "column", gap: 2, maxHeight: 340, overflowY: "auto", minWidth: 240, maxWidth: 380 }}>
               {searchSuggestions.map((item, i) => (
                 <button type="button" key={(item.mode || "ref") + ":" + item.lookup + ":" + i} role="option" aria-selected={i === sugIndex} className="ag-search-suggest"
                   onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setSugIndex(i)} onClick={() => acceptSearch(item)}
-                  style={{ display: "flex", flexDirection: "column", gap: 2, background: i === sugIndex ? "var(--surface-4, #243049)" : "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: item.noResult ? "default" : "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%", opacity: item.noResult ? 0.65 : 1 }}>
+                  style={{ display: "flex", flexDirection: "column", gap: 2, background: i === sugIndex ? "color-mix(in oklab, var(--gold-500) 16%, transparent)" : "transparent", color: "var(--text-body)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: item.noResult ? "default" : "pointer", fontSize: "var(--text-sm)", textAlign: "start", width: "100%", opacity: item.noResult ? 0.65 : 1 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
                     <span style={{ fontFamily: item.noResult ? "inherit" : "var(--font-quran)", color: item.noResult ? "var(--text-faint)" : item.didYouMean ? "var(--text-muted, #9aa3b2)" : "var(--gold-400)", fontSize: "var(--text-base)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.didYouMean ? "≈ " : ""}{item.noResult ? t("common.search.noResults") + " · " + item.label : (item.display || item.label || item.lookup)}
@@ -2584,13 +2576,13 @@ export default function QuranGraph() {
         onClose={() => { setExprOpen(false); setExprInitial(null); }} />}
 
       {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)}
-        onStartTour={() => { setShowHelp(false); startTour(); }} onWatchIntro={openIntro} onWhatsNew={openWhatsNew} />}
+        onStartTour={() => { setShowHelp(false); startTour(); }} />}
 
-      {/* First-run presentation video (language-aware; switchable mid-play). */}
-      {introOpen && <IntroVideoModal open={introOpen} onClose={closeIntro} onStartTour={startTourFromIntro} />}
-
-      {/* "What's new" changelog — auto-opens after a deploy, re-openable from Help. */}
-      {whatsNew && <WhatsNewModal open={!!whatsNew} entries={whatsNew} onClose={closeWhatsNew} />}
+      {/* "What's new" changelog — also the first-run welcome (intro mode adds tour-style
+          chrome and hands off to the tour). Auto-opens after a deploy; re-openable from Help. */}
+      {whatsNew && <WhatsNewModal open={!!whatsNew} entries={whatsNew} intro={whatsNewIntro}
+        theme={theme} onToggleTheme={() => setTheme((th) => (th === "dark" ? "light" : "dark"))}
+        onStartTour={startTourFromWhatsNew} onClose={closeWhatsNew} />}
 
       {/* Getting-started tour (interactive; waits for the user on action steps). */}
       {tourRun && <Tour run={tourRun} stepIndex={tourIndex} steps={tourSteps} onStepChange={setTourIndex} onEnd={endTour}

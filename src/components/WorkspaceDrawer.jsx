@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 import { useI18n } from "../i18n/index.js";
 import { useModalFocus } from "../hooks/useModalFocus.js";
@@ -22,20 +22,56 @@ const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "wo
 function GroupPicker({ ws, kind, id }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const [gq, setGq] = useState("");
+  const btnRef = useRef(null);
   const mine = (ws[kind]?.find((x) => x.id === id)?.groups) || [];
+  // The menu is position:fixed (anchored to the ⊕ button), NOT absolute inside the
+  // scrolling drawer body — which used to clip/detach it near the drawer's bottom edge.
+  // It flips above when there's no room below, scrolls + filters for many groups, and
+  // closes on any scroll/resize/outside-click (it can't follow the body once detached).
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onDoc = (e) => { if (!e.target.closest(".ag-ws-grpmenu") && !btnRef.current?.contains(e.target)) setOpen(false); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("mousedown", onDoc);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); document.removeEventListener("mousedown", onDoc); };
+  }, [open]);
   if (ws.groups.length === 0) return null;
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      const below = window.innerHeight - r.bottom;
+      const up = below < 260 && r.top > below;
+      setPos({
+        right: Math.max(8, Math.round(window.innerWidth - r.right)),
+        top: up ? "auto" : Math.round(r.bottom + 4),
+        bottom: up ? Math.round(window.innerHeight - r.top + 4) : "auto",
+      });
+    }
+    setGq(""); setOpen(true);
+  };
+  const list = gq.trim() ? ws.groups.filter((g) => (g.name || "").includes(gq.trim())) : ws.groups;
   return (
     <div className="ag-ws-grp">
-      <button type="button" className={"ag-btn ag-btn-xs" + (mine.length ? " is-active" : "")} aria-expanded={open}
-        title={t("ws.groups.assign")} onClick={() => setOpen((o) => !o)}>⊕{mine.length ? ` ${mine.length}` : ""}</button>
-      {open && (
-        <div className="ag-ws-grpmenu" role="menu">
-          {ws.groups.map((g) => (
+      <button ref={btnRef} type="button" className={"ag-btn ag-btn-xs" + (mine.length ? " is-active" : "")} aria-expanded={open}
+        title={t("ws.groups.assign")} onClick={toggle}>⊕{mine.length ? ` ${mine.length}` : ""}</button>
+      {open && pos && (
+        <div className="ag-ws-grpmenu" role="menu" style={{ position: "fixed", left: "auto", right: pos.right, top: pos.top, bottom: pos.bottom }}>
+          {ws.groups.length > 8 && (
+            <input className="ag-input ag-input-sm ag-ws-grpmenu-filter" value={gq} autoFocus
+              placeholder={t("ws.groups.filterPh")} aria-label={t("ws.groups.filterPh")} onChange={(e) => setGq(e.target.value)} />
+          )}
+          {list.map((g) => (
             <label key={g.id} className="ag-occ-menu-row ag-tag-pick">
               <input type="checkbox" checked={mine.includes(g.id)} onChange={() => ws.toggleGroupMember(kind, id, g.id)} />
               <span className="ag-tag-dot" style={{ background: g.color }} />{g.name || "—"}
             </label>
           ))}
+          {list.length === 0 && <span className="ag-hint" style={{ padding: "2px 4px" }}>{t("tag.filterNone")}</span>}
         </div>
       )}
     </div>
@@ -77,6 +113,10 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
   const shownFields = fields.filter(inGroup);
   const addGroup = (e) => { e.preventDefault(); const v = newGroup.trim(); if (v) { ws.addGroup(v); setNewGroup(""); } };
   const curGroup = groups.find((g) => g.id === groupFilter) || null;
+  // How many artifacts in the ACTIVE tab belong to each group — shown on the chip so the
+  // group bar reads as a filter (and stays useful when there are many groups).
+  const activeList = tab === "saved" ? items : tab === "notes" ? notes : tab === "tags" ? tags : fields;
+  const groupCount = (gid) => activeList.reduce((n, x) => n + ((x.groups || []).includes(gid) ? 1 : 0), 0);
 
   const onImportFile = (e) => {
     const f = e.target.files?.[0];
@@ -107,6 +147,7 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
           {groups.map((g) => (
             <button type="button" key={g.id} className={"ag-tag ag-tag-btn" + (groupFilter === g.id ? " is-on" : "")} onClick={() => setGroupFilter(g.id)}>
               <span className="ag-tag-dot" style={{ background: g.color }} />{g.name || "—"}
+              {groupCount(g.id) > 0 && <b className="ag-tag-n">{fmtNum(groupCount(g.id))}</b>}
             </button>
           ))}
           <form className="ag-tag-add" onSubmit={addGroup}>
