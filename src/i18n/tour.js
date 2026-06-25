@@ -49,8 +49,8 @@ export const ar = {
   "tour.searchBody": "هذا شريط البحث: تكتب فيه كلمة أو جذرًا أو رقم آية مثل «2 255» أو «2:255» للانتقال إليها مباشرة. وهو معطّل الآن في الجولة — سنستخدم قائمتَي السورة والآية في الخطوة التالية.",
 
   // 3 — Picker (ACTION: pick 2:255 — waits for both sūrah & āyah)
-  "tour.pickerTitle": "اختر الآية المركزية",
-  "tour.pickerBody": "اختر السورة ٢ (البقرة)، ثم الآية ٢٥٥ من القائمتين، لتنتقل إلى آية الكرسي. لن تُكمل الجولة حتى تختار الاثنتين.",
+  "tour.pickerTitle": "قائمتا السورة والآية",
+  "tour.pickerBody": "هاتان القائمتان تنقلانك إلى أيّ سورةٍ وآية في القرآن. حمّلنا لك آية الكرسيّ (٢:٢٥٥) لنُكمل عليها — ولك أن تجرّب القائمتين بنفسك.",
 
   // 4 — Modes (explain, pin Word)
   "tour.modesTitle": "أنماط الربط: كلمة · صيغة · جذر",
@@ -237,8 +237,8 @@ export const en = {
   "tour.searchBody": "This is the search bar: you'd type a word, root, or a verse number like «2:255» to jump straight there. It's disabled here in the tour — we'll use the sūrah/āyah menus in the next step.",
 
   // 3 — Picker (ACTION)
-  "tour.pickerTitle": "Pick the centre verse",
-  "tour.pickerBody": "Choose Sūrah 2 (al-Baqara), then Āyah 255, from the two menus to go to Āyat al-Kursī. The tour waits until you've picked both.",
+  "tour.pickerTitle": "The sūra & āyah menus",
+  "tour.pickerBody": "These two menus take you to any sūra and āyah in the Qur'an. We've loaded Āyat al-Kursī (2:255) to continue with — and you're welcome to try the menus yourself.",
 
   // 4 — Modes (explain, pin Word)
   "tour.modesTitle": "Linking modes: Word · Lemma · Root",

@@ -1547,7 +1547,7 @@ export default function QuranGraph() {
       center("basics", basicsContent),                                                                // 1 plain-language idea
       center("colors", colorsContent),                                                                // 2
       info('[data-tour="search"]', "search", {}, "bottom", { data: { lockSearch: true } }),            // 3 explain search (read-only here)
-      action('[data-tour="picker"]', "picker", {}, "navigate", "bottom"),                             // 4 pick 2:255 (waits for both)
+      info('[data-tour="picker"]', "picker", { navEx: true }, "bottom"),                              // 4 show the picker; tour itself loads 2:255 (no forced 286-deep scroll)
       info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
       info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
       action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto"),        // 7 tap ٱلْأَرْض (select)
