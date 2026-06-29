@@ -9,6 +9,7 @@ import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { SaveButton } from "./SaveButton.jsx";
 import { useVerseFilter } from "./VerseFilter.jsx";
 import { useReveal } from "../hooks/useReveal.js";
+import { usePersistedState } from "../hooks/usePersistedState.js";
 import { useI18n } from "../i18n/index.js";
 
 /* ═══ Rasm explorer (الرسم) — two tabs ═══
@@ -49,6 +50,7 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
   const [suraFilter, setSuraFilter] = useState(null); // clicked sūra in the by-sūra chart → filters the āyāt list
   const [preview, setPreview] = useState(null); // vk read in the sticky foot
   const [q, setQ] = useState(""); // catalogue filter box
+  const [showHelp, setShowHelp] = usePersistedState("qg.rasm.help", true); // explanatory blurbs on/off (persisted)
   const [prevFocus, setPrevFocus] = useState(focusId);
 
   // Sync the parent's focus request into local selection WITHOUT an effect — the sanctioned
@@ -250,8 +252,11 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
               ? <span className="ag-modal-count" style={{ fontFamily: "var(--font-display)" }}>{en ? activeRule.ar : activeRule.en}</span>
               : <span className="ag-modal-count">{tab === "internal" ? `${fmtNum(variants.length)} ${t("rasm.words")}` : tab === "ortho" ? `${fmtNum(ortho?.forms.length || 0)} ${t("rasm.forms")}` : t("rasm.sixRules")}</span>}
       </>}
-      actions={
-        (sel && profile)
+      actions={<>
+        <button type="button" className={"ag-btn" + (showHelp ? " is-gold" : "")} aria-pressed={showHelp}
+          title={showHelp ? t("rasm.helpHide") : t("rasm.helpShow")} aria-label={showHelp ? t("rasm.helpHide") : t("rasm.helpShow")}
+          onClick={() => setShowHelp((v) => !v)}>ⓘ</button>
+        {(sel && profile)
           ? <SaveButton item={{ type: "rasm", title: isOrtho ? `${profile.drawn} → ${profile.plene}` : profile.display, payload: { id: sel } }} label={t("ws.save")} />
           : !inDetail && (
             tab === "internal" && variants.length > 0
@@ -261,8 +266,8 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
                 : tab === "canon" && rawCanon
                   ? <button type="button" className="ag-btn" onClick={() => exportCsvFile([["rule", "group", "rasm", "modern", "refs", "canonCount", "detected", "source"], ...rawCanon.rules.flatMap((r) => r.groups.flatMap((g) => g.entries.map((e) => [r.ar, g.ar, e.rasm, e.modern || "", e.refs || "", e.count ?? "", e.found, e.source || g.source || r.source || ""])))], "rasm-canon.csv")}>⤓ CSV</button>
                   : null
-          )
-      }>
+          )}
+      </>}>
       <div className="ag-dist-body">
         {!inDetail ? (
           /* ── Catalogue ── */
@@ -275,9 +280,9 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
                 <button type="button" role="tab" aria-selected={tab === "canon"} className={tab === "canon" ? "is-on" : ""} onClick={() => switchTab("canon")}>{t("rasm.tab.canon")}</button>
               </div>
             )}
-            <p className="ag-hint">{(activeGroup && !showGroupCards) ? rd(activeGroup) : activeRule ? rd(activeRule) : activeOrthoCat ? t(`rasm.catHint.${orthoCat}`) : t(tab === "canon" ? "rasm.canonIntro" : tab === "ortho" ? "rasm.orthoIntro" : "rasm.intro")}</p>
-            {tab === "canon" && canon && !activeRule && <p className="ag-hint" style={{ color: "var(--text-faint)" }}>ⓘ {en && canon.meta.transmissionEn ? canon.meta.transmissionEn : canon.meta.transmission} — {t("rasm.canonMethod")}</p>}
-            {tab === "internal" && !morph && <p className="ag-hint" style={{ color: "var(--text-faint)" }}>ⓘ {t("rasm.morphNote")}</p>}
+            {showHelp && <p className="ag-hint">{(activeGroup && !showGroupCards) ? rd(activeGroup) : activeRule ? rd(activeRule) : activeOrthoCat ? t(`rasm.catHint.${orthoCat}`) : t(tab === "canon" ? "rasm.canonIntro" : tab === "ortho" ? "rasm.orthoIntro" : "rasm.intro")}</p>}
+            {showHelp && tab === "canon" && canon && !activeRule && <p className="ag-hint" style={{ color: "var(--text-faint)" }}>ⓘ {en && canon.meta.transmissionEn ? canon.meta.transmissionEn : canon.meta.transmission} — {t("rasm.canonMethod")}</p>}
+            {showHelp && tab === "internal" && !morph && <p className="ag-hint" style={{ color: "var(--text-faint)" }}>ⓘ {t("rasm.morphNote")}</p>}
             <input className="ag-input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
               placeholder={t("rasm.filter")} aria-label={t("rasm.filter")} style={{ width: "100%", marginBlock: "var(--space-2)" }} dir="rtl" />
 
@@ -388,7 +393,7 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
                 <span className="ag-tag" style={{ marginInlineStart: "auto" }}>{rn(canonSel.rule)} · {rn(canonSel.group)}</span>
               </div>
             </div>
-            <p className="ag-hint" style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("rasm.greenNote")}</p>
+            {showHelp && <p className="ag-hint" style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("rasm.greenNote")}</p>}
             {canonSel.entry.note && <p className="ag-hint">{canonSel.entry.note}</p>}
             <p className="ag-hint">{t("rasm.refs")}: <span style={{ fontFamily: "var(--font-quran)" }}>{canonSel.entry.refs || "—"}</span>
               {canonSel.entry.count != null && <> · {t("rasm.canonCount")}: {fmtNum(canonSel.entry.count)} · {t("rasm.detected")}: {fmtNum(canonSel.entry.found)} {canonSel.entry.found === canonSel.entry.count ? "✓" : "⚠"}</>}
@@ -423,7 +428,7 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
                 <span className="ag-tag" style={{ marginInlineStart: "auto" }}>{t(`rasm.cat.${profile.category}`)}</span>
               </div>
             </div>
-            <p className="ag-hint">{t("rasm.orthoProfileHint")}</p>
+            {showHelp && <p className="ag-hint">{t("rasm.orthoProfileHint")}</p>}
 
             <div className="ag-dist-sec-h" style={{ marginBlockStart: "var(--space-2)" }}><span>{t("rasm.bySura")} ({fmtNum(profile.bySura.length)})</span>{suraFilter && <button type="button" className="ag-btn" onClick={() => setSuraFilter(null)}>{t("rasm.allSuras")}</button>}</div>
             <div className="ag-dist-bars">
@@ -562,7 +567,7 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
                       {t("rasm.statLine", { suras: fmtNum(profile.suraCount), switches: fmtNum(profile.switches.length) })}
                       {" "}{profile.forms.map((f, i) => `${f.display}: ${t("rasm.run", { n: fmtNum(profile.longestRun[i]) })}`).join(" · ")}
                     </p>
-                    <p className="ag-hint">{t("rasm.timelineHint")}</p>
+                    {showHelp && <p className="ag-hint">{t("rasm.timelineHint")}</p>}
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginBlock: "var(--space-2)", maxHeight: 220, overflowY: "auto", padding: 2 }}>
                       {profile.timeline.map((tk, i) => (
                         <span key={i} title={`${verseData[tk.vk]?.sn} ${verseData[tk.vk]?.a} — ${profile.forms[tk.f].display}`}
