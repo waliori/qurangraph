@@ -170,3 +170,59 @@ export const fuzzyKeys = (raw) => {
   const strong = new Set(strongKeys(raw));
   return looseKeys(raw).filter((k) => !strong.has(k));
 };
+
+/* ═══ Rasm (orthographic skeleton) keys ═══
+ *
+ * The muṣḥaf preserves Uthmanic RASM variation: one spoken word drawn two ways —
+ * إِبْرَٰهِۦمَ (defective, no yāʾ — al-Baqarah) vs إِبْرَٰهِيمَ (plene); ٱلصَّلَوٰة (wāw-seat) vs the
+ * modern alif. The display token (`orig`) keeps it; norm()/normStrict() are matching
+ * skeletons that (correctly, for search) don't expose it as a first-class axis. These two
+ * keys do, WITHOUT touching norm():
+ *
+ *   rasmKey  — the bare DRAWN consonantal skeleton (what's actually inked). This is exactly
+ *              normStrict(): it strips harakāt, the dagger-alif ٰ, and the small "restoration"
+ *              letters (ۥ ۦ), folds the alif family, but does NOT fold ة→ه / ى→ي / the hamza
+ *              carriers — so إبرهم ≠ إبرهيم and صلوة ≠ صلاة stay distinct. The exact-spelling
+ *              ("رسم") search/grouping key.
+ *   pronKey  — the "as-read" skeleton: BEFORE stripping, promote the restoration marks to full
+ *              letters — dagger-alif ٰ → ا, small high wāw ۥ → و, small high yāʾ ۦ → ي — then run
+ *              the loose norm(). So the defective and plene spellings of one spoken word collapse
+ *              together (إِبْرَٰهِۦمَ ≈ إِبْرَٰهِيمَ → ابراهيم). This is the GROUPING key that unites
+ *              rasm variants; pairing it with rasmKey (which keeps them apart) is how the rasm lens
+ *              detects "same word, two spellings".
+ */
+export const rasmKey = (raw) => normStrict(raw);
+// ── The "unwritten long ā" devices, and how to write each one out as a full alif ──
+// A dagger-ā ٰ marks a long ā the rasm leaves unwritten. It sits on/after a CONSONANT in most words
+// (ذَٰلِك, ٱلْكِتَٰب, ٱلسَّمَٰوَٰت, أَمْوَٰل, وَٰحِد) — there the consonant is REAL and only the alif is missing.
+// In a CLOSED, well-known set the ā is instead drawn AS a wāw with no consonantal /w/ at all: the
+// feminine ـوٰة nouns ٱلصَّلَوٰة · ٱلزَّكَوٰة · ٱلْحَيَوٰة · ٱلنَّجَوٰة · ٱلْغَدَوٰة · مِشْكَوٰة · مَنَوٰة, plus ٱلرِّبَوٰا.
+// The earlier rule folded EVERY wāw-before-a-dagger to an alif and so deleted real consonants
+// (سَمَٰوَٰت→سَمَات, أَزْوَٰج→أَزَاج, وَٰحِد→احِد — wrong). The wāw-seat fold must fire ONLY in the وٰة / ribā
+// shapes; everywhere else the wāw is kept and just its dagger becomes the alif. (Harakāt may sit
+// between seat and dagger — صَلَوٰة vs صَلَوَٰت — so the middle class is the HARAKĀT block U+064B–U+065F
+// ONLY, never the letters U+0621–U+064A.)  eslint-disable-next-line no-misleading-character-class
+export const SEAT_WAW = /و[ً-ٟ]*ٰ(?=[ً-ٟ]*ة)/;   // wāw-seat before tāʾ marbūṭa (ṣalāh-type) — test only
+export const SEAT_RIBA = /و[ً-ٟ]*ٰ[ً-ٟ]*ا/;       // ٱلرِّبَوٰا (corpus-unique وٰ+alif) — test only
+export const MAQSURA_SEAT = /ى[ً-ٟ]*ٰ/;           // alif-maqṣūra carrying ā (مُوسَىٰ, عَلَىٰ, ٱلْهُدَىٰ)
+// Write every unwritten-ā device out as a full alif, KEEPING all consonants.
+export const seatToAlif = (s) => (s || "")
+  .replace(/و[ً-ٟ]*ٰ([ً-ٟ]*ة)/g, "ا$1")  // ṣalāh-type wāw-seat → alif, keep the ة (صَلَوٰة→صلاة)
+  .replace(/و[ً-ٟ]*ٰ([ً-ٟ]*ا۟?)/g, "ا")   // ribā wāw-seat + silent alif → one alif (ٱلرِّبَوٰا۟→الربا)
+  .replace(/ى[ً-ٟ]*ٰ/g, "ا")              // alif-maqṣūra ā → full alif (مُوسَىٰ→موسا)
+  .replace(/ٰ/g, "ا");                      // remaining bare dagger-ā → full alif, consonant kept (سَمَٰوَٰت→سماوات)
+// A word-final tāʾ that carries a CASE vowel/tanwīn (not sukūn) is folded to tāʾ marbūṭa, so the
+// open-tāʾ rasm and the modern closed-tāʾ of one feminine noun read alike (ٱمْرَأَتُ→امرأة, رَحْمَتُ→رحمة,
+// نِعْمَتَ→نعمة — the classical تاءات مرسومة). The quiescent verbal تاء التأنيث ـتْ (خَلَتْ, ءَامَنَتْ) carries
+// sukūn and has NO ة-twin, so it is LEFT as ت — that keeps the verb خَلَتْ apart from the noun خُلَّة. (For
+// the 2nd-person ـتَ/ـتُ verbs that share this shape, the lemma in the variants bucket does the splitting.)
+const FINAL_TAA = /ت([ً-ّ]*)$/; // final tāʾ + trailing harakāt/tanwīn, EXCLUDING sukūn (U+0652)
+const foldFinalTaa = (s) => {
+  const m = s.match(FINAL_TAA); // no match when a sukūn follows the ت (verbal تاء التأنيث) → left as ت
+  return m ? s.slice(0, m.index) + "ة" + m[1] : s;
+};
+// pronKey is the "as-read" skeleton: write the ā out (so a wāw-seat word ٱلصَّلَوٰة reads the same as a
+// plain-alif صلاة and they GROUP as one spoken word) while keeping consonantal wāws (سَمَٰوَٰت keeps its w),
+// fold the case-marked final tāʾ to tāʾ marbūṭa, promote the small restoration letters, then run norm().
+export const pronKey = (raw) =>
+  norm(foldFinalTaa(seatToAlif((raw || "").normalize("NFKC"))).replace(/ۥ/g, "و").replace(/ۦ/g, "ي"));

@@ -22,7 +22,7 @@ import { useI18n } from "../i18n/index.js";
  * start and routes Esc to it — so every modal goes back the same way and in the same
  * place, instead of each hand-rolling a ←/→ button. The arrow follows reading direction.
  */
-export function ModalShell({ open, onClose, onEscape, ariaLabel, title, actions, closeLabel, back, backLabel, share, children }) {
+export function ModalShell({ open, onClose, onEscape, ariaLabel, title, actions, closeLabel, back, backLabel, share, tall, children }) {
   const { t, lang } = useI18n();
   const dialogRef = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -38,7 +38,7 @@ export function ModalShell({ open, onClose, onEscape, ariaLabel, title, actions,
   };
   return (
     <div className="ag-modal-scrim is-open" onClick={onClose}>
-      <div className={"ag-modal" + sheetClass} style={sheetStyle} role="dialog" aria-modal="true" aria-label={ariaLabel}
+      <div className={"ag-modal" + (tall ? " is-tall" : "") + sheetClass} style={sheetStyle} role="dialog" aria-modal="true" aria-label={ariaLabel}
         ref={setModalEl} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         {/* Mobile: a grab handle drags the sheet (up→full, down→dismiss; tap toggles). */}
         {sheetEnabled && <button type="button" className="ag-sheet-grab" aria-label={t("common.sheet.resize")} {...gripProps} />}

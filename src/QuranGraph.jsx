@@ -30,6 +30,7 @@ import { useBottomSheetDrag } from "./hooks/useBottomSheetDrag.js";
 import { buildSeedIndex } from "./analytics/phrases.js";
 import { oppositesOf } from "./analytics/relations.js";
 import { indexExpressions, indexByVerse, expressionsForRoot } from "./analytics/expressions.js";
+import { rasmIndexByNorm, orthoIndexByNorm } from "./analytics/rasm.js";
 // Modals + the onboarding tour are split into their own chunks (React.lazy) and mounted
 // only when opened — not on the critical path, and react-joyride (the Tour) is heavy and
 // never loads for returning users who dismissed it. Named exports, so map to a default
@@ -46,6 +47,7 @@ const RhymeModal = lazyNamed(() => import("./components/RhymeModal.jsx"), "Rhyme
 const AyaLabModal = lazyNamed(() => import("./components/AyaLabModal.jsx"), "AyaLabModal");
 const SurahLabModal = lazyNamed(() => import("./components/SurahLabModal.jsx"), "SurahLabModal");
 const CorpusLabModal = lazyNamed(() => import("./components/CorpusLabModal.jsx"), "CorpusLabModal");
+const RasmLabModal = lazyNamed(() => import("./components/RasmLabModal.jsx"), "RasmLabModal");
 const ExpressionsModal = lazyNamed(() => import("./components/ExpressionsModal.jsx"), "ExpressionsModal");
 const ConstructionModal = lazyNamed(() => import("./components/ConstructionModal.jsx"), "ConstructionModal");
 const PairingModal = lazyNamed(() => import("./components/PairingModal.jsx"), "PairingModal");
@@ -240,6 +242,8 @@ export default function QuranGraph() {
   const [surahLab, setSurahLab] = useState(null); // sūra analysis lab: { surahId, back }
   const [semantic, setSemantic] = useState(null); // distributional neighbour map (lazy, on first lab open)
   const [corpusOpen, setCorpusOpen] = useState(false); // corpus explorer (frequency / hapax / grammar catalogue)
+  const [rasmOpen, setRasmOpen] = useState(false); // rasm explorer (orthographic variants — الرسم)
+  const [rasmFocus, setRasmFocus] = useState(null); // variant id the rasm explorer opens straight into
   const [construction, setConstruction] = useState(null); // construction-query builder: { root, label }
   const [pairing, setPairing] = useState(null); // pairing-matrix workbench: { open, seed, rows, cols } — config persists while closed so cell→verses→back round-trips
   const [claimsOpen, setClaimsOpen] = useState(false); // claim board (ما يؤيد / ما يعارض)
@@ -471,8 +475,8 @@ export default function QuranGraph() {
   useEffect(() => {
     // Also load when an āya/sūra lab is open: their POS breakdown and iltifāt (person-shift)
     // lens read per-token morphology, degrading gracefully until it lands.
-    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact" || aya || surahLab || corpusOpen || construction || pairing?.open) && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
-  }, [morphFilter, selected, searchMode, aya, surahLab, corpusOpen, construction, pairing, morph, retryTick]);
+    if ((morphFilterActive(morphFilter) || selected != null || searchMode !== "exact" || aya || surahLab || corpusOpen || rasmOpen || construction || pairing?.open) && !morph) loadMorphology().then(setMorph).catch(() => setDataErr("morph"));
+  }, [morphFilter, selected, searchMode, aya, surahLab, corpusOpen, rasmOpen, construction, pairing, morph, retryTick]);
 
   // Lazy-load the distributional semantic-neighbour map the first time the root lab is
   // opened (it's only used by that modal's "semantic" tab). Best-effort: stays null on
@@ -1353,6 +1357,7 @@ export default function QuranGraph() {
         break;
       }
       case "verse": case "word": if (p.surah) navigate(p.surah, p.ayah); break;
+      case "rasm": setRasmFocus(p.id); setRasmOpen(true); break;
       default: break;
     }
   }, [applyState, openOcc, navigate, openPhrases, closeAllViews, openView, l2v, lemmaMap, compareIndices]);
@@ -1400,6 +1405,13 @@ export default function QuranGraph() {
   const exprIndex = useMemo(() => (expr ? indexExpressions(expr) : null), [expr]);
   const exprByVerse = useMemo(() => (expr ? indexByVerse(expr) : null), [expr]);
   const selExpr = useMemo(() => (expr && exprIndex && selRoot ? expressionsForRoot(expr, exprIndex, selRoot) : null), [expr, exprIndex, selRoot]);
+  // Does the selected word have a notable rasm? Either it's drawn ≥2 ways in the muṣḥaf (internal
+  // variant), or it carries an unwritten long ā (long-vowel rasm — صلوة, السموٰت, موسىٰ). norm→id,
+  // cached. The chip opens the rasm lab focused on it; the label differs by which kind it is.
+  const selRasmId = useMemo(() => {
+    if (selNode?.type !== "word" || !selNode.wordNorm) return null;
+    return rasmIndexByNorm(verseData).get(selNode.wordNorm) || orthoIndexByNorm(verseData).get(selNode.wordNorm) || null;
+  }, [selNode, verseData]);
 
   // Lazy-load just the ONE shard the selected root falls in, the first time "show
   // more" is hit for it. A shard is a small slice of the lexicon's full articles,
@@ -1833,8 +1845,19 @@ export default function QuranGraph() {
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
     </svg>
   );
+  // Pen-nib glyph for the rasm lens — "rasm" means the drawing/tracing of the letters, so a nib reads
+  // better than a bare letter. Shared by the toolbar button and the inspector "other spellings" chip.
+  const rasmGlyph = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 19 7-7 3 3-7 7-3-3z" />
+      <path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18z" />
+      <path d="m2 2 7.586 7.586" />
+      <circle cx="11" cy="11" r="2" />
+    </svg>
+  );
   const secondaryItems = [
     { key: "corpus", glyph: "≣", label: t("corpus.open"), active: corpusOpen, onClick: () => setCorpusOpen((o) => !o) },
+    { key: "rasm", glyph: rasmGlyph, label: t("rasm.open"), active: rasmOpen, onClick: () => { setRasmFocus(null); setRasmOpen((o) => !o); } },
     { key: "pairing", glyph: "⊞", label: t("work.tools.pairing"), active: !!pairing?.open, onClick: () => setPairing((p) => (p?.open ? { ...p, open: false } : { seed: null, rows: [], cols: [], ...(p || {}), open: true })) },
     { key: "claims", glyph: "⚖", label: t("work.tools.claims"), active: claimsOpen, badge: ws.claims.length > 0 ? ws.claims.length : null, onClick: () => setClaimsOpen((o) => !o) },
     { key: "expr", glyph: "⛓", label: t("expr.open"), active: exprOpen, dataTour: "exprBtn", onClick: () => { setExprFocus(null); setExprInitial(null); setExprOpen((o) => !o); } },
@@ -2300,28 +2323,38 @@ export default function QuranGraph() {
                     <span className="ag-insp-num" style={{ color: fColor(selNode.count, theme) }}>{selNode.count}</span>
                     <span className="ag-insp-cap">{t("common.insp.versesLabel")}</span>
                   </div>
-                  {selNode.count > 1 && (
+                  {(selNode.count > 1 || selRasmId) && (
                     <div className="ag-insp-actions">
-                      <button type="button" data-tour="allVersesBtn" className="ag-btn is-gold ag-occ-btn"
-                        onClick={() => openOcc(selNode.lookup || selNode.wordNorm, selNode.label, searchMode)}>
-                        ⌖ {t("common.insp.allVerses")} ({selNode.count})
-                      </button>
-                      <button type="button" data-tour="distBtn" className="ag-btn"
-                        onClick={() => setDist({ lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode })}>
-                        ▦ {t("common.insp.distribution")}
-                      </button>
-                      <button type="button" data-tour="compareBtn" className="ag-btn" title={t("common.insp.compareTitle")}
-                        onClick={() => setCmp({ A: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode }, B: null })}>
-                        ⇄ {t("common.insp.compare")}
-                      </button>
-                      {(selNode.root || rootOf(selNode.wordNorm)) && (
-                        <button type="button" data-tour="labBtn" className="ag-btn" title={t("common.insp.analyzeTitle")}
-                          onClick={() => setLab({ root: selNode.root || rootOf(selNode.wordNorm), label: selNode.label })}>
-                          ⚛ {t("common.insp.analyze")}
+                      {selNode.count > 1 && (
+                        <>
+                          <button type="button" data-tour="allVersesBtn" className="ag-btn is-gold ag-occ-btn"
+                            onClick={() => openOcc(selNode.lookup || selNode.wordNorm, selNode.label, searchMode)}>
+                            ⌖ {t("common.insp.allVerses")} ({selNode.count})
+                          </button>
+                          <button type="button" data-tour="distBtn" className="ag-btn"
+                            onClick={() => setDist({ lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode })}>
+                            ▦ {t("common.insp.distribution")}
+                          </button>
+                          <button type="button" data-tour="compareBtn" className="ag-btn" title={t("common.insp.compareTitle")}
+                            onClick={() => setCmp({ A: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode }, B: null })}>
+                            ⇄ {t("common.insp.compare")}
+                          </button>
+                          {(selNode.root || rootOf(selNode.wordNorm)) && (
+                            <button type="button" data-tour="labBtn" className="ag-btn" title={t("common.insp.analyzeTitle")}
+                              onClick={() => setLab({ root: selNode.root || rootOf(selNode.wordNorm), label: selNode.label })}>
+                              ⚛ {t("common.insp.analyze")}
+                            </button>
+                          )}
+                          <SaveButton dataTour="saveWordBtn" label={t("ws.save")}
+                            item={{ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }} />
+                        </>
+                      )}
+                      {selRasmId && (
+                        <button type="button" className="ag-btn" title={t("rasm.open")}
+                          onClick={() => { setRasmFocus(selRasmId); setRasmOpen(true); }}>
+                          {rasmGlyph} {t(selRasmId.startsWith("o|") ? "rasm.orthoCta" : "rasm.variantsCta")}
                         </button>
                       )}
-                      <SaveButton dataTour="saveWordBtn" label={t("ws.save")}
-                        item={{ type: "occ", title: selNode.label, payload: { lookup: selNode.lookup || selNode.wordNorm, label: selNode.label, mode: searchMode } }} />
                     </div>
                   )}
                   {selExpr && (selExpr.heads.length || selExpr.collocations.length || selExpr.compounds.length) > 0 && (
@@ -2638,6 +2671,12 @@ export default function QuranGraph() {
       {corpusOpen && <CorpusLabModal open={corpusOpen} verseData={verseData} r2v={r2v} w2v={w2v} precision={precision} morph={morph} relations={relations} theme={theme}
         onNavigate={(s, a) => { setCorpusOpen(false); navigate(s, a); }}
         onClose={() => setCorpusOpen(false)} />}
+
+      {/* Rasm explorer — orthographic (rasm) variants of the same word. Jumping to an āya
+          switches to exact-spelling (دقيقة) grouping so the variant separates in the graph. */}
+      {rasmOpen && <RasmLabModal open={rasmOpen} verseData={verseData} morph={morph} theme={theme} focusId={rasmFocus}
+        onNavigate={(s, a) => { setRasmOpen(false); setRasmFocus(null); setSearchMode("exact"); setPrecision("strict"); navigate(s, a); }}
+        onClose={() => { setRasmOpen(false); setRasmFocus(null); }} />}
 
       {exprOpen && <ExpressionsModal open={exprOpen} verseData={verseData} expr={expr} theme={theme} focusRoot={exprFocus} initialDetail={exprInitial}
         onNavigate={(s, a) => { setExprOpen(false); setExprInitial(null); navigate(s, a); }}

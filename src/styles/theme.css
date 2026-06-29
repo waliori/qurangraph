@@ -435,6 +435,27 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (pointer: coarse) { .ag-vfilter-aya input { height: 44px; font-size: 16px; } }
 
+/* Rasm internal-profile pinned header: the spellings comparison + sub-tab switch + (in the Verses
+   view) the āya filter stay fixed while the active view scrolls under them. The negative block/inline
+   margins bleed the opaque background over the scroll body's padding so list rows can't peek around it
+   (the .ag-phrase-list verse list scrolls on the OUTER body, unlike the self-scrolling .ag-dist-bars). */
+.ag-rasm-pin { position: sticky; inset-block-start: calc(-1 * var(--space-4)); z-index: 3; background: var(--ink-900);
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0; padding: var(--space-4) var(--space-4) var(--space-2);
+  border-block-end: var(--bw-hair) solid var(--border-default);
+  display: flex; flex-direction: column; gap: var(--space-2); }
+.ag-rasm-pin .ag-dist-bars { max-height: none; overflow: visible; } /* spellings never need to self-scroll */
+.ag-rasm-pin .ag-vfilter { padding: 0; border-block-end: 0; }
+/* Small screens: shed every spare pixel so the verse list keeps the room. */
+@media (max-width: 640px) {
+  .ag-rasm-pin { gap: 6px; padding-block-start: var(--space-3); }
+  .ag-rasm-pinlabel { display: none; }                                 /* drop the verbose section label */
+  .ag-rasm-pin .ag-dist-rowbtn { padding-block: 2px; }
+  .ag-rasm-pin .ag-dist-rowbtn .ag-dist-name { font-size: var(--text-base); }
+  .ag-rasm-pin .ag-vfilter { gap: 6px var(--space-2); align-items: center; }
+  .ag-rasm-pin .ag-vfilter-lab { display: none; }                      /* the inputs speak for themselves */
+  .ag-rasm-pin .ag-vfilter-aya input { width: 5.5rem; }
+}
+
 /* Horizontal scroll strips (sparklines): a soft edge-fade cues there's more off-screen. */
 .ag-hscroll { overflow-x: auto; overscroll-behavior-inline: contain;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
@@ -958,6 +979,9 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding-block-end: env(safe-area-inset-bottom);
     transition: height var(--dur-base) var(--ease-out); }
+  /* Content-heavy analysis modals (rasm, …) open taller by default so the pinned controls
+     don't crowd out the result list; still draggable up to full / down to dismiss. */
+  .ag-modal.is-tall { height: 82dvh; }
   .ag-modal.is-full { height: 92dvh; }
   .ag-modal.is-dragging { transition: none; }
   .ag-modal-text { font-size: var(--text-base); }

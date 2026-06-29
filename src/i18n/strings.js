@@ -16,8 +16,9 @@ import { ar as introAr, en as introEn } from "./intro.js";
 import { ar as uiAr, en as uiEn } from "./ui.js";
 import { ar as workAr, en as workEn } from "./work.js";
 import { ar as changelogAr, en as changelogEn } from "./changelog.js";
+import { ar as rasmAr, en as rasmEn } from "./rasm.js";
 
 export const STRINGS = {
-  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr, ...tourAr, ...labAr, ...introAr, ...uiAr, ...workAr, ...changelogAr },
-  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn, ...tourEn, ...labEn, ...introEn, ...uiEn, ...workEn, ...changelogEn },
+  ar: { ...commonAr, ...cmpAr, ...helpAr, ...occAr, ...distAr, ...ctxAr, ...phraseAr, ...morphAr, ...stopAr, ...wsAr, ...tourAr, ...labAr, ...introAr, ...uiAr, ...workAr, ...changelogAr, ...rasmAr },
+  en: { ...commonEn, ...cmpEn, ...helpEn, ...occEn, ...distEn, ...ctxEn, ...phraseEn, ...morphEn, ...stopEn, ...wsEn, ...tourEn, ...labEn, ...introEn, ...uiEn, ...workEn, ...changelogEn, ...rasmEn },
 };

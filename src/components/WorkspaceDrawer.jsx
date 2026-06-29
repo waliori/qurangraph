@@ -14,9 +14,9 @@ import { exportJsonFile } from "../graph/exportGraph.js";
  * `onOpen(item)` restores an item; `onPinNote(id)` pins a note to the current graph.
  */
 
-const TYPE_BADGE = { graph: "t-verse", compare: "t-word", occ: "t-word", dist: "t-lemma", lexicon: "t-root", verse: "t-verse", word: "t-word", phrase: "t-verse", expr: "t-verse", pairing: "t-root" };
+const TYPE_BADGE = { graph: "t-verse", compare: "t-word", occ: "t-word", dist: "t-lemma", lexicon: "t-root", verse: "t-verse", word: "t-word", phrase: "t-verse", expr: "t-verse", pairing: "t-root", rasm: "t-verse" };
 // Types offered in the filter row (in display order).
-const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "word", "phrase", "expr", "pairing"];
+const FILTER_TYPES = ["graph", "compare", "occ", "dist", "lexicon", "verse", "word", "phrase", "expr", "pairing", "rasm"];
 
 /* Per-card group membership control: a ⊕N chip that opens a checklist of all groups to
  * toggle this artifact (kind ∈ items/notes/fields/tags/claims) in/out of each. */
