@@ -51,6 +51,43 @@ export const THEMES = {
 
 export const CHANGELOG = [
   {
+    id: "1.7.0",
+    date: "2026-06-29",
+    title: { ar: "نافذة الرسم", en: "The Rasm view" },
+    groups: [
+      {
+        theme: "analysis",
+        changes: [
+          {
+            kind: "new",
+            featureIcon: "rasm",
+            text: { ar: "الرسم: كيف كُتبت الكلمة في المصحف", en: "Rasm: how the word is written in the muṣḥaf" },
+            detail: {
+              ar: "نافذةٌ جديدةٌ تكشف رسم الكلمة العثمانيّ: أين تختلف صور الكتابة، وأين تُحذف ألفات المدّ أو تُثبت، وما قواعد الرسم وراء ذلك.",
+              en: "A new view that opens up the ʿUthmānic spelling of a word: where its written forms differ, where long-vowel alifs drop or stay, and the orthographic rules behind it.",
+            },
+            steps: [
+              {
+                ar: "افتح «الرسم» من شريط الأدوات أعلى الصفحة، وتنقّل بين ألسنته الثلاثة: تنوّع الكتابة الداخليّ، وحروف المدّ، وقواعد الرسم.",
+                en: "Open “Rasm” from the toolbar at the top, and move through its three tabs: internal spelling variation, long-vowel letters, and the spelling rules.",
+              },
+              {
+                ar: "إن كان للكلمة صُوَرٌ إملائيةٌ أخرى، ظهر في بطاقتها زرُّ «رسومه الأخرى» يفتح الرسم على تلك الكلمة مباشرةً.",
+                en: "If a word has other spellings, a “Its other spellings” button appears in its card and opens Rasm focused on that word.",
+              },
+              {
+                ar: "انقر ⓘ في أيّ لسانٍ ليظهر شرحٌ موجزٌ لما تراه، ثمّ انقره ثانيةً لإخفائه.",
+                en: "Tap ⓘ on any tab for a short explanation of what you're seeing, then tap it again to hide it.",
+              },
+            ],
+            media: { desktop: "changelog/rasm-desktop.mp4" },
+            mediaAlt: { ar: "فتح الرسم وتصفّح ألسنته وزرّ «رسومه الأخرى»", en: "Opening Rasm, browsing its tabs, and the “Its other spellings” button" },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "1.6.0",
     date: "2026-06-23",
     title: { ar: "تحديث ورشة البحث", en: "The research-workbench update" },

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ModalShell } from "./ModalShell.jsx";
 import { MediaGroup } from "./ClipMedia.jsx";
+import { RasmGlyph } from "./icons.jsx";
 import { useI18n } from "../i18n/index.js";
 import { loadSources } from "../data-loader.js";
 import { CURRENT_VERSION } from "../changelog.js";
@@ -118,6 +119,9 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
   // section. `clip(alt, desktop, mobile)` builds one media group; a missing file hides
   // itself. `clips(...)` lays several side by side.
   const clip = (alt, desktop, mobile) => ({ alt, media: { ...(desktop ? { desktop } : {}), ...(mobile ? { mobile } : {}) } });
+  // A row title carrying the feature's in-app icon (toolbar glyph or SVG), so the name
+  // in the guide matches the button users actually click. `g` is a glyph string or node.
+  const tg = (g, key) => <>{<span className="ag-help-tg" aria-hidden="true">{g}</span>}{t(key)}</>;
   const clips = (...arr) => (
     <div className="ag-help-clips">
       {arr.map((c, i) => <MediaGroup key={i} media={c.media} alt={c.alt} t={t} />)}
@@ -156,7 +160,7 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
           ))}
 
           {sec(t("help.keyboardTitle"), null, [
-            [t("help.keyboardKbd"), t("help.keyboardKbdD")],
+            [tg("⌨", "help.keyboardKbd"), t("help.keyboardKbdD")],
           ], clips(clip(t("help.keyboardKbd"), "changelog/keyboard-desktop.mp4", "changelog/keyboard-mobile.mp4")))}
 
           {sec(t("help.navTitle"), null, [
@@ -189,15 +193,17 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
           ], clips(clip(t("help.morphFilter"), "changelog/morphfilter-desktop.mp4")))}
 
           {sec(t("help.analysisTitle"), null, [
+            [tg(<RasmGlyph size={15} />, "help.rasm"), <>{t("help.rasmD1")} {ex("إِبْرَٰهِم", GOLD)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("إِبْرَاهِيم", GOLD)} {t("help.rasmD2")}</>],
             [t("help.morphAnalysis"), t("help.morphAnalysisD")],
             [t("help.lexicons"), <>{t("help.lexiconsD1")}{ex("العين", GREEN)}، {ex("الصحاح", GREEN)}، {ex("مقاييس", GREEN)}، {ex("المحكم", GREEN)}، {ex("المفردات", GREEN)}، {ex("لسان العرب", GREEN)}{t("help.lexiconsD2")}</>],
             [t("help.distribution"), <>{t("help.distributionD")}{t("help.distributionD2")}</>],
             [t("help.compare"), t("help.compareD")],
             [t("help.allVerses"), t("help.allVersesD")],
             [t("help.opposites"), <>{t("help.oppositesD1")} {ex("صدق", GREEN)} <span style={{ color: "var(--text-faint)" }}>↔</span> {ex("كذب", RED)} {t("help.oppositesD2")}</>],
-            [t("help.corpusExplorer"), <>{t("help.corpusExplorerD1")}{ex("الرحمن", GOLD)}، {ex("السلام", GOLD)}{t("help.corpusExplorerD2")}</>],
+            [tg("≣", "help.corpusExplorer"), <>{t("help.corpusExplorerD1")}{ex("الرحمن", GOLD)}، {ex("السلام", GOLD)}{t("help.corpusExplorerD2")}</>],
             [t("help.citations"), t("help.citationsD")],
           ], clips(
+            clip(t("help.rasm"), "changelog/rasm-desktop.mp4"),
             clip(t("help.morphAnalysis"), "changelog/inspector-desktop.mp4"),
             clip(t("help.distribution"), "changelog/distribution-desktop.mp4"),
             clip(t("help.corpusExplorer"), "changelog/corpus-desktop.mp4"),
@@ -209,12 +215,12 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
               <span style={{ display: "block", marginBlockStart: 4 }}>
                 {ex("عَلِمَ", GREEN)} ← {ex("عالِم", GREEN)} ← {ex("عِلْم", GREEN)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("بصر", BLUE)} {ex("صبر", BLUE)} {ex("برص", BLUE)} <span style={{ color: "var(--text-faint)" }}>·</span> {ex("رحم", PURPLE)} ⇢ {ex("غفر", PURPLE)}
               </span></>],
-            [t("help.ayaLab"), <>{t("help.ayaLabD")}{t("help.ayaLabD2")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("طلق", GREEN)} {ex("عدد", GREEN)}</>],
-            [t("help.rhyme"), <>{t("help.rhymeD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("مُبِين", GOLD)} {ex("الرَّحِيم", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egRhyme")}</span></>],
+            [tg("⊞", "help.ayaLab"), <>{t("help.ayaLabD")}{t("help.ayaLabD2")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("طلق", GREEN)} {ex("عدد", GREEN)}</>],
+            [tg("♪", "help.rhyme"), <>{t("help.rhymeD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("مُبِين", GOLD)} {ex("الرَّحِيم", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egRhyme")}</span></>],
             [t("help.phrases"), <>{t("help.phrasesD")} <span style={{ color: "var(--text-faint)" }}>—</span> {ex("فبأيّ آلاء ربكما تكذبان", GOLD)}</>],
-            [t("help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}<b style={{ color: PURPLE }}>{t("help.surahLabIltifat")}</b>{t("help.surahLabIltifatD")}<b style={{ color: PURPLE }}>{t("help.surahLabLetters")}</b>{t("help.surahLabLettersD")}<b style={{ color: PURPLE }}>{t("help.surahLabCompareT")}</b>{t("help.surahLabCompareD")}
+            [tg("▦", "help.surahLab"), <>{t("help.surahLabD1")}<b style={{ color: GREEN }}>{t("help.surahLabKey")}</b>{t("help.surahLabKeyD")}<b style={{ color: GREEN }}>{t("help.surahLabCoh")}</b>{t("help.surahLabCohD")}<b style={{ color: GREEN }}>{t("help.surahLabStruct")}</b>{t("help.surahLabStructD")}<b style={{ color: GREEN }}>{t("help.surahLabBonds")}</b>{t("help.surahLabBondsD")}<b style={{ color: PURPLE }}>{t("help.surahLabIltifat")}</b>{t("help.surahLabIltifatD")}<b style={{ color: PURPLE }}>{t("help.surahLabLetters")}</b>{t("help.surahLabLettersD")}<b style={{ color: PURPLE }}>{t("help.surahLabCompareT")}</b>{t("help.surahLabCompareD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("تلك أمة قد خلت", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.egBond")}</span></span></>],
-            [t("help.expr"), <>{t("help.exprD")}
+            [tg("⛓", "help.expr"), <>{t("help.exprD")}
               <b style={{ color: GREEN }}>{t("help.exprGov")}</b>{t("help.exprGovD")}<b style={{ color: GREEN }}>{t("help.exprColloc")}</b>{t("help.exprCollocD")}<b style={{ color: GREEN }}>{t("help.exprComp")}</b>{t("help.exprCompD")}<b style={{ color: PURPLE }}>{t("help.exprIdiom")}</b>{t("help.exprIdiomD")}
               <span style={{ display: "block", marginBlockStart: 4 }}>{ex("آمَنَ بـ", GOLD)} {ex("أقام الصلاة", GOLD)} {ex("سبيل الله", GOLD)} <span style={{ color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>{t("help.exprWhere")}</span></span></>],
           ], clips(
@@ -226,11 +232,11 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
           ))}
 
           {sec(t("help.workbenchTitle"), <p className="ag-help-intro ag-hint">{t("help.workbenchIntro")}</p>, [
-            [t("help.wbClaim"), t("help.wbClaimD")],
+            [tg("⚖", "help.wbClaim"), t("help.wbClaimD")],
             [t("help.wbCoding"), t("help.wbCodingD")],
             [t("help.wbRole"), t("help.wbRoleD")],
             [t("help.wbConstruction"), t("help.wbConstructionD")],
-            [t("help.wbPairing"), t("help.wbPairingD")],
+            [tg("⊞", "help.wbPairing"), t("help.wbPairingD")],
           ], clips(
             clip(t("help.wbClaim"), "changelog/claims-desktop.mp4", "changelog/claims-mobile.mp4"),
             clip(t("help.wbCoding"), "changelog/coding-desktop.mp4"),

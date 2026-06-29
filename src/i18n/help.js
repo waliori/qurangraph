@@ -102,6 +102,9 @@ export const ar = {
 
   // Analysis and lexicons
   "help.analysisTitle": "التحليل والمعاجم",
+  "help.rasm": "الرسم العثماني",
+  "help.rasmD1": "افتح «الرسم» من شريط الأدوات لتكشف صور كتابة الكلمة في المصحف — تنوّع الكتابة الداخليّ وحروف المدّ وقواعد الرسم، في ثلاثة ألسنة. وإن كان للكلمة صورٌ إملائيةٌ أخرى",
+  "help.rasmD2": "ظهر في بطاقتها زرُّ «رسومه الأخرى» يفتح الرسم عليها. انقر ⓘ في أيّ لسانٍ لإظهار شرحه أو إخفائه.",
   "help.morphAnalysis": "التحليل الصرفي",
   "help.morphAnalysisD": "الجذر والصيغة والوزن والزمن والبناء والإعراب لكل كلمة — من المدوّنة القرآنية.",
   "help.lexicons": "المعاجم",
@@ -198,7 +201,7 @@ export const ar = {
   "help.oppositesD2": "في ٧٥:٣١–٣٢؛ يظهر في لوحة الكلمة وتحليل الجذر ومستكشف المدوّنة.",
 
   // ── مستكشف المدوّنة ──
-  "help.corpusExplorer": "مستكشف المدوّنة (≣)",
+  "help.corpusExplorer": "مستكشف المدوّنة",
   "help.corpusExplorerD1": "من زر «≣» في الشريط: تردُّد الجذور والنوادر (ما يَرِد مرّةً واحدة)، وفهرسٌ صرفيّ، وفهرس الطباق، والمتشابهات اللفظية، والبلاغة (القَسَم والشرط)، وحقولك الدلالية، وأسماء الله الحسنى مرتبطةً بجذورها (",
   "help.corpusExplorerD2": ")، مع تبديلٍ بين تطابق الكلمة وتطابق الجذر.",
 
@@ -247,7 +250,7 @@ export const ar = {
   // ── ورشة البحث ──
   "help.workbenchTitle": "ورشة البحث",
   "help.workbenchIntro": "أدواتٌ تحوّل التصفّح إلى حجّة، كلٌّ مبنيٌّ على المدوّنة وموثَّقٌ بآياته:",
-  "help.wbClaim": "لوحة الدعاوى (⚖)",
+  "help.wbClaim": "لوحة الدعاوى",
   "help.wbClaimD": "اطرح دعوى ثمّ أرفِق آياتٍ تؤيّدها أو تعارضها في عمودين؛ ثبِّت أيّ آيةٍ من قائمة المواضع بزرّ ⚐، ثمّ صدّر القضيّة كاملةً Markdown أو JSON.",
   "help.wbCoding": "الترميز (🏷)",
   "help.wbCodingD": "عدسةٌ على أيّ قائمة مواضع: أنشئ فئاتٍ موضوعيةً وامنح كلّ آيةٍ وسومها، مع عدّادٍ حيٍّ لكلّ فئة.",
@@ -255,7 +258,7 @@ export const ar = {
   "help.wbRoleD": "عدسةٌ على قائمة المواضع تُظهر الدور الإعرابيّ لكلّ موضع (مضاف إليه · مفعول به · مجرور بحرف…) وخلاصةً مجمّعة — استدلالٌ تقريبيّ من وسوم الإعراب والجوار، للتمييز لا للقطع.",
   "help.wbConstruction": "الاستعلام التركيبيّ (⧉)",
   "help.wbConstructionD": "من مختبر الجذر: ثبِّت الجذر على بناءٍ واحد (وزن، معلوم/مجهول، حرف الجرّ، تعريف المفعول) وافتح تلك المواضع وحدها — تمييز «أشرك بـ» من «أشرك مع».",
-  "help.wbPairing": "مصفوفة الاقتران (⊞)",
+  "help.wbPairing": "مصفوفة الاقتران",
   "help.wbPairingD": "شبكةُ تقاطعٍ بين مجموعتين من الحدود تُظهر الخليّة الفارغة (ما لا يجتمع)؛ ازرع محورًا من عائلة جذرٍ أو حقلٍ محفوظ، واضغط خليّةً لقراءة آياتها.",
 
   // ── لوحة المفاتيح العربية ──
@@ -373,6 +376,9 @@ export const en = {
 
   // Analysis and lexicons
   "help.analysisTitle": "Analysis and lexicons",
+  "help.rasm": "ʿUthmānic spelling (rasm)",
+  "help.rasmD1": "Open “Rasm” from the toolbar to reveal how a word is written in the muṣḥaf — internal spelling variation, long-vowel letters, and the spelling rules, across three tabs. When a word has other spellings",
+  "help.rasmD2": "an “Its other spellings” button appears in its card and opens Rasm on it. Tap ⓘ on any tab to show or hide its explanation.",
   "help.morphAnalysis": "Morphological analysis",
   "help.morphAnalysisD": "The root, lemma, pattern, tense, voice, and case of each word — from the Quranic corpus.",
   "help.lexicons": "Lexicons",
@@ -469,7 +475,7 @@ export const en = {
   "help.oppositesD2": "in 75:31–32; shown in the word inspector, root analysis, and the corpus explorer.",
 
   // ── Corpus explorer ──
-  "help.corpusExplorer": "Corpus explorer (≣)",
+  "help.corpusExplorer": "Corpus explorer",
   "help.corpusExplorerD1": "From the ≣ toolbar button: root frequencies and hapax (once-only roots), a grammar catalogue, an opposites index, look-alike verses, rhetoric (oaths & conditionals), your semantic fields, and the 99 divine names linked to their roots (",
   "help.corpusExplorerD2": "), with a word/root match toggle.",
 
@@ -519,7 +525,7 @@ export const en = {
   // ── Research workbench ──
   "help.workbenchTitle": "Research workbench",
   "help.workbenchIntro": "Tools that turn browsing into an argument — each built on the corpus and evidenced by its verses:",
-  "help.wbClaim": "Claim board (⚖)",
+  "help.wbClaim": "Claim board",
   "help.wbClaimD": "State a claim, then attach āyāt that support or challenge it in two columns; pin any verse from an occurrences list with ⚐, then export the whole case as Markdown or JSON.",
   "help.wbCoding": "Coding (🏷)",
   "help.wbCodingD": "A lens on any occurrences list: create thematic categories and tag each verse into them, with a live count per category.",
@@ -527,7 +533,7 @@ export const en = {
   "help.wbRoleD": "A lens on an occurrences list showing each token's role (muḍāf ilayhi · object · genitive-by-particle…) and an aggregate — an honest heuristic from case tags + adjacency, for distinguishing, not deciding.",
   "help.wbConstruction": "Construction query (⧉)",
   "help.wbConstructionD": "From the root lab: pin a root to one construction (Form, voice, governed particle, object definiteness) and open just those tokens — the ašraka bi- vs ašraka maʿa distinction.",
-  "help.wbPairing": "Pairing matrix (⊞)",
+  "help.wbPairing": "Pairing matrix",
   "help.wbPairingD": "A co-occurrence grid over two term sets that makes the empty cell visible (what never co-occurs); seed an axis from a root's family or a saved field, and click a cell to read its verses.",
 
   // ── Arabic keyboard ──

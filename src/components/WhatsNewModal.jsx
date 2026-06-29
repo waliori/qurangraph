@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { ModalShell } from "./ModalShell.jsx";
 import { MediaGroup } from "./ClipMedia.jsx";
+import { RasmGlyph } from "./icons.jsx";
 import { useI18n } from "../i18n/index.js";
 import { THEMES } from "../changelog.js";
+
+// A change may name itself with its in-app icon via `featureIcon` (a key here), so the
+// headline carries the same glyph the toolbar shows. Plain-glyph features can use a string.
+const FEATURE_ICONS = {
+  rasm: <RasmGlyph size={15} className="ag-cl-feicon" />,
+};
 
 /* ═══ "What's new" / changelog dialog ═══
  *
@@ -53,7 +60,12 @@ function Change({ c, t, lang }) {
         {c.icon || kind.glyph}
       </span>
       <div className="ag-cl-itemmain">
-        <p className="ag-cl-text">{pick(c.text, lang)}</p>
+        <p className="ag-cl-text">
+          {c.featureIcon && FEATURE_ICONS[c.featureIcon] && (
+            <span className="ag-cl-fechip" aria-hidden="true">{FEATURE_ICONS[c.featureIcon]}</span>
+          )}
+          {pick(c.text, lang)}
+        </p>
         {c.detail && <p className="ag-cl-detail">{pick(c.detail, lang)}</p>}
         {c.steps?.length > 0 && (
           <ol className="ag-cl-steps">
