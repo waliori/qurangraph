@@ -50,7 +50,7 @@ export function RasmLabModal({ open, verseData, morph, theme, focusId, onNavigat
   const [suraFilter, setSuraFilter] = useState(null); // clicked sūra in the by-sūra chart → filters the āyāt list
   const [preview, setPreview] = useState(null); // vk read in the sticky foot
   const [q, setQ] = useState(""); // catalogue filter box
-  const [showHelp, setShowHelp] = usePersistedState("qg.rasm.help", true); // explanatory blurbs on/off (persisted)
+  const [showHelp, setShowHelp] = usePersistedState("qg.rasm.help", false); // explanatory blurbs on/off (persisted; off by default)
   const [prevFocus, setPrevFocus] = useState(focusId);
 
   // Sync the parent's focus request into local selection WITHOUT an effect — the sanctioned
