@@ -47,6 +47,31 @@
     />
     <title>آيات.network — شبكة الكلمات القرآنية · v__APP_VERSION__</title>
 
+    <!-- Pre-boot landing shell: real, indexable Arabic content rendered into #root
+         before the JS bundle loads. React's createRoot() clears #root and replaces
+         this on mount, so users see it only during the sub-second boot, while
+         non-JS crawlers (Bing, DuckDuckGo, deferred Googlebot) index real prose
+         instead of an empty SPA shell. Styled inline because theme.css ships inside
+         the JS bundle and is not yet applied at first paint. style-src allows
+         'unsafe-inline' (see vite.config.js CSP). -->
+    <style>
+      .ag-shell { position: fixed; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 14px; text-align: center;
+        padding: 32px; font-family: "IBM Plex Sans Arabic", system-ui, sans-serif;
+        background: #e3d9bf; color: #3a3322; }
+      [data-theme="dark"] .ag-shell { background: #070a12; color: #c7cbd6; }
+      .ag-shell-glyph { font-size: 52px; line-height: 1; color: #9a7400; }
+      [data-theme="dark"] .ag-shell-glyph { color: #f5b301; }
+      .ag-shell h1 { font-family: "Reem Kufi", sans-serif; font-size: 27px; font-weight: 700;
+        margin: 0; color: #7a5a00; }
+      [data-theme="dark"] .ag-shell h1 { color: #fcd34d; }
+      .ag-shell p { max-width: 640px; font-size: 16px; line-height: 1.7; margin: 0; }
+      .ag-shell ul { list-style: none; padding: 0; margin: 2px 0; max-width: 640px;
+        font-size: 14px; line-height: 1.95; opacity: .85; }
+      .ag-shell .ag-shell-en { font-size: 13px; line-height: 1.6; opacity: .6; direction: ltr; }
+      .ag-shell-load { font-size: 12px; letter-spacing: .12em; opacity: .5; margin-top: 6px; }
+    </style>
+
     <!-- Structured data — type="application/ld+json" is data, not executed,
          so it is not subject to the script-src CSP. -->
     <script type="application/ld+json">
@@ -72,16 +97,34 @@
     <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
   </head>
   <body>
-    <div id="root"><div class="ag-boot"><div class="ag-boot-glyph">۞</div></div></div>
+    <div id="root">
+      <div class="ag-shell">
+        <span class="ag-shell-glyph" aria-hidden="true">۞</span>
+        <h1>آيات.network — شبكة الكلمات القرآنية</h1>
+        <p>
+          مستكشفٌ تفاعليٌّ لشبكة الكلمات والجذور والصِّيَغ في القرآن الكريم: ابحث في
+          الكلمات القرآنية، وتتبَّع الجذور عبر الآيات والسُّوَر، وحلِّل الصرف ومقاييس
+          اللغة، واستكشف العلاقات بين الكلمات في نصِّ المصحف الشريف.
+        </p>
+        <ul>
+          <li>بحثٌ في كلمات القرآن الكريم وجذورها اللغوية</li>
+          <li>شبكةٌ تفاعليةٌ تربط الجذور بالآيات والصِّيَغ الصرفية</li>
+          <li>تحليلٌ صرفيٌّ ومقاييس لغوية لكل كلمة قرآنية</li>
+          <li>أداةٌ مجانية للباحثين وطلبة العلم في الدراسات القرآنية</li>
+        </ul>
+        <p class="ag-shell-en">
+          ayat.network — an interactive explorer for the network of words, roots, and
+          morphological forms in the Holy Qur'an: search Quranic words, trace roots
+          across verses, and analyze Arabic morphology.
+        </p>
+        <span class="ag-shell-load">جارٍ التحميل…</span>
+      </div>
+    </div>
     <noscript>
-      <h1>آيات.network — شبكة الكلمات القرآنية</h1>
-      <p>
-        مستكشف تفاعلي لشبكة الكلمات والجذور والصِّيَغ في القرآن الكريم. ابحث في الكلمات
-        القرآنية، واستكشف العلاقات بين الجذور والآيات، وحلِّل مقاييس اللغة والصرف.
-        يتطلب هذا التطبيق تفعيل JavaScript في المتصفح.
+      <p style="text-align:center;padding:16px">
+        يتطلب هذا التطبيق تفعيل JavaScript في المتصفح لعرض الشبكة التفاعلية.
+        — This interactive application requires JavaScript.
       </p>
-      <p>An interactive explorer for the network of words, roots, and morphological
-        forms in the Qur'an. This application requires JavaScript.</p>
     </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
