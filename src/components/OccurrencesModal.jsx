@@ -1,19 +1,23 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useLayoutEffect } from "react";
 import { HighlightedAyah } from "./HighlightedAyah.jsx";
 import { ModalShell } from "./ModalShell.jsx";
 import { SaveButton } from "./SaveButton.jsx";
 import { exportCsvFile, exportJsonFile, exportTextFile, buildConcordance, buildResultBibtex } from "../graph/exportGraph.js";
 import { wordGroupKey } from "../arabic-utils.js";
 import { roleAt, roleBreakdown, ROLE_AR, ROLE_EN } from "../analytics/role.js";
-import { useVirtualRows } from "../hooks/useVirtualRows.js";
 import { useVerseFilter } from "./VerseFilter.jsx";
 import { useI18n } from "../i18n/index.js";
 import { useWorkspace } from "../hooks/useWorkspace.js";
 
 /* OccurrencesModal — a scrollable popup listing every āyah a word (or its root)
  * occurs in, the current verse first. Each row is clickable to re-centre the
- * graph on that āyah. Driven by `occ = { lookup, label, mode, keys }`. The list is
- * virtualized (useVirtualRows) so even اللّٰه (~2700 occurrences) opens instantly.
+ * graph on that āyah. Driven by `occ = { lookup, label, mode, keys }`.
+ *
+ * The list is rendered in full (not virtualized) and scrolled natively. Measured-row
+ * virtualization estimated off-screen heights and re-measured while scrolling, and near
+ * variable-height Arabic verses that measure/re-window/re-scroll cycle fed back on itself
+ * — the last verses became unreachable and the scroll fought the user (worst in Firefox).
+ * Even the busiest word (اللّٰه, ~2700 āyāt) is just text rows the browser scrolls fine.
  *
  * Three workbench layers ride on top (all off by default, so the plain reader is unchanged):
  *   - الإعراب (role): a per-row syntactic-role chip + an aggregate breakdown — needs `morph`.
@@ -28,8 +32,9 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   const total = allKeys.length;
   const { filtered: keys, controls: filterControls, filterKey } = useVerseFilter(allKeys, verseData);
   const n = keys.length;
-  const { scrollRef, rowRef, onScroll, start, end, padTop, padBottom, listProps, rowProps } =
-    useVirtualRows({ count: n, est: 92, resetKey: `${occ?.lookup}|${occ?.mode}|${filterKey}|${n}` });
+  // Reset to the top when the term or the filter changes (the current āya is row 0).
+  const scrollRef = useRef(null);
+  useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [occ?.lookup, occ?.mode, filterKey]);
   const [roleOn, setRoleOn] = useState(false);
   const [coding, setCoding] = useState(false);
   const [menuVk, setMenuVk] = useState(null);   // open tag menu for this verse
@@ -79,7 +84,7 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
   };
 
   const rows = [];
-  for (let i = start; i < end; i++) {
+  for (let i = 0; i < n; i++) {
     const vk = keys[i];
     const v = verseData[vk];
     if (!v) continue;
@@ -89,9 +94,9 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
     let roleLabel = null;
     if (roleOn && morph) { const p = posFor(vk); if (p.length) roleLabel = ROLE[roleAt(morph, verseData, vk, p[0]).role]; }
     rows.push(
-      <li key={vk} ref={rowRef(i)} className="ag-occ-li">
+      <li key={vk} className="ag-occ-li">
         <div className="ag-occ-rowwrap">
-          <button type="button" {...rowProps(i)} className={"ag-modal-row" + (i === 0 ? " is-current" : "")}
+          <button type="button" className={"ag-modal-row" + (i === 0 ? " is-current" : "")}
             onClick={() => onNavigate(v.s, v.a)} title={t("occ.makeCenter")}>
             <span className="ag-ayah-ref">
               <span className="ag-ayah-surah">{v.sn}</span>
@@ -246,10 +251,8 @@ export function OccurrencesModal({ occ, verseData, searchMode, precision = "loos
         {n === 0 && (
           <div className="ag-state"><span>{t("common.filter.noMatch")}</span></div>
         )}
-        <ul className="ag-modal-list" ref={scrollRef} onScroll={onScroll} {...listProps} aria-label={t("occ.title", { label: occ.label })}>
-          <li className="ag-vspace" aria-hidden="true" style={{ height: padTop }} />
+        <ul className="ag-modal-list" ref={scrollRef} aria-label={t("occ.title", { label: occ.label })}>
           {rows}
-          <li className="ag-vspace" aria-hidden="true" style={{ height: padBottom }} />
         </ul>
     </ModalShell>
   );

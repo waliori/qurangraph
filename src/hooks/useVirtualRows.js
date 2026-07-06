@@ -23,7 +23,7 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
   const scrollRef = useRef(null);
   const sizes = useRef(new Map());     // row index → measured height
   const rowEls = useRef(new Map());    // row index → DOM node (current window)
-  const pendingIndex = useRef(null);   // row to keep pinned-to-top until heights settle
+  const pendingIndex = useRef(null);   // row to keep pinned-to-target until heights settle
   const focusPending = useRef(false);  // a keyboard move asked to focus the active row once it renders
   const [offsets, setOffsets] = useState(() => new Float64Array(1));
   const [scrollTop, setScrollTop] = useState(0);
@@ -43,7 +43,7 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
   useLayoutEffect(() => {
     sizes.current = new Map();
     const o = rebuild();
-    pendingIndex.current = initialIndex > 0 ? Math.min(initialIndex, count) : null;
+    pendingIndex.current = initialIndex > 0 ? Math.min(initialIndex, Math.max(0, count - 1)) : null;
     const top = pendingIndex.current != null ? Math.max(0, o[pendingIndex.current] - 8) : 0;
     setVh(scrollRef.current?.clientHeight || 560);
     setScrollTop(top);
@@ -52,10 +52,34 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
     focusPending.current = false;
   }, [resetKey, rebuild, initialIndex, count]);
 
-  // After each paint: measure rendered rows and refine offsets; while an open-at
-  // target is pending, re-pin it to the top each pass (measured heights differ
-  // from the estimate, so a one-shot scroll would drift) until heights stop
-  // changing. The "changed" guard makes this a no-op once everything is measured.
+  // The open-at pin fights the user if it keeps re-centring while they scroll. Rather
+  // than guess "was that scroll the user or us?" from the position (fragile — our own
+  // writes, the browser's end-of-list clamp, and StrictMode's double-invoked effects all
+  // muddy it), cancel the pin on any GENUINE user input: wheel, touch, key, or a pointer
+  // press on the scroller. Those never come from our programmatic scrollTop writes.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const cancel = () => { pendingIndex.current = null; };
+    const opts = { passive: true };
+    el.addEventListener("wheel", cancel, opts);
+    el.addEventListener("touchstart", cancel, opts);
+    el.addEventListener("pointerdown", cancel, opts);
+    el.addEventListener("keydown", cancel);
+    return () => {
+      el.removeEventListener("wheel", cancel, opts);
+      el.removeEventListener("touchstart", cancel, opts);
+      el.removeEventListener("pointerdown", cancel, opts);
+      el.removeEventListener("keydown", cancel);
+    };
+  }, [resetKey]);
+
+  // After each paint: measure rendered rows and refine offsets so the window and the
+  // scrollbar stay accurate as rows resolve from their estimate. Keeping the viewport
+  // visually stable while off-screen rows above resize is left to the BROWSER's native
+  // scroll anchoring (CSS overflow-anchor, on by default) — it is far more robust than
+  // adjusting scrollTop by hand, which oscillated near the list ends. Positioning the
+  // open-at target is done in the rAF effect below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     let changed = false;
@@ -64,14 +88,55 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
       const h = node.offsetHeight;
       if (h && sizes.current.get(i) !== h) { sizes.current.set(i, h); changed = true; }
     });
-    const o = changed ? rebuild() : offsets;
-    if (changed) setOffsets(o);
-    const el = scrollRef.current;
-    if (pendingIndex.current != null && el && o.length === count + 1) {
-      el.scrollTop = Math.max(0, o[Math.min(pendingIndex.current, count)] - 8);
-      if (!changed) pendingIndex.current = null; // converged
-    }
+    if (changed) setOffsets(rebuild());
   });
+
+  // Open-at positioning, done in a post-paint rAF loop rather than a layout effect.
+  // A scrollTop write inside a layout effect runs BEFORE the browser has established the
+  // element's scroll range; Firefox then clamps the write to 0 and the list is stuck at
+  // the top with the target never scrolled into view (Chromium establishes the range
+  // earlier, so it happened to work there). requestAnimationFrame fires after layout AND
+  // paint, when scrollHeight is final, so the write always sticks. We re-centre each frame
+  // as the row heights resolve, stop once the position is stable (or after a frame budget),
+  // and bail immediately if the user touches the scroller (the user-input effect clears
+  // pendingIndex). The initial scrollTop STATE (set in the reset effect) keeps the target
+  // inside the rendered window so its row element exists to measure here.
+  // Each frame, re-centre the target using its live rect and SYNC the position into React
+  // state (setScrollTop). The state sync is essential: the virtualized window is computed
+  // from the scrollTop state, so if we scrolled the element without syncing, the row math
+  // and the real scroll position would drift into different coordinate spaces and the list
+  // would snap to the wrong rows the moment the pin let go. Stops once stable or after a
+  // frame budget, and bails the instant the user touches the scroller (user-input effect
+  // clears pendingIndex). The initial scrollTop STATE (reset effect) keeps the target in
+  // the rendered window so its row exists to measure here.
+  useEffect(() => {
+    if (pendingIndex.current == null) return undefined;
+    let raf = 0, stable = 0, frames = 0;
+    const place = () => {
+      raf = 0;
+      if (pendingIndex.current == null) return; // cancelled by user input
+      const el = scrollRef.current;
+      const target = rowEls.current.get(pendingIndex.current);
+      if (el && target) {
+        const max = Math.max(0, el.scrollHeight - el.clientHeight);
+        const rowTop = (target.getBoundingClientRect().top - el.getBoundingClientRect().top) + el.scrollTop;
+        const want = Math.min(max, Math.max(0, rowTop - Math.max(0, (el.clientHeight - target.offsetHeight) / 2)));
+        const before = el.scrollTop;
+        if (Math.abs(before - want) > 1) el.scrollTop = want;
+        const after = el.scrollTop; // the browser clamps to its real scroll range
+        if (after !== before) setScrollTop(after);
+        // Converge when the position actually stops moving — comparing to `want` alone
+        // never settles if want exceeds the reachable max (scrollHeight briefly reads
+        // larger than the real scroll range), which made the pin fight for the full budget.
+        if (Math.abs(after - before) <= 1) stable += 1; else stable = 0;
+      }
+      frames += 1;
+      if (stable >= 3 || frames > 60) { pendingIndex.current = null; return; }
+      raf = requestAnimationFrame(place);
+    };
+    raf = requestAnimationFrame(place);
+    return () => { if (raf) cancelAnimationFrame(raf); };
+  }, [resetKey, count]);
 
   // Keep the viewport height in sync with the actual list size. Capturing it only
   // at reset (when the list is still short/empty) renders too few rows and the
@@ -89,7 +154,11 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
-    if (el) { setScrollTop(el.scrollTop); setVh(el.clientHeight); }
+    if (!el) return;
+    // Just mirror the position — the open-at pin is cancelled by the user-input effect
+    // above (wheel/touch/pointer/key), so this fires for both our programmatic writes
+    // and the user's scroll without needing to tell them apart.
+    setScrollTop(el.scrollTop); setVh(el.clientHeight);
   }, []);
   const rowRef = useCallback((i) => (el) => { if (el) rowEls.current.set(i, el); else rowEls.current.delete(i); }, []);
 
@@ -153,9 +222,13 @@ export function useVirtualRows({ count, est = 92, overscan = 6, resetKey, initia
   const total = ready && count ? offsets[count] : 0;
   let start = 0, end = 0;
   if (ready && count) {
-    for (let lo = 0, hi = count; lo < hi;) { const m = (lo + hi) >> 1; if (offsets[m + 1] <= scrollTop) lo = m + 1; else hi = m; start = lo; }
+    // Clamp to the content: refined (shrinking) measurements can briefly leave the
+    // state scrollTop past the new total — an unclamped binary search then lands at
+    // start === count and renders an empty window.
+    const st = Math.max(0, Math.min(scrollTop, total - 1));
+    for (let lo = 0, hi = count; lo < hi;) { const m = (lo + hi) >> 1; if (offsets[m + 1] <= st) lo = m + 1; else hi = m; start = lo; }
     end = start;
-    while (end < count && offsets[end] < scrollTop + vh) end++;
+    while (end < count && offsets[end] < st + vh) end++;
     start = Math.max(0, start - overscan);
     end = Math.min(count, end + overscan);
   }
