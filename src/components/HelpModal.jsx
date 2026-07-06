@@ -100,8 +100,10 @@ const sec = (title, illo, items, clipsNode) => (
     <h3 className="ag-help-h">{title}</h3>
     {illo}
     <dl className="ag-help-dl">
-      {items.map(([t, d]) => (
-        <div className="ag-help-row" key={t}><dt className="ag-help-t">{t}</dt><dd className="ag-help-d">{d}</dd></div>
+      {items.map(([term, d], i) => (
+        // key by index: many term labels are JSX (icon + text), and a JSX value as a key
+        // stringifies to "[object Object]" — several of those collide into duplicate keys.
+        <div className="ag-help-row" key={i}><dt className="ag-help-t">{term}</dt><dd className="ag-help-d">{d}</dd></div>
       ))}
     </dl>
     {clipsNode}
@@ -204,7 +206,7 @@ export function HelpModal({ open, onClose, onStartTour, onOpenChangelog }) {
             [t("help.citations"), t("help.citationsD")],
           ], clips(
             clip(t("help.rasm"), "changelog/rasm-desktop.mp4"),
-            clip(t("help.morphAnalysis"), "changelog/inspector-desktop.mp4"),
+            clip(t("help.morphAnalysis"), "changelog/morphfilter-desktop.mp4"),
             clip(t("help.distribution"), "changelog/distribution-desktop.mp4"),
             clip(t("help.corpusExplorer"), "changelog/corpus-desktop.mp4"),
             clip(t("help.opposites"), "changelog/antonyms-desktop.mp4"),
