@@ -162,6 +162,10 @@ export const ar = {
   "common.dataErr.retry": "إعادة المحاولة",
   "common.dataErr.dismiss": "إغلاق",
 
+  // Storage writes failing (quota / private browsing) — the workspace can't persist
+  "common.persistErr.msg": "تعذّر الحفظ في هذا المتصفح (المساحة ممتلئة أو تصفّح خاص) — لن تبقى مساحة العمل بعد إغلاق الصفحة. صدِّر نسخة احتياطية.",
+  "common.persistErr.dismiss": "إغلاق",
+
   // SVG graph aria
   "common.graphRole": "شبكة بيانية",
   "common.graphAria": "شبكة الآية {sn} {a}: {n} عقدة و{m} رابط، بنمط {mode}. تنقّل بين العقد بمفتاح Tab.",
@@ -444,6 +448,10 @@ export const en = {
   "common.dataErr.morph": "Couldn't load morphology data.",
   "common.dataErr.retry": "Retry",
   "common.dataErr.dismiss": "Dismiss",
+
+  // Storage writes failing (quota / private browsing) — the workspace can't persist
+  "common.persistErr.msg": "This browser can't save right now (storage full or private browsing) — your workspace won't survive closing the page. Export a backup.",
+  "common.persistErr.dismiss": "Dismiss",
 
   // SVG graph aria
   "common.graphRole": "Network graph",
