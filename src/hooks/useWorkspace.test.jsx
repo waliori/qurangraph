@@ -50,9 +50,26 @@ describe("useWorkspace", () => {
     expect(result.current.items).toHaveLength(0);
     act(() => { result.current.importJSON(json); });
     expect(result.current.items).toHaveLength(1);
+    // Merge dedupes by id: re-importing your own backup is a no-op, not a duplicate.
     act(() => { result.current.importJSON(json, { merge: true }); });
+    expect(result.current.items).toHaveLength(1);
+    // …while genuinely new records (different id) do merge in.
+    const other = JSON.stringify({ v: 3, items: [{ id: "i_other", type: "verse", title: "38:34", payload: { surah: 38, ayah: 34 } }], notes: [], tags: [], tagAssign: {}, claims: [], fields: [], groups: [] });
+    act(() => { result.current.importJSON(other, { merge: true }); });
     expect(result.current.items).toHaveLength(2);
     act(() => { expect(result.current.importJSON("not json")).toBe(false); });
+  });
+
+  it("merge-import unions tag assignments per verse instead of dropping imported codings", () => {
+    const { result } = setup();
+    let tagId;
+    act(() => { tagId = result.current.addTag("توحيد").id; });
+    act(() => { result.current.toggleTag("2:255", tagId); });
+    const incoming = JSON.stringify({ v: 3, items: [], notes: [], claims: [], fields: [], groups: [],
+      tags: [{ id: "t_imported", label: "ملك" }], tagAssign: { "2:255": ["t_imported"], "38:34": ["t_imported"] } });
+    act(() => { result.current.importJSON(incoming, { merge: true }); });
+    expect(result.current.tagAssign["2:255"].sort()).toEqual([tagId, "t_imported"].sort());
+    expect(result.current.tagAssign["38:34"]).toEqual(["t_imported"]);
   });
 
   it("persists across remounts via localStorage", () => {

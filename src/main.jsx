@@ -11,6 +11,12 @@ import { installGlobalErrorCapture } from './errorLog.js'
 // leaves an inspectable trace instead of only a transient console.error.
 installGlobalErrorCapture()
 
+// Ask the browser to treat this origin's storage as persistent: the whole workspace
+// lives in localStorage, and without this Safari evicts it after ~7 days of non-use
+// and other browsers may clear it under storage pressure. Best-effort, no prompt in
+// most browsers; denial just leaves the status quo.
+try { navigator.storage?.persist?.().catch(() => {}) } catch { /* older browsers */ }
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <I18nProvider>

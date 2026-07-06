@@ -250,14 +250,24 @@ export function WorkspaceProvider({ children }) {
   const importJSON = useCallback((text, { merge = false } = {}) => {
     let parsed;
     try { parsed = sanitize(JSON.parse(text)); } catch { return false; }
-    setStore((st) => (merge
-      ? { v: 3, items: [...parsed.items, ...st.items], notes: [...parsed.notes, ...st.notes],
-          tags: [...st.tags, ...parsed.tags.filter((p) => !st.tags.some((t) => t.id === p.id))],
-          tagAssign: { ...parsed.tagAssign, ...st.tagAssign },
-          claims: [...parsed.claims, ...st.claims],
-          fields: [...parsed.fields, ...st.fields.filter((f) => !parsed.fields.some((p) => p.id === f.id))],
-          groups: [...st.groups, ...parsed.groups.filter((p) => !st.groups.some((g) => g.id === p.id))] }
-      : parsed));
+    setStore((st) => {
+      if (!merge) return parsed;
+      // Merge is id-deduplicated across the board — re-importing your own backup must be
+      // a no-op, not a duplicate of every item/note/claim — and tag assignments UNION
+      // per verse: the old object spread kept only the local array, silently dropping
+      // imported codings on any verse that was already tagged locally.
+      const byId = (mine, theirs) => [...mine, ...theirs.filter((p) => !mine.some((x) => x.id === p.id))];
+      const tagAssign = { ...parsed.tagAssign };
+      for (const k in st.tagAssign) {
+        tagAssign[k] = tagAssign[k] ? [...new Set([...tagAssign[k], ...st.tagAssign[k]])] : st.tagAssign[k];
+      }
+      return { v: 3,
+        items: byId(st.items, parsed.items), notes: byId(st.notes, parsed.notes),
+        tags: byId(st.tags, parsed.tags), tagAssign,
+        claims: byId(st.claims, parsed.claims),
+        fields: byId(st.fields, parsed.fields),
+        groups: byId(st.groups, parsed.groups) };
+    });
     return true;
   }, [setStore]);
   const clearAll = useCallback(() => setStore({ ...EMPTY }), [setStore]);
