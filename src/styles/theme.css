@@ -146,7 +146,9 @@ body {
 .ag-bar {
   position: relative; z-index: 30;
   display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
-  padding: var(--space-3) var(--space-4);
+  /* viewport-fit=cover + standalone PWA: keep the brand/search row out of the
+     status-bar / Dynamic-Island zone on notched phones (0 everywhere else). */
+  padding: calc(var(--space-3) + env(safe-area-inset-top, 0px)) var(--space-4) var(--space-3);
   background: color-mix(in oklab, var(--ink-900) 84%, transparent);
   backdrop-filter: blur(16px) saturate(1.15);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
@@ -211,6 +213,10 @@ select {
   background-repeat: no-repeat; background-position: left var(--space-3) center; background-size: 11px;
   transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
 }
+/* `left` IS the inline-end in the RTL default — but in the English/LTR UI it put the
+   chevron on top of the label's first characters while the reserved inline-end padding
+   sat empty. Flip it per direction (background-position has no logical keywords yet). */
+[dir="ltr"] select { background-position: right var(--space-3) center; }
 select:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
 select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, transparent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold-500) 16%, transparent); }
@@ -225,7 +231,9 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
 }
 .ag-select select:hover { border-color: color-mix(in oklab, var(--gold-500) 45%, var(--border-default)); }
 .ag-select::after {
-  content: "⌄"; position: absolute; inset-inline-start: var(--space-2); inset-block-start: 46%;
+  /* inline-END, matching the base select's chevron side and the padding reserved for it
+     (inset-inline-start put the caret over the label's leading digit in both directions). */
+  content: "⌄"; position: absolute; inset-inline-end: var(--space-2); inset-block-start: 46%;
   transform: translateY(-50%); color: var(--text-faint); pointer-events: none; font-size: 14px;
 }
 .ag-select.is-ayah select { width: 64px; text-align: center; padding-inline: var(--space-2) var(--space-5); }
@@ -785,6 +793,13 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
   border-start-end-radius: var(--radius-md); border-end-end-radius: var(--radius-md);
   box-shadow: var(--shadow-2); }
 .ag-kbd-fab:hover { color: var(--text-strong); }
+/* Compact layouts: bottom sheets open at 56dvh, putting their header band exactly at the
+   viewport's vertical middle — where this pill sat, covering the header's badge/close
+   controls (it z-orders above dialogs by design, so it can serve their inputs). Park it
+   higher, above the sheet's top edge, and clear of curved corners in landscape. */
+@media (max-width: 860px), (pointer: coarse) {
+  .ag-kbd-fab { inset-block-start: max(31%, calc(env(safe-area-inset-top) + 88px)); }
+}
 .ag-kbd-fab:active { cursor: grabbing; }
 .ag-kbd-fab.is-active { color: var(--gold-400);
   border-color: color-mix(in oklab, var(--gold-500) 40%, transparent);
@@ -865,7 +880,9 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
    sheet instead of scrolling the page. */
 .ag-sheet-grab { display: none; position: relative; width: 100%; height: 30px; flex: 0 0 auto;
   border: 0; padding: 0; margin: 0; background: transparent; cursor: grab; touch-action: none; }
-.ag-sheet-grab::before { content: ""; position: absolute; inset-block-start: 11px; inset-inline-start: 50%;
+/* Physical left+translateX centering: inset-inline-start:50% resolves to right:50% in
+   RTL and parked the pill 44px off-centre there. */
+.ag-sheet-grab::before { content: ""; position: absolute; inset-block-start: 11px; left: 50%;
   transform: translateX(-50%); width: 44px; height: 5px; border-radius: var(--radius-pill);
   background: var(--ink-600); transition: background var(--dur-fast) var(--ease-standard); }
 .ag-sheet-grab:hover::before, .ag-sheet-grab:active::before { background: var(--ink-400); }
@@ -958,9 +975,12 @@ select:focus-visible { border-color: color-mix(in oklab, var(--gold-500) 60%, tr
 .ag-modal-list { list-style: none; margin: 0; padding: var(--space-2); overflow-y: auto; flex: 1 1 auto;
   display: block; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 /* Row spacing lives as padding INSIDE each <li> so it's included in the
-   measured height the virtualizer uses for its offsets (margins would not be). */
+   measured height the virtualizer uses for its offsets (margins would not be).
+   overflow-anchor is left at its default (auto): the browser keeps the visible rows
+   stable as off-screen rows above resize into their real heights — turning it off made
+   the list oscillate near the ends because nothing absorbed those shifts. */
 .ag-modal-list > li { padding-block-end: var(--space-1); }
-.ag-modal-list > li.ag-vspace { padding: 0; }
+.ag-modal-list > li.ag-vspace { padding: 0; overflow-anchor: none; }
 .ag-modal-row { width: 100%; display: flex; align-items: flex-start; gap: var(--space-3); text-align: start;
   padding: var(--space-3) var(--space-4); background: transparent; border: var(--bw-hair) solid transparent;
   border-radius: var(--radius-md); cursor: pointer; color: var(--text-body);
@@ -1315,7 +1335,7 @@ body.qg-tour-min .react-joyride__floater { position: fixed !important;
  * large, the Latin trigger as a small hint above it. */
 .ag-keyboard {
   position: fixed;
-  bottom: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -1403,7 +1423,7 @@ body.qg-tour-min .react-joyride__floater { position: fixed !important;
 
 /* Phones: hug the bottom edge. Sizing itself is fluid (clamp), so no per-key overrides. */
 @media (max-width: 560px) {
-  .ag-keyboard { bottom: 6px; }
+  .ag-keyboard { bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
   .ag-kb-ctrl .ag-kb-key { padding: 4px; }
 }
 
@@ -1618,6 +1638,13 @@ body.qg-tour-min .react-joyride__floater { position: fixed !important;
      the floater (above) is what's pinned, the card just rides on top of it. */
   .ag-tour { max-height: 52dvh; display: flex; flex-direction: column; width: 100%; max-width: 100%; }
   .ag-tour-body { max-height: 32dvh; overflow-y: auto; overscroll-behavior: contain; }
+  /* More copy below the fold: fade the last line so a clipped sentence reads as
+     "scroll for more", not as truncated text (the card toggles .has-more). */
+  .ag-tour-body.has-more::after {
+    content: ""; position: sticky; inset-block-end: 0; display: block; height: 26px;
+    margin-block-start: -26px; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--ink-800));
+  }
   .ag-iconbtn { width: 44px; height: 44px; font-size: 17px; }
   .ag-reader-btn { width: 42px; height: 42px; font-size: 15px; }
   .ag-seg button { padding: 11px 13px; }
@@ -1669,10 +1696,11 @@ body.qg-tour-min .react-joyride__floater { position: fixed !important;
   padding-block-end: env(safe-area-inset-bottom);
   animation: ag-sheet-rise var(--dur-base) var(--ease-out);
 }
+/* The grip is a tap-to-close button (ToolbarMenu), not a drag handle — cursor:grab +
+   touch-action:none advertised a swipe that did nothing and blocked page scrolling. */
 .ag-sheet-grip { width: 56px; height: 18px; flex: 0 0 auto; align-self: center; padding: 7px 0; border: 0;
   background: var(--ink-600); background-clip: content-box; border-radius: var(--radius-pill);
-  cursor: grab; touch-action: none; }
-.ag-sheet-grip:active { cursor: grabbing; }
+  cursor: pointer; }
 /* The portaled panel keeps its inner layout/padding but drops its own positioning,
  * border and height cap — the .ag-sheet owns those now. */
 .ag-sheet > .ag-popover, .ag-sheet > .ag-menu-pop {
@@ -1682,8 +1710,10 @@ body.qg-tour-min .react-joyride__floater { position: fixed !important;
 }
 
 /* Landscape phones: too little vertical room for a peek sheet — open straight to full,
- * and trim the reader so the canvas keeps as much height as possible. */
-@media (max-width: 900px) and (orientation: landscape) {
+ * and trim the reader so the canvas keeps as much height as possible. Scoped to ≤860px,
+ * the same breakpoint that makes the inspector a bottom sheet: at 861–900px landscape it
+ * is still the docked 340px sidebar, and forcing 90dvh on it overflowed the layout. */
+@media (max-width: 860px) and (orientation: landscape) {
   /* Too little vertical room for a peek — open near-full straight away. */
   .ag-inspector { height: 90dvh; max-height: 94dvh; }
   .ag-inspector.is-open.is-full { height: 94dvh; }
