@@ -32,6 +32,10 @@ export function useBottomSheetDrag(onClose) {
 
   const onPointerDown = useCallback((e) => {
     if (!enabled) return;
+    // gripProps can be spread on a container strip (the inspector head) that holds real
+    // controls — let buttons/inputs inside it take their own events instead of starting
+    // a drag. The dedicated grab handle IS the currentTarget, so it always passes.
+    if (e.currentTarget !== e.target && e.target.closest("button, input, select, a, textarea, [role='button']")) return;
     const el = sheetRef.current; if (!el) return;
     gestureRef.current = true;
     const vh = (typeof window !== "undefined" && window.innerHeight) || 800;
@@ -63,10 +67,12 @@ export function useBottomSheetDrag(onClose) {
 
   // Keyboard / non-pointer activation of the handle toggles peek↔full; a click synthesised
   // right after a pointer gesture is swallowed (the pointerup already handled it).
-  const onClick = useCallback(() => {
+  const onClick = useCallback((e) => {
+    if (!enabled) return; // desktop: the head is a plain header, not a sheet handle
+    if (e && e.currentTarget !== e.target && e.target.closest("button, input, select, a, textarea, [role='button']")) return;
     if (gestureRef.current) { gestureRef.current = false; return; }
     setSnap((s) => (s === "full" ? "peek" : "full"));
-  }, []);
+  }, [enabled]);
 
   return {
     enabled,

@@ -140,8 +140,8 @@ export const ar = {
   "tour.wsOpenTitle": "مساحة العمل",
   "tour.wsOpenBody": "هذه مساحة العمل: كلّ ما تحفظه — كلمات وتعابير ودعاوى وملاحظات — يتجمّع هنا، ويمكنك تصديره أو استيراده لاحقًا.",
 
-  // 21 — Workspace detail
-  "tour.wsViewTitle": "مساحة العمل",
+  // 21 — Workspace detail (title differs from wsOpen so consecutive steps don't look stuck)
+  "tour.wsViewTitle": "داخل مساحة العمل",
   "tour.wsViewBody": "ها هي لقطتك محفوظة. تتجمّع هنا كل محفوظاتك (كلمات، ومقارنات، وتوزيعات، ولقطات) مع ملاحظات حرّة وملاحظات لاصقة على العقد. لا خادمَ هنا ولا حساب: كل شيء يُحفظ في متصفّحك وحده — فإن مسحت بيانات المتصفّح زالت محفوظاتك. لذا صدّرها ملفًّا للاحتفاظ بها أو نقلها إلى جهاز آخر.",
 
   // 21b — Help dialog (open & close)
@@ -328,8 +328,8 @@ export const en = {
   "tour.wsOpenTitle": "Your Workspace",
   "tour.wsOpenBody": "This is your Workspace: everything you save — words, expressions, claims and notes — collects here, ready to export or import later.",
 
-  // 21 — Workspace detail
-  "tour.wsViewTitle": "Your Workspace",
+  // 21 — Workspace detail (title differs from wsOpen so consecutive steps don't look stuck)
+  "tour.wsViewTitle": "Inside the Workspace",
   "tour.wsViewBody": "There's your snapshot. Everything you save collects here (words, comparisons, distributions, snapshots) with free notes and sticky notes pinned to nodes. There's no backend and no account: it all lives in your browser alone — so clearing your browser data erases it. Export it as a file to keep a backup or move it to another device.",
 
   // 21b — Help dialog (open & close)

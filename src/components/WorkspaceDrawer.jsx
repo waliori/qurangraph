@@ -127,7 +127,11 @@ export function WorkspaceDrawer({ open, onClose, onOpen, onPinNote, onOpenTag, c
   const onImportFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    f.text().then((txt) => ws.importJSON(txt, { merge: true }));
+    // Surface the outcome — a corrupt/wrong file used to fail with zero feedback,
+    // leaving the user believing their backup was merged.
+    f.text()
+      .then((txt) => ws.toast(t(ws.importJSON(txt, { merge: true }) ? "ws.importOk" : "ws.importFail")))
+      .catch(() => ws.toast(t("ws.importFail")));
     e.target.value = "";
   };
 

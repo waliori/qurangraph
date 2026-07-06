@@ -18,6 +18,14 @@ import { useI18n } from "../i18n/index.js";
  */
 const NoArrow = () => null;
 
+// The selector of the element to ring for a step: an explicit `data.ring` (the mobile
+// show-and-tell steps point at the always-present stage but want to spotlight the control
+// they describe), else the step's own target — skipping centred steps and large noRing
+// panels. Pure, so it can key the ring effect instead of the whole steps array.
+const ringSelector = (step) =>
+  step?.data?.ring
+  || (step && step.placement !== "center" && !step.data?.noRing && typeof step.target === "string" ? step.target : null);
+
 // In-card text-size control: scale the tour copy between these bounds, persisted.
 const SCALE_MIN = 0.85, SCALE_MAX = 1.4, SCALE_STEP = 0.1;
 const clampScale = (v) => Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(v * 100) / 100));
@@ -54,7 +62,17 @@ function TourCard({
   const gated = !!step.data?.gated;
   const cardRef = useRef(null);
   const [off, setOff] = useState({ x: 0, y: 0 });
+  const offRef = useRef(off); // clamp() reads the live offset without re-binding
+  useEffect(() => { offRef.current = off; }, [off]);
   const dragRef = useRef(null);
+  // Body-scroll affordance: on small screens the body caps at 32dvh and scrolls, but a
+  // cut-off line read as truncated copy — flag "there's more below" so CSS can fade it.
+  const bodyRef = useRef(null);
+  const [bodyMore, setBodyMore] = useState(false);
+  const checkBodyMore = () => {
+    const el = bodyRef.current;
+    if (el) setBodyMore(el.scrollHeight - el.scrollTop - el.clientHeight > 6);
+  };
   // Local mirrors of the in-card controls. react-joyride re-renders the tooltip
   // only on step changes, NOT when the parent's props change — so driving these
   // straight from props makes them update a step late (the "checkbox doesn't tick
@@ -74,7 +92,8 @@ function TourCard({
     const el = cardRef.current;
     if (!el) return next;
     const r = el.getBoundingClientRect();
-    const baseL = r.left - off.x, baseT = r.top - off.y;
+    const cur = offRef.current;
+    const baseL = r.left - cur.x, baseT = r.top - cur.y;
     const x = Math.min(window.innerWidth - 8 - r.width - baseL, Math.max(8 - baseL, next.x));
     const y = Math.min(window.innerHeight - 8 - r.height - baseT, Math.max(8 - baseT, next.y));
     return { x, y };
@@ -94,13 +113,18 @@ function TourCard({
   };
   const onGrabUp = () => { dragRef.current = null; };
   // Nudge fully into view once placed (react-joyride can anchor a card partly
-  // off-screen next to an edge target), and again on resize / rotate.
+  // off-screen next to an edge target), and again on resize / rotate. Runs on mount
+  // only (the card remounts per step) and bails when the offset is already clamped —
+  // the dep-less version scheduled a fresh rAF after EVERY render and setOff always
+  // produced a new object, re-rendering the card at ~60fps for the whole tour.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setOff((o) => clamp(o)));
-    const h = () => setOff((o) => clamp(o));
-    window.addEventListener("resize", h);
-    return () => { cancelAnimationFrame(id); window.removeEventListener("resize", h); };
-  });
+    const renudge = () => setOff((o) => { const n = clamp(o); return n.x === o.x && n.y === o.y ? o : n; });
+    const id = requestAnimationFrame(() => { renudge(); checkBodyMore(); });
+    window.addEventListener("resize", renudge);
+    return () => { cancelAnimationFrame(id); window.removeEventListener("resize", renudge); };
+  }, []);
+  // Re-measure the body overflow when the text scale changes (A− / A+).
+  useEffect(() => { checkBodyMore(); }, [scale]);
 
   const bumpScale = (d) => { const v = clampScale(scale + d); setScale(v); onFontScale?.(v); };
   const toggleTheme = () => { onToggleTheme?.(); setThemeView((v) => (v === "dark" ? "light" : "dark")); };
@@ -127,7 +151,7 @@ function TourCard({
         </div>
         {step.title && <div className="ag-tour-title">{step.title}</div>}
       </div>
-      <div className="ag-tour-body">{step.content}</div>
+      <div ref={bodyRef} onScroll={checkBodyMore} className={"ag-tour-body" + (bodyMore ? " has-more" : "")}>{step.content}</div>
 
       {index < 2 && <p className="ag-tour-tip">{t("tour.dragHint")}</p>}
 
@@ -217,28 +241,32 @@ export function Tour({ run, stepIndex, steps, onStepChange, onEnd, theme, onTogg
     [dontShow, setDS, fontScale, changeScale, theme, onToggleTheme, lang, onToggleLang, minimized, dir, t],
   );
 
-  // Pulse a ring on the current step's target element (the dimmed overlay alone
-  // isn't enough on hideOverlay steps; this works for HTML controls and SVG
-  // nodes alike). Skip centred steps (their target is the whole stage).
+  // Pulse a ring on the current step's target element (the dimmed overlay alone isn't
+  // enough on hideOverlay steps; this works for HTML controls and SVG nodes alike).
+  //
+  // Keyed on the SELECTOR, not the whole `steps` array: `steps` gets a new identity on
+  // incidental re-renders (it closes over live app state), which used to re-run this
+  // effect — removing then re-adding the class, restarting the pulse, and reading as a
+  // flicker. And because the ring is a class on a React-managed element, a re-render can
+  // reset that element's className and drop it — so a MutationObserver re-applies the
+  // class if anything strips it, keeping the pulse smooth and continuous.
+  const ringSel = run ? ringSelector(steps[stepIndex]) : null;
   useEffect(() => {
-    if (!run) return undefined;
-    const step = steps[stepIndex];
-    // `data.ring` names the element to highlight explicitly — used by the mobile
-    // show-and-tell steps, which target the (always-present) stage so the tour can't
-    // break, yet still want to spotlight the control/sheet they describe. Otherwise
-    // ring the step's own target, skipping centred steps and large noRing panels.
-    const sel = step?.data?.ring
-      || (step && step.placement !== "center" && !step.data?.noRing && typeof step.target === "string" ? step.target : null);
-    if (!sel) return undefined;
-    let el = null, timer = 0, tries = 0;
+    if (!ringSel) return undefined;
+    let el = null, timer = 0, tries = 0, mo = null;
     const apply = () => {
-      el = document.querySelector(sel);
-      if (el) el.classList.add("qg-tour-target");
-      else if (tries++ < 25) timer = window.setTimeout(apply, 100); // target may appear after the before-hook
+      el = document.querySelector(ringSel);
+      if (el) {
+        el.classList.add("qg-tour-target");
+        if (typeof MutationObserver !== "undefined") {
+          mo = new MutationObserver(() => { if (el && !el.classList.contains("qg-tour-target")) el.classList.add("qg-tour-target"); });
+          mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+        }
+      } else if (tries++ < 25) { timer = window.setTimeout(apply, 100); } // target may appear after the before-hook
     };
     timer = window.setTimeout(apply, 40);
-    return () => { window.clearTimeout(timer); if (el) el.classList.remove("qg-tour-target"); };
-  }, [run, stepIndex, steps]);
+    return () => { window.clearTimeout(timer); if (mo) mo.disconnect(); if (el) el.classList.remove("qg-tour-target"); };
+  }, [ringSel]);
 
   // Mobile: pin the card to the bottom of the screen for steps that describe the top
   // toolbar (data.mcard === "bottom"), so the card doesn't cover the control it explains.

@@ -20,7 +20,7 @@ const REDUCE_MOTION = typeof matchMedia !== "undefined" && matchMedia("(prefers-
  * only the handful of nodes whose flags changed.
  */
 
-const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, aria, coarse, onEnter, onLeave, onClick }) {
+const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, T, theme, reg, aria, coarse, touchBoost = 1, onEnter, onLeave, onClick }) {
   const opacity = dim ? 0.42 : 1;
   const r = isH ? n.r * 1.35 : isS || isAW ? n.r * 1.2 : n.r;
   const isWE = n.type === "word" && n.isExpanded;
@@ -29,7 +29,9 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   // On touch, a transparent disc enlarges the tap area to ≥44px diameter (Apple HIG)
   // without changing the painted node — small nodes are otherwise near-impossible to hit
   // with a fingertip. It sits first/under everything and shares the <g>'s click handler.
-  const hitR = coarse ? Math.max(r, 22) : 0;
+  // The disc lives inside the zoomed <g>, so its WORLD radius must grow as the view zooms
+  // out (touchBoost ≈ 1/k, quantized upstream) to keep the ON-SCREEN target finger-sized.
+  const hitR = coarse ? Math.max(r, 22 * touchBoost) : 0;
 
   // Recompute the node colour per render so a theme switch instantly recolours the
   // graph (the colour baked at build time is for one theme only). Light mode swaps
@@ -99,7 +101,7 @@ const GraphNode = memo(function GraphNode({ node: n, x, y, isH, isS, isAW, dim, 
   );
 });
 
-function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, coarse, onNodeEnter, onNodeLeave, onNodeClick }) {
+function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewport, highlightSet, highlightLinks, activeWordNodeIds, hovered, selected, showLoops, T, theme, coarse, touchBoost, onNodeEnter, onNodeLeave, onNodeClick }) {
   const { t } = useI18n();
   const anyHighlight = !!highlightSet || activeWordNodeIds.size > 0;
   const pos = (n) => positions[n.id] || { x: n.x, y: n.y };
@@ -153,7 +155,7 @@ function GraphLayerInner({ nodes, links, loopLinks, positions, nmap, reg, viewpo
         const onP = highlightSet ? highlightSet.has(n.id) : true;
         const dim = !(onP || isAW) && anyHighlight;
         return <GraphNode key={n.id} node={n} x={p.x} y={p.y} reg={reg} aria={nodeAria(n, t)}
-          isH={hovered === n.id} isS={selected === n.id} isAW={isAW} dim={dim} coarse={coarse}
+          isH={hovered === n.id} isS={selected === n.id} isAW={isAW} dim={dim} coarse={coarse} touchBoost={touchBoost}
           T={T} theme={theme} onEnter={onNodeEnter} onLeave={onNodeLeave} onClick={onNodeClick} />;
       })}
     </>

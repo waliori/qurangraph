@@ -7,8 +7,18 @@ import { useState, useEffect } from "react";
  * - An optional `sanitize(value)` runs on both the loaded value and every
  *   update, so out-of-range or malformed persisted data can never reach the UI
  *   (e.g. a stale surah index outside [1, 114]).
- * - Writes are best-effort; a failing setItem (private mode, quota) is ignored.
+ * - Writes are best-effort, but a failing setItem (private mode, quota) is
+ *   announced ONCE per session via a `qg:persist-fail` window event — the
+ *   workspace rides on this hook, so a silent failure means research that
+ *   looks saved evaporates on reload.
  */
+let persistFailAnnounced = false;
+const announcePersistFail = () => {
+  if (persistFailAnnounced || typeof window === "undefined") return;
+  persistFailAnnounced = true;
+  try { window.dispatchEvent(new Event("qg:persist-fail")); } catch { /* ignore */ }
+};
+
 export function usePersistedState(key, fallback, sanitize) {
   const [value, setValue] = useState(() => {
     let raw = fallback;
@@ -20,7 +30,7 @@ export function usePersistedState(key, fallback, sanitize) {
   });
 
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { announcePersistFail(); }
   }, [key, value]);
 
   return [value, setValue];

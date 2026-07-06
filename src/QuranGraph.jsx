@@ -222,6 +222,7 @@ export default function QuranGraph() {
   const panVelRef = useRef({ vx: 0, vy: 0 });        // px/frame at release, for inertia
   const inertiaRef = useRef(0);                      // pan-inertia rAF id
   const [dims, setDims] = useState({ w: 900, h: 600 });
+  const autoFitRef = useRef(true); // frame the first settled layout if it overflows the viewport
   const [showHelp, setShowHelp] = useState(false);
   const [meanings, setMeanings] = useState(null); // active lexicon: root → { c, f } (lazy)
   const [meaningsFull, setMeaningsFull] = useState(null); // active lexicon: root → full article (accumulated per fetched shard)
@@ -280,6 +281,20 @@ export default function QuranGraph() {
   const closeInspector = useCallback(() => { setSelected(null); setActiveWord(null); }, []);
   const { sheetRef: inspSheetRef, sheetClass: inspSheetClass, sheetStyle: inspSheetStyle, gripProps: inspGripProps } = useBottomSheetDrag(closeInspector);
   const coarsePointer = useMediaQuery("(pointer: coarse)"); // touch: enlarge node hit areas / enable touch gestures
+  // Screen-space touch-target scale for the SVG hit discs: the invisible tap disc lives
+  // inside the zoomed <g>, so a fixed world radius shrinks with the zoom — at k=0.3 the
+  // "44px" disc was ~13 real px. Boost by 1/k, quantized to half-steps so the memoized
+  // nodes only re-render on coarse zoom changes, capped so neighbouring discs don't
+  // swallow each other when fully zoomed out.
+  const touchBoost = useMemo(
+    () => (coarsePointer ? Math.min(6, Math.max(1, Math.ceil(2 / transform.k) / 2)) : 1),
+    [coarsePointer, transform.k]);
+  // Landscape phones: the toolbar + expanded reader left a ~90px graph strip with every
+  // node buried under the reader. Start (and rotate) collapsed there; re-expandable.
+  const shortLandscape = useMediaQuery("(pointer: coarse) and (orientation: landscape) and (max-height: 520px)");
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => { if (shortLandscape) setReaderCollapsed(true); }, [shortLandscape]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const T = THEMES[theme];
 
   // Translate that centres the virtual canvas in the current viewport.
@@ -401,8 +416,14 @@ export default function QuranGraph() {
     if (corpusOpen) return { t: "corpus" };
     if (ctx) return { t: "ctx", c: ctx.centerKey };
     if (phrase) return { t: "phrase", c: phrase.centerKey };
+    // Workbench panels — without these a shared link silently dropped the very view
+    // being shared (and, arriving on a fresh device, the auto-intro/tour ran over it).
+    if (rasmOpen) return { t: "rasm", id: rasmFocus || null };
+    if (pairing?.open) return { t: "pairing", r: (pairing.rows || []).map((tm) => ({ k: tm.key, l: tm.label, m: tm.mode })), c: (pairing.cols || []).map((tm) => ({ k: tm.key, l: tm.label, m: tm.mode })) };
+    if (construction) return { t: "constr", r: construction.root, l: construction.label };
+    if (claimsOpen) return { t: "claims" };
     return null;
-  }, [dist, cmp, occ, lab, aya, surahLab, rhyme, exprOpen, exprFocus, corpusOpen, ctx, phrase]);
+  }, [dist, cmp, occ, lab, aya, surahLab, rhyme, exprOpen, exprFocus, corpusOpen, ctx, phrase, rasmOpen, rasmFocus, pairing, construction, claimsOpen]);
 
   // Mirror the live state back into the URL hash (debounced; replaceState so pan/
   // zoom never spam history). Runs once hydration completes, then on every change.
@@ -437,6 +458,14 @@ export default function QuranGraph() {
   // forever. Track which one failed and let the user retry: retryTick is in each
   // loader effect's deps, so bumping it re-runs the failed fetch.
   const [dataErr, setDataErr] = useState(null); // "lexicon" | "lemma" | "morph" | null
+  // Surfaced localStorage write failure (quota / private mode): the workspace and every
+  // qg.* preference silently stop persisting there — tell the user instead of losing work.
+  const [persistErr, setPersistErr] = useState(false);
+  useEffect(() => {
+    const on = () => setPersistErr(true);
+    window.addEventListener("qg:persist-fail", on);
+    return () => window.removeEventListener("qg:persist-fail", on);
+  }, []);
   const [retryTick, setRetryTick] = useState(0);
   const retryLoads = useCallback(() => { setDataErr(null); setRetryTick((n) => n + 1); }, []);
 
@@ -732,6 +761,21 @@ export default function QuranGraph() {
     return { k, x: dims.w / 2 - cx * k, y: dims.h / 2 - cy * k };
   }, [graphNodes, dims.w, dims.h, homeView]);
 
+  // One-shot auto-fit: arm whenever the centre verse changes (boot + navigation)…
+  useEffect(() => { autoFitRef.current = true; }, [currentKey]);
+  // …then, once the settled layout commits (positions is written only at rest), if it
+  // doesn't fit the viewport at the home zoom (narrow phone screens — the centre verse
+  // could land half off-screen), frame it. Any manual pan/zoom before the settle
+  // disarms it (see onPointerDown), so it never fights the user for the camera.
+  useEffect(() => {
+    if (!autoFitRef.current || !Object.keys(positions).length) return;
+    autoFitRef.current = false;
+    const f = fitView();
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (f.k < 0.98) setTransform(f);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [positions, fitView]);
+
   // Pan the view to centre a node (used by the expanded-words list) and select it.
   const focusNode = useCallback((id) => {
     const p = positionsRef.current[id];
@@ -824,8 +868,13 @@ export default function QuranGraph() {
   const hitTestAt = useCallback((clientX, clientY) => {
     if (renderer !== "canvas" || !spatialIndexRef.current) return null;
     const w = svgToWorld(clientX, clientY);
-    return hitTest(spatialIndexRef.current, positionsRef.current, w.x, w.y, coarsePointer ? 14 : 4);
-  }, [renderer, svgToWorld, coarsePointer]);
+    // The slack is a SCREEN-space allowance (a fingertip is ~14px regardless of zoom),
+    // so convert it to world units by the current scale — a fixed world slack shrank
+    // to ~1px on screen when zoomed out, making nodes untappable. Capped under the
+    // spatial grid cell (80) so the 3×3 cell search still covers it.
+    const slack = Math.min(60, (coarsePointer ? 14 : 4) / transform.k);
+    return hitTest(spatialIndexRef.current, positionsRef.current, w.x, w.y, slack);
+  }, [renderer, svgToWorld, coarsePointer, transform.k]);
 
   // ── Pan inertia (touch): coast after a flick, decaying with friction ──
   const stopInertia = useCallback(() => { if (inertiaRef.current) { cancelAnimationFrame(inertiaRef.current); inertiaRef.current = 0; } }, []);
@@ -891,6 +940,7 @@ export default function QuranGraph() {
   const onPointerDown = useCallback((e) => {
     if (e.target.closest("[data-panel]")) return; // let panels handle their own input
     stopInertia(); // a fresh touch halts any coasting pan
+    autoFitRef.current = false; // the user took the camera — don't auto-fit over them
     // Suppress the browser's native text-selection drag while panning/dragging a node
     // (otherwise gliding a node selects the reader/inspector text). Panels are exempt
     // (returned above) so their text stays selectable; restored on pointer up/leave.
@@ -1103,7 +1153,7 @@ export default function QuranGraph() {
   const closeAllViews = useCallback(() => {
     setDist(null); setCmp(null); setOcc(null); setLab(null); setAya(null); setSurahLab(null);
     setRhyme(null); setExprOpen(false); setExprFocus(null); setExprInitial(null); setCorpusOpen(false); setCtx(null); setPhrase(null); setDef(null);
-    setConstruction(null); setPairing(null); setClaimsOpen(false);
+    setConstruction(null); setPairing(null); setClaimsOpen(false); setRasmOpen(false); setRasmFocus(null);
   }, []);
 
   // Reopen an analysis view from its compact descriptor (the inverse of `currentView`).
@@ -1123,9 +1173,19 @@ export default function QuranGraph() {
       case "corpus": setCorpusOpen(true); break;
       case "ctx": setCtx({ centerKey: v.c }); break;
       case "phrase": openPhrases(v.c); break;
+      case "rasm": setRasmFocus(v.id || null); setRasmOpen(true); break;
+      case "pairing": {
+        // Terms travel without their key lists (URL stays short) — rebuild them from the
+        // live indices, same as restoring a saved pairing from the workspace.
+        const rebuild = (arr) => (arr || []).map((tm) => ({ key: tm.k, label: tm.l, mode: tm.m, keys: (compareIndices[tm.m] || {})[tm.k] || [] }));
+        setPairing({ open: true, seed: null, rows: rebuild(v.r), cols: rebuild(v.c) });
+        break;
+      }
+      case "constr": setConstruction({ root: v.r, label: v.l || v.r }); break;
+      case "claims": setClaimsOpen(true); break;
       default: break;
     }
-  }, [openOcc, openPhrases]);
+  }, [openOcc, openPhrases, compareIndices]);
 
   // Apply a deep-linked analysis view once hydration has completed (and openView/its data
   // dependencies exist). One-shot: the pending descriptor is consumed and cleared.
@@ -1477,12 +1537,21 @@ export default function QuranGraph() {
   // Each step's `before` sets the canonical UI it needs, then waits for the commit
   // so its target exists before react-joyride measures it. `navEx` guarantees the
   // example verse; `selectId` selects a specific node (the example word).
+  // The only live values `before` needs — read through a ref so tourBefore itself is a
+  // STABLE callback. Otherwise it changed identity whenever `navigate` did (it closes over
+  // `dims`, which shifts as the inspector docks / toolbar wraps), which re-created the
+  // whole tourSteps array, which made react-joyride re-process the current step and re-run
+  // this before-hook — closing the modal the user had just opened, and restarting the
+  // highlight pulse (the flicker). Everything else here is a stable useState setter.
+  const tourBeforeRef = useRef({});
+  useEffect(() => { tourBeforeRef.current = { currentKey, navigate, nmap }; }, [currentKey, navigate, nmap]);
   const tourBefore = useCallback((cfg = {}) => async () => {
+    const { currentKey, navigate, nmap } = tourBeforeRef.current;
     if (cfg.navEx && currentKey !== TOUR_EX.key) navigate(TOUR_EX.s, TOUR_EX.a);
     if (cfg.mode) setSearchMode(cfg.mode); // pin the grouping mode so counts are accurate
     setToolsOpen(!!cfg.tools); setWsOpen(!!cfg.ws);
     setOcc(null); setCmp(null); setCtx(null); setPhrase(null); setDef(null); setDist(null); setLab(null); setRhyme(null); setAya(null); setSurahLab(null);
-    setExprOpen(false); setExprFocus(null); setCorpusOpen(false); setPairing(null); setClaimsOpen(false); // close show-&-tell panels between steps
+    setExprOpen(false); setExprFocus(null); setCorpusOpen(false); setPairing(null); setClaimsOpen(false); setConstruction(null); setRasmOpen(false); setRasmFocus(null); // close show-&-tell panels between steps
     // The ⋯ slide-up menu keeps its open-state inside ToolbarMenu, so our state resets
     // can't reach it; left open it would bleed into every later step. Unless THIS step is
     // the one opening it, dismiss any stray sheet by clicking its scrim.
@@ -1499,6 +1568,9 @@ export default function QuranGraph() {
       }
     } else { setSelected(null); setActiveWord(null); setSheetOpen(false); }
     setKbMode(cfg.kb ? "shown" : "off"); // reset the keyboard between steps (open only on its own step)
+    // Collapse the bottom reader for steps whose target node can settle behind it
+    // (clicks land on the reader, not the node). Restored from the snapshot on exit.
+    if (cfg.hideReader) setReaderCollapsed(true);
     // ── Show-&-tell (mobile): the tour DRIVES the app itself — opening modals directly via
     // state (robust; clicking through the slide-up menu was ending the tour) — so each step
     // narrates a LIVE view with no tap required. ──
@@ -1511,7 +1583,10 @@ export default function QuranGraph() {
     const clickReady = async (sel) => { for (let i = 0; i < 10; i++) { const el = document.querySelector(sel); if (el) { el.click(); return true; } await new Promise((r) => setTimeout(r, 80)); } return false; };
     if (cfg.openMenu) { await clickReady(cfg.openMenu); await tourSettle(); }
     if (cfg.click) { await clickReady(cfg.click); await tourSettle(); }
-  }, [currentKey, navigate, nmap, setSearchMode, setExpandedWords, setKbMode, tourSettle]);
+    // Reads currentKey/navigate/nmap from tourBeforeRef; setters + tourSettle are stable,
+    // so this callback never changes identity → tourSteps stops churning.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourSettle]);
 
   const tourSteps = useMemo(() => {
     const center = (key, content) => ({ target: '[data-tour="stage"]', placement: "center", title: t(`tour.${key}Title`), content: content ?? t(`tour.${key}Body`), before: tourBefore({}) });
@@ -1563,7 +1638,10 @@ export default function QuranGraph() {
       info('[data-tour="picker"]', "picker", { navEx: true }, "bottom"),                              // 4 show the picker; tour itself loads 2:255 (no forced 286-deep scroll)
       info('[data-tour="modes"]', "modes", { mode: "exact", navEx: true }, "bottom"),                 // 5 modes (pin Word)
       info('[data-tour="dock"]', "graph", { navEx: true }, "left", { ...lit, ...noRing }),            // 6 pan/zoom
-      action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto"),        // 7 tap ٱلْأَرْض (select)
+      // Node-target action steps hide the overlay (lit): joyride's spotlight re-measures a
+      // moving SVG node every frame while the simulation settles — a visibly stuttering
+      // hole in the dim veil. The pulse ring (ring effect) tracks the element for free.
+      action(earthSel, "tapEarth", { navEx: true }, `word:${tourEx?.earthNorm || ""}`, "auto", lit),   // 7 tap ٱلْأَرْض (select)
       action(earthSel, "fanOut", { selectId: earthId, collapse: true }, `expand:${tourEx?.earthLookup || ""}@${TOUR_EX.key}`, "auto", lit), // 8 re-click to fan out its verses
       action(earthSel, "dragZoom", { selectId: earthId }, `drag:${earthId || ""}`, "auto", lit),                // 9 drag ٱلْأَرْض itself (children follow); auto-zoom-out effect below
       info(".ag-inspector", "inspector", { selectId: earthId }, "auto", noRing),                      // 9
@@ -1571,10 +1649,16 @@ export default function QuranGraph() {
       action('[data-tour="distBtn"]', "dist", { selectId: earthId }, "modal:dist", "auto", lit),      // 11 distribution
       action('[data-tour="compareBtn"]', "compare", { selectId: earthId }, "modal:cmp", "auto", lit), // 12 compare
       action('[data-tour="allVersesBtn"]', "allverses", { selectId: earthId }, "modal:occ", "auto", lit), // 13 all verses
-      action(kursSel, "tapKursi", { navEx: true }, `word:${tourEx?.kursNorm || ""}`, "auto"),         // 13 rare word
-      action(partnerSel, "kursiVerse", {}, `verse:${TOUR_EX.kursPartner}`, "auto"),                   // 14 click the other verse (38:34)
+      action(kursSel, "tapKursi", { navEx: true }, `word:${tourEx?.kursNorm || ""}`, "auto", lit),    // 13 rare word
+      // hideReader: the 38:34 partner node tends to settle behind the bottom reader panel,
+      // where the spotlight shines through but clicks land on the reader — the gate could
+      // never fire. Collapse the reader for this step so the node is actually tappable.
+      action(partnerSel, "kursiVerse", { hideReader: true }, `verse:${TOUR_EX.kursPartner}`, "auto", lit), // 14 click the other verse (38:34)
       info(".ag-inspector", "kursiVerseDetail", { selectId: tourEx?.partnerId }, "auto", noRing),     // 15 its details stay open
-      action('[data-tour="modeRoot"]', "rootMode", {}, "mode-root", "bottom"),                        // 16 root mode
+      // Pin Word mode on entry so the "switch to Root" action is real and repeatable —
+      // stepping Back onto this step while already in Root mode would otherwise leave a
+      // gate that can never fire (or, before the stale-gate guard, one that self-fires).
+      action('[data-tour="modeRoot"]', "rootMode", { mode: "exact" }, "mode-root", "bottom"),         // 16 root mode
       action('[data-tour="echoesBtn"]', "echoes", {}, "modal:phrase", "auto", lit),                   // 16 echoes
       action('[data-tour="contextBtn"]', "context", {}, "modal:ctx", "auto", lit),                    // 17 context
       action('[data-tour="exprBtn"]', "expr", {}, "modal:expr", "bottom", lit),                        // expressions explorer
@@ -1590,12 +1674,16 @@ export default function QuranGraph() {
       center("workbench"),                                                                            // 27 newer research features (claims, lenses, pairing, corpus)
       center("finish"),                                                                               // 28
     ];
-    // PHONES get a shorter, robust path. The desktop tour drills into the inspector and a
-    // chain of FULL-SCREEN modals, where a floating card has nowhere to go on a small screen
-    // (it covers the control you must tap, and the open dialog can't be closed). The mobile
-    // tour teaches the core flow with a few simple taps, then DESCRIBES the rest (analysis +
-    // workbench) via centered cards — no modal chain, nothing to get stuck behind.
-    if (coarsePointer) {
+    // COMPACT layouts get a shorter, robust path. The desktop tour drills into the inspector
+    // and a chain of FULL-SCREEN modals, where a floating card has nowhere to go on a small
+    // screen (it covers the control you must tap, and the open dialog can't be closed). The
+    // compact tour teaches the core flow with a few simple taps, then DESCRIBES the rest
+    // (analysis + workbench) via centered cards — no modal chain, nothing to get stuck behind.
+    // Keyed on compactUI (same predicate as the CSS/toolbar layout), NOT pointer coarseness:
+    // a narrow desktop window gets the compact layout, so it must get the compact tour too —
+    // the desktop steps' toolbar targets are unmounted inside the closed ⋯ sheet there, and a
+    // gated step whose target is missing renders no card at all (hard-stuck tour).
+    if (compactUI) {
       // SHOW & TELL: the tour DRIVES the app itself — it opens the sliding menus, the modals
       // and the keyboard — so each step narrates a LIVE view with no taps required. The card
       // is pinned to the top (CSS), and each feature auto-opens as a bottom-sheet peek below
@@ -1636,7 +1724,17 @@ export default function QuranGraph() {
       ];
     }
     return steps;
-  }, [t, tourEx, tourBefore, coarsePointer]);
+  }, [t, tourEx, tourBefore, compactUI]);
+
+  // If the step list swaps under a live tour (the layout predicate flips mid-run —
+  // window resized across 860px, pointer type changes on a convertible), the preserved
+  // index can point past the end of the new, shorter array; joyride then renders
+  // nothing and the tour zombies with no way out. Clamp to the last step instead.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (tourRun && tourSteps.length && tourIndex >= tourSteps.length) setTourIndex(tourSteps.length - 1);
+  }, [tourRun, tourIndex, tourSteps.length]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── Gating: advance an action step once the user performs the action ──
   const gateRef = useRef({});
@@ -1644,7 +1742,7 @@ export default function QuranGraph() {
   useEffect(() => {
     if (!tourRun) return;
     gateRef.current = {
-      lex: activeLexicon, theme, lang, rareOnly, renderer,
+      lex: activeLexicon, theme, lang, rareOnly, renderer, hideStop, showLoops, maxBranch,
       morph: JSON.stringify(morphFilter), saveCount: ws.items.length, expC: exportCount, dragBase: dragTick, armed: false,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1663,7 +1761,10 @@ export default function QuranGraph() {
     else if (gate === "lexicon") done = activeLexicon !== B.lex;
     else if (gate === "mode-root") done = searchMode === "root";
     else if (gate === "tools") done = toolsOpen;
-    else if (gate === "tool-toggle") done = rareOnly !== B.rareOnly || renderer !== B.renderer || JSON.stringify(morphFilter) !== B.morph;
+    // Any control in the highlighted tools popover counts — the step says "try a toggle",
+    // so hide-stop-words / show-loops / the branch slider must advance it too, not just
+    // rare-only / renderer / morphology.
+    else if (gate === "tool-toggle") done = rareOnly !== B.rareOnly || renderer !== B.renderer || hideStop !== B.hideStop || showLoops !== B.showLoops || maxBranch !== B.maxBranch || JSON.stringify(morphFilter) !== B.morph;
     else if (gate === "save") done = ws.items.length > B.saveCount;
     else if (gate === "copylink") done = linkCopied;              // copied a share link
     else if (gate === "export") done = exportCount > B.expC;      // downloaded an image
@@ -1674,8 +1775,15 @@ export default function QuranGraph() {
       if (open) B.armed = true; // user opened it
       done = B.armed && !open; // …then closed it
     }
+    // Stale-satisfaction latch (the Back-button bounce): entering a step via PREV, the
+    // gate can already read as satisfied by the walkthrough's own earlier actions — this
+    // effect sees the pre-reset state before the step's before-hook commits. Record that
+    // first reading; while stale, wait for the reset (condition goes false) instead of
+    // advancing, so Back actually lands on the step rather than bouncing forward.
+    if (B.stale === undefined) B.stale = done;
+    if (B.stale) { if (!done) B.stale = false; return; }
     if (done) setTourIndex((i) => (tourSteps[i]?.data?.gate === gate ? i + 1 : i));
-  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, exprOpen, showHelp]);
+  }, [tourRun, tourIndex, tourSteps, currentKey, selNode, activeLexicon, searchMode, toolsOpen, rareOnly, renderer, hideStop, showLoops, maxBranch, morphFilter, ws.items.length, linkCopied, exportCount, wsOpen, theme, lang, expandedWords, draggedId, dragTick, dist, cmp, occ, phrase, ctx, exprOpen, showHelp]);
 
   // Suppress text selection while the tour runs (so dragging the graph or the
   // tour card never selects page text).
@@ -1688,10 +1796,16 @@ export default function QuranGraph() {
   // clicks inside the modal body (which would open/navigate and wrongly advance
   // the tour) at the capture phase — leaving hover, scroll, and the close button
   // (in the header) / backdrop working.
+  // NB: the react-hooks/refs rule mis-flags these tourSteps[tourIndex] reads. tourSteps is
+  // a useMemo, but because tourBefore reads a ref inside an async callback (at step-show
+  // time, never during render) the analyzer conservatively taints everything derived from
+  // it. The reads here are ordinary render-time array access and are safe.
+  // eslint-disable-next-line react-hooks/refs
   const tourModalStep = tourRun && !!tourSteps[tourIndex]?.data?.gate?.startsWith?.("modal:");
   // The compare step is hands-on: the user builds the comparison by typing a second
   // term (ٱلْأَرْض) and setting it. Keep the term-picker area live, but still block the
   // result rows/chips below — those navigate / re-pick and would derail the tour.
+  // eslint-disable-next-line react-hooks/refs
   const tourCmpStep = tourRun && tourSteps[tourIndex]?.data?.gate === "modal:cmp";
   useEffect(() => {
     if (!tourModalStep) return undefined;
@@ -1708,6 +1822,7 @@ export default function QuranGraph() {
 
   // The search step just *shows* the search bar; it stays read-only so the user
   // doesn't navigate away mid-tour (they use the sūrah/āyah selectors next).
+  // eslint-disable-next-line react-hooks/refs -- see note above; tourSteps is a useMemo, safe render read
   const tourLockSearch = tourRun && !!tourSteps[tourIndex]?.data?.lockSearch;
   useEffect(() => { tourLockSearchRef.current = tourLockSearch; }, [tourLockSearch]);
 
@@ -1727,7 +1842,11 @@ export default function QuranGraph() {
   // branching), then restore everything (including the centre verse) on exit.
   const prevSettingsRef = useRef(null);
   const startTour = () => {
-    prevSettingsRef.current = { surah, ayah, searchMode, precision, hideStop, showLoops, rareOnly, morphFilter, renderer, maxBranch, stopExtra, stopDisabled, activeLexicon, theme };
+    // Also snapshot the EXPLORATION (expansions, selection, camera): on a fresh device a
+    // shared graph link auto-runs the intro → tour, and the tour's reset used to wipe the
+    // very state the person came for. Restoring it on exit means "close the tour and see
+    // what was shared", for links without an analysis view too.
+    prevSettingsRef.current = { surah, ayah, searchMode, precision, hideStop, showLoops, rareOnly, morphFilter, renderer, maxBranch, stopExtra, stopDisabled, activeLexicon, theme, readerCollapsed, expandedWords, expandedVerses, selected, activeWord, transform };
     setSearchMode("exact"); setPrecision("loose"); setHideStop(true); setShowLoops(true);
     setRareOnly(false); setMorphFilter({ ...EMPTY_MORPH_FILTER }); setRenderer("svg"); setMaxBranch(3);
     setStopExtra([]); setStopDisabled([]);
@@ -1740,7 +1859,9 @@ export default function QuranGraph() {
       setSearchMode(s.searchMode); setPrecision(s.precision); setHideStop(s.hideStop); setShowLoops(s.showLoops);
       setRareOnly(s.rareOnly); setMorphFilter(s.morphFilter); setRenderer(s.renderer); setMaxBranch(s.maxBranch);
       setStopExtra(s.stopExtra); setStopDisabled(s.stopDisabled); setActiveLexicon(s.activeLexicon); setTheme(s.theme);
-      setSurah(s.surah); setAyah(s.ayah);
+      setSurah(s.surah); setAyah(s.ayah); setReaderCollapsed(s.readerCollapsed);
+      setExpandedWords(s.expandedWords); setExpandedVerses(s.expandedVerses);
+      setSelected(s.selected); setActiveWord(s.activeWord); setTransform(s.transform);
       prevSettingsRef.current = null;
     }
     if (dontShow) { try { localStorage.setItem("qg.tourHide", "1"); } catch { /* private mode */ } }
@@ -1871,12 +1992,21 @@ export default function QuranGraph() {
   return (
     <div className={"ag-app" + (compactUI && barHidden ? " bar-hidden" : "")}>
       {/* Recoverable lazy-load failure — dismissible, with retry (replaces the old
-          silent .catch that stranded the inspector/graph in a permanent loading state). */}
+          silent .catch that stranded the inspector/graph in a permanent loading state).
+          Physical left+translateX centering — insetInlineStart:50% resolves to right:50%
+          in the RTL (default) UI and pushed the alert its own width off-centre/off-screen. */}
       {dataErr && (
-        <div role="alert" style={{ position: "fixed", insetInlineStart: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--ink-850)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
+        <div role="alert" style={{ position: "fixed", left: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--ink-850)", color: "var(--text-body)", border: "1px solid var(--gold-500, #b8932f)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
           <span>{t(`common.dataErr.${dataErr}`)}</span>
           <button type="button" className="ag-btn is-gold" style={{ padding: "2px 10px" }} onClick={retryLoads}>{t("common.dataErr.retry")}</button>
           <button type="button" className="ag-iconbtn" style={{ width: 24, height: 24, fontSize: 12 }} aria-label={t("common.dataErr.dismiss")} onClick={() => setDataErr(null)}>✕</button>
+        </div>
+      )}
+      {/* Storage writes are failing (quota / private mode) — warn instead of losing work silently. */}
+      {persistErr && !dataErr && (
+        <div role="alert" style={{ position: "fixed", left: "50%", insetBlockStart: 8, transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: "var(--space-3, 12px)", background: "var(--ink-850)", color: "var(--text-body)", border: "1px solid var(--rubric-400, #fb7185)", borderRadius: 8, padding: "8px 12px", fontSize: "var(--text-sm)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,.35))", maxWidth: "92vw" }}>
+          <span>{t("common.persistErr.msg")}</span>
+          <button type="button" className="ag-iconbtn" style={{ width: 24, height: 24, fontSize: 12 }} aria-label={t("common.persistErr.dismiss")} onClick={() => setPersistErr(false)}>✕</button>
         </div>
       )}
       {/* ── Toolbar ── */}
@@ -2195,7 +2325,7 @@ export default function QuranGraph() {
               {(renderer === "svg" || exporting) && <GraphLayer
                 nodes={graphNodes} links={graphLinks} loopLinks={loopLinks} positions={positions} nmap={nmap} reg={registry} viewport={cullViewport}
                 highlightSet={highlightSet} highlightLinks={highlightLinks} activeWordNodeIds={activeWordNodeIds}
-                hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme} coarse={coarsePointer && !exporting}
+                hovered={hovered} selected={selected} showLoops={showLoops} T={T} theme={theme} coarse={coarsePointer && !exporting} touchBoost={touchBoost}
                 onNodeEnter={onNodeEnter} onNodeLeave={onNodeLeave} onNodeClick={onNodeClick} />}
             </g>
           </svg>
@@ -2303,7 +2433,7 @@ export default function QuranGraph() {
             <button type="button" className="ag-sheet-grab" aria-label={t("common.sheet.resize")} {...inspGripProps} />
             {selNode.type === "word" ? (
               <>
-                <div className="ag-insp-head">
+                <div className="ag-insp-head" {...inspGripProps}>
                   <div className="ag-insp-title">
                     <span className="ag-badge t-word">{t("common.graphMode.word")}</span>
                     <h2 className="ag-insp-word">{selNode.label}</h2>
@@ -2514,7 +2644,7 @@ export default function QuranGraph() {
               </>
             ) : selNode.type === "verse" ? (
               <>
-                <div className="ag-insp-head">
+                <div className="ag-insp-head" {...inspGripProps}>
                   <div className="ag-insp-title">
                     <span className="ag-badge t-verse">{t("common.insp.verseBadge")}</span>
                     <h2 className="ag-insp-word" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)" }}>{selNode.label}</h2>
