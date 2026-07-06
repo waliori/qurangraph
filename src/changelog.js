@@ -51,6 +51,66 @@ export const THEMES = {
 
 export const CHANGELOG = [
   {
+    id: "1.7.1",
+    date: "2026-07-06",
+    title: { ar: "قراءةٌ أسلس وإصلاحات", en: "Smoother reading & fixes" },
+    groups: [
+      {
+        theme: "ux",
+        changes: [
+          {
+            kind: "fix",
+            text: {
+              ar: "قراءة الآية في سياقها وقائمة كلّ المواضع تنزلق بسلاسة إلى آخر آية",
+              en: "Reading a verse in context and the “all occurrences” list scroll smoothly to the very last verse",
+            },
+            detail: {
+              ar: "كانت القوائم الطويلة تتوقّف قبل نهايتها فلا تظهر الآيات الأخيرة مهما نزّلت، وأحيانًا يقاوم التمرير؛ صار العرض كاملًا ينزلق طبيعيًّا حتى النهاية.",
+              en: "Long lists used to stop short — the last verses stayed hidden no matter how you scrolled, and the scroll sometimes fought back. The whole list now scrolls naturally all the way down.",
+            },
+          },
+          {
+            kind: "improve",
+            text: { ar: "الجولة التعريفية أهدأ وأثبت", en: "The guided tour is calmer and steadier" },
+            detail: {
+              ar: "يَنبِض إبرازُ العنصر برفقٍ بدل الوميض، وتبقى النافذة التي تطلب الجولةُ فتحَها مفتوحةً لتتأمّلها، ولم تعد تتجمّد على الشاشات الضيّقة.",
+              en: "The highlight pulses gently instead of flickering, a window the tour asks you to open now stays open so you can look at it, and it no longer freezes on narrow screens.",
+            },
+          },
+          {
+            kind: "fix",
+            text: { ar: "لمسٌ أدقّ وشاشاتٌ أفضل على الهاتف", en: "More precise touch and better layout on phones" },
+            detail: {
+              ar: "تبقى أهدافُ اللمس بحجم الإصبع مهما بعُدت، ويبدأ العرضُ الأفقيُّ بمساحةٍ أوسع للرسم، ولا تحجب لوحةُ المفاتيح ما تكتبه.",
+              en: "Tap targets stay finger-sized at any zoom, landscape opens with more room for the graph, and the on-screen keyboard no longer covers what you type.",
+            },
+          },
+        ],
+      },
+      {
+        theme: "workbench",
+        changes: [
+          {
+            kind: "fix",
+            text: { ar: "مساحة العمل لا تفقد ما حفظتَ بصمت", en: "Your workspace won't silently lose what you saved" },
+            detail: {
+              ar: "ينبّهك التطبيق إن تعذّر الحفظ في المتصفّح (تصفّحٌ خاصٌّ أو امتلاء المساحة)، ويطلب تخزينًا دائمًا؛ واستيرادُ نسختك يدمجها دون تكرارٍ ودون إسقاط وسومك.",
+              en: "The app now warns you if the browser can't save (private mode or full storage) and asks for persistent storage; importing your backup merges it without duplicates and keeps your tags.",
+            },
+          },
+          {
+            kind: "improve",
+            text: { ar: "روابط المشاركة تشمل مشاهد أكثر", en: "Share links cover more views" },
+            detail: {
+              ar: "صار رابطُ المشاركة يعيد فتح الرسم، ومصفوفة الاقتران، واستعلام البناء، ولوحة الدعاوى كما كانت.",
+              en: "A shared link now reopens the Rasm view, the pairing matrix, the construction query, and the claim board just as they were.",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "1.7.0",
     date: "2026-06-29",
     title: { ar: "نافذة الرسم", en: "The Rasm view" },
