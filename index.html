@@ -88,16 +88,10 @@
         "operatingSystem": "Any",
         "inLanguage": "ar",
         "isAccessibleForFree": true,
-        "author": { "@type": "Person", "name": "Walid Lahnine" }
+        "author": { "@type": "Person", "name": "Walid" }
       }
     </script>
 
-    <!-- Plausible CE analytics. NOTE: the `.hash.` variant was intentionally
-         dropped — this app stores its whole serialized state in location.hash
-         (see src/hooks/useUrlState.js), which hash-mode would report as unique
-         pageview URLs. Allowlisted in the build CSP (see vite.config.js). -->
-    <script defer data-domain="ayat.network" src="https://plausible.walidlahnine.com/js/script.file-downloads.outbound-links.pageview-props.tagged-events.js"></script>
-    <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
   </head>
   <body>
     <div id="root">

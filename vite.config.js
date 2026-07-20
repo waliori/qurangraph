@@ -27,19 +27,6 @@ function versionHtmlPlugin() {
   }
 }
 
-// Inject a Content-Security-Policy meta tag into the *built* HTML only. Doing it
-// here (rather than in index.html) keeps the dev server working — Vite's HMR
-// relies on inline scripts and a websocket that a strict `script-src 'self'`
-// would block. The app loads only same-origin JSON and uses React inline styles,
-// hence connect-src 'self' and style-src 'unsafe-inline'. The Arabic/Qur'an
-// faces come from Google Fonts, so its stylesheet host (fonts.googleapis.com)
-// and font host (fonts.gstatic.com) are allowed for style-src / font-src.
-// Plausible CE analytics: its script is loaded from plausible.walidlahnine.com
-// (script-src) and POSTs events back there (connect-src). The inline bootstrap
-// stub is allowed by its sha256 hash rather than 'unsafe-inline', keeping the
-// policy tight — if you ever edit that stub in index.html, recompute the hash.
-const PLAUSIBLE = "https://plausible.walidlahnine.com"
-const PLAUSIBLE_STUB_HASH = "'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='"
 // No-flash theme bootstrap inline script in index.html (sets data-theme before paint).
 const THEME_BOOT_HASH = "'sha256-bUMmeNNa7nKi6t2ICaDVWulLf+Qa0OEHcGPPqrP0gfE='"
 const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' ${PLAUSIBLE} ${PLAUSIBLE_STUB_HASH} ${THEME_BOOT_HASH}; connect-src 'self' ${PLAUSIBLE}; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'`
