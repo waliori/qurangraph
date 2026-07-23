@@ -47,9 +47,83 @@ export const THEMES = {
   graph:      { icon: "🕸", label: { ar: "الرسم", en: "The graph" } },
   lexicons:   { icon: "📖", label: { ar: "المعاجم", en: "Lexicons" } },
   onboarding: { icon: "🚪", label: { ar: "البداية واللغة", en: "Onboarding & language" } },
+  api:        { icon: "🔌", label: { ar: "لأدواتك الخاصّة", en: "For your own tools" } },
 };
 
 export const CHANGELOG = [
+  {
+    id: "1.8.0",
+    date: "2026-07-23",
+    title: { ar: "الروابط تفتح على ما شُورك به، وواجهةٌ برمجية", en: "Links open on what was shared — and an API" },
+    groups: [
+      {
+        theme: "onboarding",
+        changes: [
+          {
+            kind: "fix",
+            text: {
+              ar: "الرابط الذي يصلك يفتح على ما شُورك به مباشرةً",
+              en: "A link someone sends you opens straight onto what was shared",
+            },
+            detail: {
+              ar: "كانت نافذة التعريف ثمّ الجولة تتقدّمان على المشهد المُرسَل، فلا تراه حتى تُغلقهما — وربّما لم تفهم أصلًا ما الذي أُرسل إليك. صار الرابط يفتح رسمَه أو تحليلَه فورًا، ويبقى التعريفُ في انتظارك أوّلَ مرّةٍ تزور فيها الموقع مباشرةً.",
+              en: "The welcome dialog and then the tour used to stack in front of the view you were sent, so you couldn't see it until you dismissed both — and might never have worked out what you'd been sent. A link now opens its graph or its analysis at once, and the introduction still waits for you the first time you come to the site directly.",
+            },
+          },
+        ],
+      },
+      {
+        theme: "api",
+        changes: [
+          {
+            kind: "new",
+            text: {
+              ar: "خُذ كلَّ ما هنا إلى أدواتك: واجهةٌ برمجيةٌ مفتوحة",
+              en: "Take everything here into your own tools — an open HTTP API",
+            },
+            detail: {
+              ar: "نصُّ المصحف وصرفُ كلِّ كلمة، والكلماتُ والصِّيَغُ والجذور، والمعاجم الستّة، وكلُّ تحليلٍ يجريه الموقع — بصيغة JSON أو CSV، بلا مفتاحٍ ولا تسجيل. وكلُّ جوابٍ يحمل معه رابطًا يفتح الشيء نفسَه هنا، فتُرفِق مع نتيجتك صفحةً يفتحها القارئ ويرى فيها ما رأيت.",
+              en: "The text and every word's morphology, the words, lemmas and roots, the six lexicons, and every analysis the site performs — as JSON or CSV, with no key and no signup. And every answer carries a link that opens the same thing here, so you can hand a reader the page alongside your result.",
+            },
+            steps: [
+              {
+                ar: "افتح ayat.network/api/v1/docs لتجرّب أيّ طلبٍ في المتصفّح: الحقول مملوءةٌ بأمثلةٍ جاهزة، فاضغط «Run».",
+                en: "Open ayat.network/api/v1/docs to try any request in the browser: the fields arrive pre-filled with worked examples — press Run.",
+              },
+              {
+                ar: "اكتب جذرًا أو كلمةً في حقل البحث (الحقول العربية تُكتَب من اليمين)، واختر: كلمةً أو صيغةً أو جذرًا.",
+                en: "Type a root or a word into the query field (Arabic fields type right-to-left) and pick word, lemma or root.",
+              },
+              {
+                ar: "فوق الجواب تظهر أزرارٌ تفتح المشهد نفسَه هنا: المواضع، والتوزيع على السور، ومختبر الجذر، والرسم.",
+                en: "Above the answer, buttons open the same view here: the occurrences, the distribution across sūrahs, the root lab, the graph.",
+              },
+              {
+                ar: "وللنسخ إلى سطر الأوامر استعمل صيغة المسار — ‎/api/v1/search/كتب?mode=root — فتمرّ العربيةُ سليمةً.",
+                en: "To copy into a terminal, use the path form — /api/v1/search/كتب?mode=root — which carries Arabic through intact.",
+              },
+            ],
+            media: { desktop: "changelog/api-docs-desktop.mp4" },
+            mediaAlt: {
+              ar: "تجربةُ طلبٍ في مستكشف الواجهة، ثمّ فتحُ نتيجته في الموقع",
+              en: "Running a request in the API explorer, then opening its result in the app",
+            },
+          },
+          {
+            kind: "new",
+            text: {
+              ar: "كلُّ نتيجةٍ تأتيك ومعها رابطُها في الموقع",
+              en: "Every result comes back with its own link into the site",
+            },
+            detail: {
+              ar: "اسأل عن آيات جذرٍ ما، فيعود الجواب ومعه روابطُ فتح قائمةِ مواضعه، وتوزيعِه على السور، ومختبرِه، والرسمِ حوله — روابطُ صالحةٌ للمشاركة والحفظ والاستشهاد في بحثك.",
+              en: "Ask for the āyāt of a root and the answer comes with links that open its occurrences list, its distribution across the sūrahs, its lab and the graph around it — links you can share, bookmark, or cite in your paper.",
+            },
+          },
+        ],
+      },
+    ],
+  },
   {
     id: "1.7.1",
     date: "2026-07-06",

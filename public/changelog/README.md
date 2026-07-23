@@ -12,7 +12,7 @@ Missing files hide silently (no broken image, no orphan label), so replace freel
   running container on :8088. Mobile clips use a 390px viewport (bottom-sheet layout).
   Keyboard clips seed `qg.keyboard='"shown"'` (JSON) so transliteration is active.
 
-## Coverage: 39 of 47 changes have media (1 is a screenshot: `v0.2-roots.png`)
+## Coverage: 40 of 50 changes have media (1 is a screenshot: `v0.2-roots.png`)
 
 36 video files. Many features reached via the **word inspector** (click a node):
 `inspector-desktop` (lexicons / Ibn Fāris / dictionary), `distribution-desktop`
@@ -22,10 +22,11 @@ coding, role-lens, pairing, workspace, save, corpus, antonyms, valency, expressi
 sūra-picker, share, lemma, morphfilter, theme, language, tour, intro, notes, graph, etc.
 Dual desktop+phone: claims, keyboard, phrase.
 
-## The 8 still TEXT-ONLY (record + add a `media:` ref if wanted)
+## The 9 still TEXT-ONLY (record + add a `media:` ref if wanted)
 
 All genuinely abstract or buried — none has a single clean interaction to film:
-- **No single UI moment:** snappier dialogs (1.5) · responsive toolbar (1.0) ·
+- **No single UI moment:** shared links skip the intro (1.8 — the whole point is that
+  nothing appears) · snappier dialogs (1.5) · responsive toolbar (1.0) ·
   works offline / slide-up (0.3) · unified back button (1.6) · oaths & conditionals
   (1.6 — a corpus-explorer tab, no single gesture) · error resilience (1.4 fix).
 - **Filmable but fiddly:** Arabic keyboard **draggable badge** (1.6 — the fab didn't read
