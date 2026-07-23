@@ -73,7 +73,8 @@ a link the API emits is a link the app can read.
 
 | | |
 |---|---|
-| **Verse keys** | Always `surah:ayah` — `2:255`. Paths also accept `/verses/2/255`. |
+| **Verse keys** | `surah:ayah` — `2:255`. Paths also accept `/verses/2/255`. The sūrah half may be a **name**: `البقرة:255`, `al-baqarah/255`. |
+| **Naming a sūrah** | Anywhere a sūrah is taken, it may be a number (`2`), its Arabic name (`البقرة`, or `بقرة` without the article), or a transliteration (`al-baqarah`, `baqarah`, `Al Baqara`). |
 | **`mode`** | `exact` (surface form) · `lemma` (صيغة) · `root` (جذر). Decides how occurrences are grouped, and travels into the UI link. |
 | **`precision`** | `loose` (default, folds آية/اية) · `strict`. |
 | **Queries** | Type Arabic however you like — vocalized Uthmani (`ٱلصَّلَوٰة`), conventional imlāʾī (`الصلاة`), or Latin (`salat`, `rahman`). The API runs the same forgiving resolver as the search bar; a miss returns near-matches as a `hint`. |
@@ -96,6 +97,50 @@ a link the API emits is a link the app can read.
 
 ---
 
+## Naming a sūrah
+
+Every route that takes a sūrah takes a name as readily as a number — `/surahs/{id}`,
+`/verses/{surah}/{ayah}`, `/verses?surah=`, `/analysis/surah/{id}`, `/analysis/iltifat/{surah}`,
+`/analysis/bonds/{surah}`, `/analysis/munasabat?surah=`, and the sūrah half of any verse key:
+
+```bash
+curl "$API/verses/البقرة/255"        # Arabic name
+curl "$API/verses/al-baqarah/255"    # transliteration
+curl "$API/verses/بقرة:255"          # without the definite article
+curl "$API/analysis/surah/yasin"     # 36, Yā-Sīn
+curl "$API/surahs/الإخلاص"
+```
+
+Accepted for each sūrah: the number, the corpus's own Arabic name (normalised, so
+`الاخلاص` and `الإخلاص` agree), the same name without `ال`, and a set of curated Latin
+spellings with and without the article (`nas`, `an-nas`, `annas`).
+
+**Matching is exact after normalisation — deliberately not fuzzy.** The corpus romanizer
+that resolves Latin *word* queries answers يوسف for `yasin`, المسد for `maida` and النساء
+for `nas`. That is tolerable when you are hunting a word and can see the candidates; it is
+not when you ask for a chapter and get a different chapter with a `200`. So an
+unrecognised name is a `404` that lists near spellings, never a guess:
+
+```jsonc
+{ "error": {
+    "code": "not_found",
+    "message": "No sūrah matches \"baqra\".",
+    "hint": "Did you mean البقرة (2), الواقعة (56), الحاقة (69)? …" } }
+```
+
+A key whose *shape* is wrong (`banana`, `2:255:1`) is a `400`; a well-formed key naming a
+sūrah that doesn't exist (`baqra:1`) is a `404`.
+
+The Arabic names are read from the corpus itself, so they cannot drift from the text. Only
+the transliterations are curated (`server/surahNames.js`), and the index refuses to build
+if any spelling would be ambiguous — an ambiguous table fails the boot, not a request.
+
+> **Alternate traditional names** (المؤمن for 40, بني إسرائيل for 17, براءة for 9) are
+> *not* accepted. Choosing which variants to bless is a scholarly judgement with no source
+> in this repo to cite; ask if you need them.
+
+---
+
 ## Sending Arabic from curl
 
 curl percent-encodes a URL's **path** but passes its **query string** through verbatim. So
@@ -112,6 +157,7 @@ Three ways round it, in order of convenience:
 # 1 · the path form — the term rides in the path, so curl encodes it for you
 curl "https://ayat.network/api/v1/search/كتب?mode=root"
 curl "https://ayat.network/api/v1/roots/علم"
+curl "https://ayat.network/api/v1/verses/البقرة/255"
 curl "https://ayat.network/api/v1/lexicons/maqayis/علم"
 
 # 2 · let curl build the query string
@@ -157,9 +203,10 @@ change — see [Turning keys on](#turning-keys-on) below. Clients that already s
 | | |
 |---|---|
 | `GET /surahs` | All 114, with verse counts and disjoined letters |
-| `GET /surahs/{id}` | One sūrah and its āyāt (`?verses=false` for the header only) |
+| `GET /surahs/{id}` | One sūrah and its āyāt (`?verses=false` for the header only). `{id}` may be a name |
 | `GET /verses` | Āyāt in muṣḥaf order — `?surah=&from=&to=` |
-| `GET /verses/{s}:{a}` | One āya, with per-word root / lemma / full morphology |
+| `GET /verses/{s}:{a}` | One āya, with per-word root / lemma / full morphology. `{s}` may be a name |
+| `GET /verses/{surah}/{ayah}` | The same, slash-separated — `/verses/البقرة/255` |
 
 ### Words, lemmas, roots
 

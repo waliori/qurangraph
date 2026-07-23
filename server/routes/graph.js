@@ -19,7 +19,7 @@ export function register(router, ctx) {
   const { corpus: C } = ctx;
 
   router.add("/graph", ({ V, query }) => {
-    const centre = parseVerseKey(query.get("verse") || `${query.get("surah") || 2}:${query.get("ayah") || 255}`);
+    const centre = parseVerseKey(query.get("verse") || `${query.get("surah") || 2}:${query.get("ayah") || 255}`, C.surahIndex);
     if (!V.verseData[centre]) throw notFound(`No āya ${centre}.`);
     const mode = qEnum(query, "mode", MODES, "exact");
     const maxBranch = qInt(query, "max_branch", { min: 1, max: 60, def: 10 });

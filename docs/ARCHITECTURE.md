@@ -301,6 +301,7 @@ server/    the HTTP API (see API.md) — node:http, zero runtime deps
   config.js      env-driven configuration
   corpus.js      loads public/data/ and builds the indices via src/corpusIndices.js
   links.js       the ui… deep links, built with the app's own encodeState
+  surahNames.js  sūrah number · Arabic name · transliteration → id (exact, never fuzzy)
   terms.js       query → canonical term, and the response shapes
   http.js        router · query validation · paging · CSV · envelope · errors
   auth.js        optional API keys + per-IP rate limiting

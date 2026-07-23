@@ -65,7 +65,7 @@ export const P = {
   format: q("format", { type: "string", enum: ["json", "csv"], default: "json", description: "`csv` on endpoints whose data is a list of rows." }),
 
   /* ── per-endpoint ── */
-  surah: q("surah", { type: "integer", minimum: 1, maximum: 114, example: 2, description: "Restrict to one sūrah." }),
+  surah: q("surah", { type: "string", example: "2", description: "Restrict to one sūrah. A sūrah, named however you like: a number (1–114), its Arabic name (البقرة, بقرة), or a transliteration (al-baqarah, baqara). Matched exactly after normalisation — a near miss returns candidates rather than a guess." }),
   from: q("from", { type: "integer", minimum: 1, example: 1, description: "First āya number (within the sūrah)." }),
   to: q("to", { type: "integer", minimum: 1, example: 10, description: "Last āya number (within the sūrah)." }),
   verses: q("verses", { type: "boolean", default: true, description: "Include the āyāt themselves, not just the header." }),
@@ -98,8 +98,8 @@ export const P = {
   minVerses: q("min_verses", { type: "integer", default: 2, minimum: 1, maximum: 50, description: "Ignore roots occurring in fewer than this many āyāt of the sūrah." }),
   rhymeBy: q("by", { type: "string", enum: ["key", "rawiy"], default: "key", description: "`key` = the strict ending; `rawiy` = the rhyme consonant alone (the classical criterion)." }),
 
-  verseParam: q("verse", { type: "string", example: "2:255", description: "Restrict to one āya's pairs." }),
-  surahParam: q("surah", { type: "integer", minimum: 1, maximum: 114, example: 2, description: "Restrict to one sūrah." }),
+  verseParam: q("verse", { type: "string", example: "2:255", description: "Restrict to one āya's pairs. The sūrah half may be a name." }),
+  surahParam: q("surah", { type: "string", example: "2", description: "Restrict to one sūrah. A sūrah, named however you like: a number (1–114), its Arabic name (البقرة, بقرة), or a transliteration (al-baqarah, baqara). Matched exactly after normalisation — a near miss returns candidates rather than a guess." }),
   aVerse: q("a", { type: "string", required: true, example: "1:1", description: "First āya key." }),
   bVerse: q("b", { type: "string", required: true, example: "1:3", description: "Second āya key." }),
 
@@ -115,7 +115,7 @@ export const P = {
   maxGlobal: q("max_global", { type: "integer", default: 3, minimum: 1, maximum: 50, description: "A word counts as a bond only if it occurs in at most this many āyāt corpus-wide." }),
   minDistance: q("min_distance", { type: "integer", default: 2, minimum: 1, maximum: 200, description: "Minimum āya distance for a bond to be interesting." }),
 
-  graphVerse: q("verse", { type: "string", default: "2:255", example: "2:255", description: "The āya at the centre of the graph." }),
+  graphVerse: q("verse", { type: "string", default: "2:255", example: "2:255", description: "The āya at the centre of the graph. The sūrah half may be a name (`البقرة:255`)." }),
   maxBranch: q("max_branch", { type: "integer", default: 10, minimum: 1, maximum: 60, description: "Most āyāt any one word may fan out to." }),
   hideStop: q("hide_stopwords", { type: "boolean", default: true, description: "Hide grammatical particles (حروف المعاني)." }),
   expandWords: q("expand_words", {
@@ -127,9 +127,9 @@ export const P = {
 
 /* Path parameters, with an example that actually resolves. */
 export const PP = {
-  verseKey: path("key", { type: "string", example: "2:255", description: "An āya key, `surah:ayah`." }),
-  surahId: path("id", { type: "integer", example: 112, description: "Sūrah number, 1–114." }),
-  surahNum: path("surah", { type: "integer", example: 2, description: "Sūrah number, 1–114." }),
+  verseKey: path("key", { type: "string", example: "2:255", description: "An āya key, `surah:ayah`. The sūrah half may be a name: `البقرة:255`, `al-baqarah/255`." }),
+  surahId: path("id", { type: "string", example: "112", description: "A sūrah, named however you like: a number (1–114), its Arabic name (البقرة, بقرة), or a transliteration (al-baqarah, baqara). Matched exactly after normalisation — a near miss returns candidates rather than a guess." }),
+  surahNum: path("surah", { type: "string", example: "2", description: "A sūrah, named however you like: a number (1–114), its Arabic name (البقرة, بقرة), or a transliteration (al-baqarah, baqara). Matched exactly after normalisation — a near miss returns candidates rather than a guess." }),
   ayahNum: path("ayah", { type: "integer", example: 255, description: "Āya number within the sūrah." }),
   root: path("root", { type: "string", rtl: true, example: "علم", description: "A triliteral root." }),
   rootKey: path("key", { type: "string", rtl: true, example: "علم", description: "A triliteral root." }),

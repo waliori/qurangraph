@@ -16,6 +16,21 @@ import { hitIndices, tokenCountIn } from "./corpus.js";
 import { termLinks, verseLinks } from "./links.js";
 
 export const MODES = ["exact", "lemma", "root"];
+
+/* A sūrah, however it was named: 2 · البقرة · بقرة · al-baqarah · "Al Baqara".
+ * Exact after normalisation — a miss returns the near spellings rather than a guess.
+ * See server/surahNames.js for why fuzzy matching is refused here. */
+export function resolveSurahId(C, raw) {
+  const id = C.surahIndex.lookup(raw);
+  if (id) return id;
+  const near = C.surahIndex.near(raw);
+  throw notFound(
+    `No sūrah matches "${String(raw ?? "").trim()}".`,
+    near.length
+      ? `Did you mean ${near.map((n) => `${n.name} (${n.id})`).join(", ")}? A sūrah may be given as a number (1–114), its Arabic name, or a transliteration.`
+      : `Give a number (1–114), an Arabic name (البقرة), or a transliteration (al-baqarah).`,
+  );
+}
 export const PRECISIONS = ["loose", "strict"];
 
 const isLatin = (s) => /[a-z]/i.test(s || "");

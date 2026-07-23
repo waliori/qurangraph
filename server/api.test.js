@@ -153,6 +153,50 @@ describe.skipIf(!HAVE_DATA)("API", () => {
       expect(d.words[0].index).toBe(0);
     });
 
+    it("names a sūrah as well as numbering it", async () => {
+      const byNumber = await call(`${V1}/verses/2:255`);
+      for (const form of ["2/255", ar("البقرة") + "/255", ar("البقرة") + ":255", "al-baqarah/255", "baqarah:255"]) {
+        const r = await call(`${V1}/verses/${form}`);
+        expect(r.status, form).toBe(200);
+        expect(r.json.data.verse_key, form).toBe("2:255");
+        expect(r.json.data.text, form).toBe(byNumber.json.data.text);
+      }
+    });
+
+    it("takes a name on every route that takes a sūrah", async () => {
+      const routes = [
+        `/surahs/${ar("الإخلاص")}`,
+        "/surahs/al-ikhlas",
+        `/verses?surah=${ar("يس")}&limit=1`,
+        "/analysis/surah/yasin",
+        `/analysis/iltifat/${ar("الفاتحة")}`,
+        "/analysis/bonds/al-baqarah?limit=2",
+        `/analysis/verse/${ar("البقرة")}:255`,
+        `/analysis/rhyme/${ar("الإخلاص")}:1?limit=2`,
+        `/graph?verse=${ar("يس")}:1&mode=root&max_branch=2`,
+      ];
+      for (const r of routes) expect((await call(V1 + r)).status, r).toBe(200);
+    });
+
+    it("never answers with a different sūrah than the one asked for", async () => {
+      // The corpus romanizer maps these to يوسف / المسد / النساء; the API must not.
+      for (const [name, id, arabic] of [["yasin", 36, "يس"], ["maida", 5, "المائدة"], ["nas", 114, "الناس"]]) {
+        const r = await call(`${V1}/analysis/surah/${name}`);
+        expect(r.json.data.surah.id, name).toBe(id);
+        expect(r.json.data.surah.name, name).toBe(arabic);
+      }
+    });
+
+    it("suggests candidates for an unknown sūrah instead of guessing", async () => {
+      const r = await call(`${V1}/analysis/surah/baqra`);
+      expect(r.status).toBe(404);
+      expect(r.json.error.hint).toContain("البقرة");
+
+      const v = await call(`${V1}/verses/baqra/1`);
+      expect(v.status).toBe(404);            // well-formed key, unknown sūrah
+      expect((await call(`${V1}/verses/banana`)).status).toBe(400);   // not a key at all
+    });
+
     it("accepts both /verses/2:255 and /verses/2/255", async () => {
       const a = await call(`${V1}/verses/2:255`);
       const b = await call(`${V1}/verses/2/255`);

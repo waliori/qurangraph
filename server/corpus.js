@@ -23,6 +23,7 @@ import { buildRomanIndex } from "../src/search.js";
 import { buildSeedIndex } from "../src/analytics/phrases.js";
 import { indexExpressions } from "../src/analytics/expressions.js";
 import { shardOf } from "../src/lexiconShard.js";
+import { buildSurahIndex } from "./surahNames.js";
 import { config } from "./config.js";
 
 const readJSON = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -100,8 +101,12 @@ export function loadCorpus(dataDir = config.dataDir) {
     return v;
   }
 
+  // Sūrah name → id, built from the corpus's own names plus the curated transliterations.
+  // Throws on any ambiguity, so a bad table fails the boot rather than a request.
+  const surahIndex = buildSurahIndex(loose.surahList);
+
   return {
-    quranRaw, rootMap, lemmaMap, morph,
+    quranRaw, rootMap, lemmaMap, morph, surahIndex,
     ...loose,                 // the default (loose) indices, spread for direct access
     variant,
     lexiconIndex, lexiconConcise, lexiconFull,

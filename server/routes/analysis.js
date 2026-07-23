@@ -7,7 +7,7 @@
  */
 
 import { notFound, badRequest, qInt, qBool, qEnum, paging, page } from "../http.js";
-import { resolveTerm, termShape, verseShape, MODES } from "../terms.js";
+import { resolveTerm, termShape, verseShape, resolveSurahId, MODES } from "../terms.js";
 import { hitIndices } from "../corpus.js";
 import { termLinks, verseLinks, surahLinks, compareLink, pairingLink, verseLink } from "../links.js";
 import { parseVerseKey } from "./corpus.js";
@@ -176,7 +176,7 @@ export function register(router, ctx) {
 
   /* ── one āya, analysed ── */
   router.add("/analysis/verse/:key", ({ V, params, query }) => {
-    const vk = parseVerseKey(params.key);
+    const vk = parseVerseKey(params.key, C.surahIndex);
     const v = V.verseData[vk];
     if (!v) throw notFound(`No āya ${vk}.`);
     const profile = verseProfile(vk, V.verseData, V.r2v, C.morph);
@@ -223,8 +223,7 @@ export function register(router, ctx) {
 
   /* ── one sūra, analysed ── */
   router.add("/analysis/surah/:id", ({ V, params, query }) => {
-    const id = Number(params.id);
-    if (!(id >= 1 && id <= 114)) throw notFound(`No sūrah ${params.id} (1–114).`);
+    const id = resolveSurahId(C, params.id);
     const profile = surahProfile(id, V.verseData);
     const keyness = surahKeyness(id, V.verseData, V.r2v, { minVerses: qInt(query, "min_verses", { min: 1, max: 50, def: 2 }) });
     const cohesion = surahCohesion(id, V.verseData, V.r2v);
@@ -263,13 +262,14 @@ export function register(router, ctx) {
     response: "SurahAnalysisResponse",
     examples: [
       { label: "Al-Ikhlāṣ — short and sharp", path: "/analysis/surah/112" },
+      { label: "Yā-Sīn by name", path: "/analysis/surah/yasin" },
       { label: "Yā-Sīn", path: "/analysis/surah/36" },
     ],
   });
 
   /* ── rhyme ── */
   router.add("/analysis/rhyme/:key", ({ V, params, query, url }) => {
-    const vk = parseVerseKey(params.key);
+    const vk = parseVerseKey(params.key, C.surahIndex);
     const v = V.verseData[vk];
     if (!v) throw notFound(`No āya ${vk}.`);
     const by = qEnum(query, "by", ["key", "rawiy"], "key");
@@ -504,7 +504,7 @@ export function register(router, ctx) {
     if (!C.mutashabihat) throw notFound("The mutashābihāt dataset was not built for this deployment.");
     const verse = query.get("verse");
     if (verse) {
-      const vk = parseVerseKey(verse);
+      const vk = parseVerseKey(verse, C.surahIndex);
       const ids = C.mutashabihat.byVerse?.[vk] || [];
       const pairs = ids.map((i) => C.mutashabihat.pairs[i]).filter(Boolean);
       return { data: { verse: verseShape(V, C, vk), pairs: pairs.map((p) => shapePair(V, p)) }, links: verseLinks(vk) };
@@ -528,7 +528,7 @@ export function register(router, ctx) {
     if (!C.munasabat) throw notFound("The munāsabāt dataset was not built for this deployment.");
     const surah = query.get("surah");
     if (surah) {
-      const id = Number(surah);
+      const id = resolveSurahId(C, surah);
       return { data: C.munasabat.bySura?.[id] ?? null, links: surahLinks(id) };
     }
     const p = page(C.munasabat.pairs || [], paging(query), url);
@@ -547,8 +547,7 @@ export function register(router, ctx) {
   });
 
   router.add("/analysis/iltifat/:surah", ({ V, params }) => {
-    const id = Number(params.surah);
-    if (!(id >= 1 && id <= 114)) throw notFound(`No sūrah ${params.surah}.`);
+    const id = resolveSurahId(C, params.surah);
     const pre = C.iltifat?.bySura?.[id];
     const data = pre || (C.morph ? suraIltifat(id, V.verseData, C.morph) : null);
     if (!data) throw notFound("Iltifāt needs either the prebuilt dataset or the morphology data.");
@@ -564,8 +563,7 @@ export function register(router, ctx) {
   });
 
   router.add("/analysis/bonds/:surah", ({ V, params, query, url }) => {
-    const id = Number(params.surah);
-    if (!(id >= 1 && id <= 114)) throw notFound(`No sūrah ${params.surah}.`);
+    const id = resolveSurahId(C, params.surah);
     const bonds = surahBonds(id, V.verseData, V.w2v, V.seedIndex(), V.stopSet, {
       maxGlobal: qInt(query, "max_global", { min: 1, max: 50, def: 3 }),
       minDist: qInt(query, "min_distance", { min: 1, max: 200, def: 2 }),
@@ -585,8 +583,8 @@ export function register(router, ctx) {
   });
 
   router.add("/analysis/shared-roots", ({ V, query }) => {
-    const a = parseVerseKey(query.get("a"));
-    const b = parseVerseKey(query.get("b"));
+    const a = parseVerseKey(query.get("a"), C.surahIndex);
+    const b = parseVerseKey(query.get("b"), C.surahIndex);
     if (!V.verseData[a] || !V.verseData[b]) throw notFound("Both a and b must be existing āyāt.");
     const roots = sharedRoots(a, b, V.verseData);
     return {

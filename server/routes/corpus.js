@@ -1,17 +1,37 @@
 /* ═══ Corpus routes: sūrahs, āyāt, the raw text + morphology ═══ */
 
 import { notFound, badRequest, qBool, paging, page } from "../http.js";
-import { verseShape } from "../terms.js";
+import { verseShape, resolveSurahId } from "../terms.js";
 import { surahLinks } from "../links.js";
 import { muqattaatOf } from "../../src/analytics/letters.js";
 import { P, PP, PAGED } from "../params.js";
 
 /* "2:255", "2/255" and "2,255" all name the same āya — accept them all, since the key
- * travels through URLs, spreadsheets and shell quoting on its way here. */
-export function parseVerseKey(raw) {
-  const m = /^(\d{1,3})[:/,](\d{1,3})$/.exec(String(raw || "").trim());
-  if (!m) throw badRequest(`"${raw}" is not a verse key`, `Use surah:ayah, e.g. 2:255`);
-  return `${Number(m[1])}:${Number(m[2])}`;
+ * travels through URLs, spreadsheets and shell quoting on its way here.
+ *
+ * With a `surahIndex` the sūrah half may also be a name: "البقرة:255", "al-baqarah/255".
+ * Without one (unit tests, callers that only ever see numbers) it stays numeric. */
+export function parseVerseKey(raw, surahIndex = null) {
+  const v = String(raw ?? "").trim();
+  // The sūrah half may not itself contain a separator, so "2:255:1" is rejected outright
+  // rather than being read as a sūrah called "2:255".
+  const m = /^([^:/,]+)[:/,](\d{1,3})$/.exec(v);
+  if (!m) throw badRequest(`"${v}" is not a verse key`, `Use surah:ayah — 2:255, البقرة:255, or al-baqarah/255.`);
+  const [, sPart, aPart] = m;
+  if (/^\d{1,3}$/.test(sPart)) return `${Number(sPart)}:${Number(aPart)}`;
+  // A name where this caller only handles numbers is a malformed key, not a missing sūrah.
+  if (!surahIndex) throw badRequest(`"${v}" is not a verse key`, `Use surah:ayah, e.g. 2:255`);
+  const id = surahIndex.lookup(sPart);
+  if (!id) {
+    // The SHAPE is fine (`something:12`) — it is the sūrah that doesn't exist. That is a
+    // 404, matching /analysis/surah/{id}; a 400 is reserved for a key that isn't a key.
+    const near = surahIndex.near(sPart);
+    throw notFound(`No sūrah called "${sPart}".`,
+      near.length
+        ? `Did you mean ${near.map((n) => `${n.name} (${n.id})`).join(", ")}? A sūrah may be a number, an Arabic name, or a transliteration.`
+        : `Use surah:ayah — 2:255, البقرة:255, or al-baqarah/255.`);
+  }
+  return `${id}:${Number(aPart)}`;
 }
 
 export function register(router, ctx) {
@@ -27,7 +47,7 @@ export function register(router, ctx) {
   });
 
   router.add("/surahs/:id", ({ V, params, query, url }) => {
-    const id = Number(params.id);
+    const id = resolveSurahId(C, params.id);
     const s = V.surahList.find((x) => x.id === id);
     if (!s) throw notFound(`No sūrah ${params.id} (1–114).`);
     const withVerses = qBool(query, "verses", true);
@@ -48,13 +68,14 @@ export function register(router, ctx) {
     response: "SurahResponse",
     examples: [
       { label: "Al-Ikhlāṣ, complete", path: "/surahs/112" },
+      { label: "…by its Arabic name", path: "/surahs/الإخلاص" },
+      { label: "…by transliteration", path: "/surahs/al-ikhlas" },
       { label: "First 3 āyāt of Al-Baqara, with morphology", path: "/surahs/2?limit=3&words=true" },
     ],
   });
 
   router.add("/verses", ({ V, query, url }) => {
-    const surah = query.get("surah") ? Number(query.get("surah")) : null;
-    if (surah !== null && !(surah >= 1 && surah <= 114)) throw badRequest(`"surah" must be 1–114`);
+    const surah = query.get("surah") ? resolveSurahId(C, query.get("surah")) : null;
     const from = query.get("from") ? Number(query.get("from")) : null;
     const to = query.get("to") ? Number(query.get("to")) : null;
     let keys = V.orderedKeys;
@@ -74,12 +95,13 @@ export function register(router, ctx) {
     response: "VerseListResponse",
     examples: [
       { label: "Al-Ikhlāṣ", path: "/verses?surah=112" },
+      { label: "…by name", path: "/verses?surah=الإخلاص" },
       { label: "Al-Baqara 1–10", path: "/verses?surah=2&from=1&to=10" },
     ],
   });
 
   router.add("/verses/:key", ({ V, params, query }) => {
-    const vk = parseVerseKey(params.key);
+    const vk = parseVerseKey(params.key, C.surahIndex);
     if (!V.verseData[vk]) throw notFound(`No āya ${vk}.`);
     return { data: verseShape(V, C, vk, { words: qBool(query, "words", true) }) };
   }, {
@@ -90,12 +112,13 @@ export function register(router, ctx) {
     response: "VerseResponse",
     examples: [
       { label: "Āyat al-Kursī", path: "/verses/2:255" },
+      { label: "…named, not numbered", path: "/verses/البقرة:255" },
       { label: "The basmala", path: "/verses/1:1" },
     ],
   });
 
   router.add("/verses/:surah/:ayah", ({ V, params, query }) => {
-    const vk = parseVerseKey(`${params.surah}:${params.ayah}`);
+    const vk = parseVerseKey(`${params.surah}:${params.ayah}`, C.surahIndex);
     if (!V.verseData[vk]) throw notFound(`No āya ${vk}.`);
     return { data: verseShape(V, C, vk, { words: qBool(query, "words", true) }) };
   }, {
@@ -103,7 +126,11 @@ export function register(router, ctx) {
     tags: ["corpus"],
     params: [PP.surahNum, PP.ayahNum, P.words],
     response: "VerseResponse",
-    examples: [{ label: "Āyat al-Kursī", path: "/verses/2/255" }],
+    examples: [
+      { label: "Āyat al-Kursī", path: "/verses/2/255" },
+      { label: "By sūrah name", path: "/verses/البقرة/255" },
+      { label: "By transliteration", path: "/verses/al-baqarah/255" },
+    ],
   });
 }
 
