@@ -264,6 +264,14 @@ describe.skipIf(!HAVE_DATA)("API", () => {
       expect(keys(await find("والليل إذا يغشى"))).toEqual(["92:1"]);
     });
 
+    it("bridges the rasm↔imlāʾī gaps a quotation is usually typed with", async () => {
+      // Both come from real articles, and both reduce to different skeletons under norm():
+      //   وَجَآءُوٓ  — the muṣḥaf leaves the plural wāw bare; modern adds the otiose alif.
+      //   أَرَءَيْتُمْ — bare hamza where a typed أرأيتم puts it on an alif seat.
+      expect(keys(await find("وَجَاءُوا أَبَاهُمْ عِشَاءً يَبْكُونَ"))).toEqual(["12:16"]);
+      expect(keys(await find("قُلْ أَرَأَيْتُمْ إِن جَعَلَ اللَّهُ عَلَيْكُمُ اللَّيْلَ سَرْمَدًا"))).toEqual(["28:71"]);
+    });
+
     it("matches across a fusion the muṣḥaf writes as one word", async () => {
       // يا أيها is typed as two words and written يَٰٓأَيُّهَا as one.
       const r = await find("يا أيها الذين آمنوا اتقوا الله");

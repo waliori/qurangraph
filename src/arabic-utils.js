@@ -204,10 +204,29 @@ export const geminateOut = (s) => (s || "").replace(/([ء-ي])([ً-ِْ-ٰ]*)ّ/
 // The geminated variant is in here for ٱلَّيْل / ٱلَّذِين against a typed الليل / الذين — see
 // geminateOut above. Added, not substituted, so words that already write both letters keep
 // resolving through their plain key.
+// Two more rasm↔imlāʾī gaps, both attested in ordinary quotation:
+//
+//   ألف فارقة — the muṣḥaf writes a plural wāw bare (وَجَآءُوٓ) where modern spelling adds the
+//     otiose alif (وجاءوا). Dropping a trailing وا→و on both sides bridges it.
+//   hamza seat — أَرَءَيْتُمْ against a typed أَرَأَيْتُمْ. norm() folds أ into ا but keeps ء, so the
+//     two skeletons diverge exactly where the hamza sits. Erasing every hamza AND its alif
+//     seats collapses them onto the same stump.
+//
+// The hamza-blind key is the most destructive fold here, so it is floored at three
+// characters: أرض and أمر reduce to "رض"/"مر", which are stumps common enough to meet
+// unrelated words. Above that floor the run of neighbouring words that must ALSO agree
+// makes a stray collision harmless, which is the same argument the fuzzy key rests on.
+const otioseAlif = (s) => s.replace(/وا$/, "و");
+const hamzaBlind = (s) => s.replace(/[ءئؤأإآ]/g, "");
+
 export const quoteKeys = (raw) => {
-  const gem = geminateOut(raw);
   const keys = [...strongKeys(raw), ...fuzzyKeys(raw)];
+  const gem = geminateOut(raw);
   if (gem !== raw) keys.push(...strongKeys(gem));
+  const bare = otioseAlif(raw);
+  if (bare !== raw) keys.push(norm(bare));
+  const blind = norm(hamzaBlind(raw));
+  if (blind.length >= 3) keys.push(blind);
   return [...new Set(keys.filter((k) => k && k.length >= 2))];
 };
 
