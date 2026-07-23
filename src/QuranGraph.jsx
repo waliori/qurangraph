@@ -1162,12 +1162,19 @@ export default function QuranGraph() {
   // Reopen an analysis view from its compact descriptor (the inverse of `currentView`).
   // Shared by deep-link hydration and saved-graph restore — recomputes any heavy payload
   // (e.g. occurrence key lists) rather than carrying it in the URL.
+  // Returns false ONLY when the view could not be applied yet because its index has not
+  // loaded (see the "occ" case) — the caller keeps the descriptor pending and retries. Every
+  // other view opens synchronously and returns true.
   const openView = useCallback((v) => {
-    if (!v || !v.t) return;
+    if (!v || !v.t) return true;
     switch (v.t) {
       case "dist": setDist({ lookup: v.k, label: v.l, mode: v.m }); break;
       case "cmp": setCmp({ A: v.a ? { lookup: v.a.k, label: v.a.l, mode: v.a.m } : null, B: v.b ? { lookup: v.b.k, label: v.b.l, mode: v.b.m } : null }); break;
-      case "occ": openOcc(v.k, v.l, v.m); break;
+      // openOcc refuses to open on an unloaded l2v/w2v (empty index = "not ready", not "no
+      // hits"). For lemma/exact modes that index arrives AFTER the graph hydrates, so on a
+      // cold cache the deep link would lose the race and be dropped. Propagate its result so
+      // the pending-view effect retries once the index loads.
+      case "occ": return openOcc(v.k, v.l, v.m);
       case "lab": setLab({ root: v.r, label: v.l || v.r }); break;
       case "aya": setAya({ centerKey: v.c }); break;
       case "surah": setSurahLab({ surahId: v.s }); break;
@@ -1188,14 +1195,17 @@ export default function QuranGraph() {
       case "claims": setClaimsOpen(true); break;
       default: break;
     }
+    return true;
   }, [openOcc, openPhrases, compareIndices]);
 
-  // Apply a deep-linked analysis view once hydration has completed (and openView/its data
-  // dependencies exist). One-shot: the pending descriptor is consumed and cleared.
+  // Apply a deep-linked analysis view once hydration has completed. NOT strictly one-shot:
+  // the occurrences view needs an index (l2v/w2v) that can load after hydration, so the
+  // descriptor is kept until openView actually applies it. This effect re-runs whenever
+  // openView's data deps change — i.e. when that index loads — so a view that lost the race
+  // at hydration is retried the moment its data is ready, instead of being silently dropped.
   useEffect(() => {
     if (!hydrated || !pendingViewRef.current) return;
-    openView(pendingViewRef.current);
-    pendingViewRef.current = null;
+    if (openView(pendingViewRef.current) !== false) pendingViewRef.current = null;
   }, [hydrated, openView]);
 
   // ═══ Cross-dialog back-stack ═══
