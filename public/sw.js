@@ -40,6 +40,11 @@ self.addEventListener("fetch", (e) => {
   // cache with tens of MB the user may only watch once.
   if (url.pathname.endsWith(".mp4")) return;
 
+  // The HTTP API is live data with its own ETag/Cache-Control per endpoint. Running it
+  // through stale-while-revalidate would hand a caller yesterday's answer and hide the
+  // 429/401 responses that tell them why a request failed — so never intercept it.
+  if (url.pathname.startsWith("/api/")) return;
+
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).catch(() => caches.match(SHELL)));
     return;

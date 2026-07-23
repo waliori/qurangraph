@@ -6,4 +6,13 @@
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <!-- The API's prose reference: static, indexable HTML describing the public endpoints.
+       The interactive explorer at /api/v1/docs is JavaScript-driven and not listed; the
+       data endpoints are for clients, not crawlers. -->
+  <url>
+    <loc>https://ayat.network/api/v1/guide</loc>
+    <lastmod>2026-07-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 </urlset>

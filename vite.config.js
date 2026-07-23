@@ -110,6 +110,14 @@ function compressPlugin() {
 export default defineConfig({
   base: './',
   plugins: [react(), versionHtmlPlugin(), cspPlugin(), swVersionPlugin(), compressPlugin()],
+  server: {
+    // In production nginx proxies /api/ to the API container; mirror that in dev so a
+    // browser page and a curl against localhost:5173 see the same URL space. Run the
+    // API alongside the dev server with `npm run api:dev`.
+    proxy: {
+      '/api': { target: process.env.API_ORIGIN || 'http://localhost:8080', changeOrigin: true },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -127,6 +135,8 @@ export default defineConfig({
     // Node by default (pure logic); component tests opt into jsdom per-file via
     // a `// @vitest-environment jsdom` pragma.
     environment: 'node',
-    include: ['src/**/*.test.{js,jsx}', 'scripts/**/*.test.js'],
+    include: ['src/**/*.test.{js,jsx}', 'scripts/**/*.test.js', 'server/**/*.test.js'],
+    // server/api.test.js builds the whole corpus in beforeAll (tens of seconds).
+    testTimeout: 30_000,
   },
 })

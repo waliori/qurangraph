@@ -215,7 +215,7 @@ Each is the engine behind one lens; the heavier ones defer to idle in their moda
 
 | Hook | Role |
 |------|------|
-| `useCorpusIndices` | the derived data layer: builds `verseData` + the inverted indices (`w2v`/`r2v`/`l2v`), `searchAlias`, `compareIndices`, `orderedKeys`, and `stopSet` from the loaded corpus. Pure memos, lifted out of QuranGraph (first slice of the R3.1 decomposition). |
+| `useCorpusIndices` | the derived data layer: builds `verseData` + the inverted indices (`w2v`/`r2v`/`l2v`), `searchAlias`, `compareIndices`, `orderedKeys`, and `stopSet` from the loaded corpus. A thin memoised binding over `src/corpusIndices.js`, which holds the actual derivation so the API server (`server/corpus.js`) builds byte-identical indices from the same code. |
 | `usePersistedState` | localStorage state with a sanitizer; corrupt-/quota-safe. |
 | `useUrlState` | encode/decode the full app state to the URL hash (compact keys, only non-defaults, sorted Sets, optional node positions). `readUrlState`/`writeUrlState` (debounced `replaceState`). |
 | `useExplorationHistory` | undo/redo of discrete exploration steps (≤120), keyboard-bound. |
@@ -254,6 +254,8 @@ src/
   morphology.js            columnar morphology decode + filter
   theme.js                 themes + frequency/depth/edge colour scales
   lexiconShard.js          stable shard hash (shared with the builder)
+  corpusIndices.js         PURE index derivation — shared by the app and the API server
+  onboarding.js            direct-visit vs shared-link gate for the welcome/tour
   data-loader.js           cached BASE_URL-relative JSON fetches
   styles/theme.css         CSS design tokens (data-theme driven)
   graph/
@@ -294,7 +296,39 @@ src/
   i18n/    index.js · strings.js · common/help/occ/dist/cmp/ctx/phrase/morph/stop/
            ws/lab/work/tour/ui/changelog/intro
 scripts/   data pipeline (see DATA.md)
+server/    the HTTP API (see API.md) — node:http, zero runtime deps
+  index.js       request pipeline + route registration
+  config.js      env-driven configuration
+  corpus.js      loads public/data/ and builds the indices via src/corpusIndices.js
+  links.js       the ui… deep links, built with the app's own encodeState
+  terms.js       query → canonical term, and the response shapes
+  http.js        router · query validation · paging · CSV · envelope · errors
+  auth.js        optional API keys + per-IP rate limiting
+  params.js      the parameter vocabulary, declared once
+  schemas.js     OpenAPI component schemas (the real response shapes)
+  openapi.js     the spec, generated from the route table
+  docs.js        the prose reference at /guide
+  explorer.js + explorer/   the interactive explorer at /docs (HTML+CSS+JS, inlined)
+  routes/        meta · corpus · lexical · analysis · expressions · graph
 ```
+
+### The API shares the app's code, it does not re-implement it
+
+`server/` imports `src/analytics/*`, `src/graph/buildGraph.js`, `src/search.js` and
+`src/morphology.js` directly, and builds its indices from the same
+`src/corpusIndices.js` the `useCorpusIndices` hook wraps. That extraction is the point:
+"which āyāt contain this root" has one implementation, so an API answer and the on-screen
+answer cannot drift. Likewise `server/links.js` encodes its `ui…` URLs with
+`src/hooks/useUrlState.js` — the same function the share button uses.
+
+### One declaration drives the code, the spec and the docs
+
+Each route registers its parameters (from `server/params.js`) and a response schema name
+(from `server/schemas.js`) alongside its handler. `openapi.js` turns that into the OpenAPI
+document, and the explorer at `/docs` builds its forms from that same document — so an
+endpoint cannot be documented one way and typed another, and a new route appears in the
+docs the moment it is registered. The handlers still validate independently (`http.js`):
+the spec is a promise, validation is enforcement.
 
 Tests live next to their modules as `*.test.{js,jsx}`. Most run in Node; component
 tests opt into jsdom with a `// @vitest-environment jsdom` pragma.

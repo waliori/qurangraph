@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
     image: qurangraph:latest
     container_name: qurangraph
     restart: unless-stopped
@@ -10,8 +11,41 @@ services:
     # over the shared proxy_network, not published on the host.
     networks:
       - proxy_network
+      - qurangraph_internal
+    depends_on:
+      - qurangraph-api
+
+  # The HTTP API. Deliberately NOT on proxy_network: it is reached only through the
+  # site's own nginx, which proxies /api/ to it (see docker/nginx.conf), so there is one
+  # hostname, one TLS certificate and no second Proxy Manager entry to maintain. The
+  # container name is what nginx resolves — keep the two in step if you rename it.
+  qurangraph-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    image: qurangraph-api:latest
+    container_name: qurangraph-api
+    restart: unless-stopped
+    environment:
+      # Where the `ui…` deep links in every response should point.
+      API_APP_BASE: ${API_APP_BASE:-https://ayat.network/}
+      # The API's own public base, used for `self` links and the OpenAPI server block.
+      API_PUBLIC_BASE: ${API_PUBLIC_BASE:-https://ayat.network/api/v1}
+      # Leave EMPTY for open access (the launch posture). Set it to a comma-separated
+      # list of `label:key` pairs (`npm run api:key`) and every request must then carry
+      # X-API-Key. Nothing else about the API changes.
+      API_KEYS: ${API_KEYS:-}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-600}
+      API_RATE_LIMIT_KEYED: ${API_RATE_LIMIT_KEYED:-6000}
+      API_LOG: ${API_LOG:-false}
+    networks:
+      - qurangraph_internal
 
 networks:
   # Created and owned by the Nginx Proxy Manager stack; we just join it.
   proxy_network:
     external: true
+  # Private link between the site's nginx and the API container.
+  qurangraph_internal:
+    driver: bridge

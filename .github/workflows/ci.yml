@@ -16,6 +16,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # public/data/ is gitignored, so server/api.test.js skips here — its end-to-end
+      # assertions run in the `api` job below, against the image that ships the data.
       - run: npm test
       - run: npm run build
       # Surface known vulnerabilities without failing the build on transitive advisories.
@@ -33,6 +35,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
           push: false
           load: true # load into the local docker daemon so the smoke test can run it
           tags: qurangraph:ci
@@ -51,3 +54,47 @@ jobs:
           test -n "$ok" || { echo "app did not come up"; docker logs qg; exit 1; }
           curl -fsSI http://localhost:8080/ | grep -i 'x-content-type-options' || { echo "security headers missing"; exit 1; }
           docker rm -f qg
+
+  # The API image, plus the end-to-end API tests that the `build` job has to skip: this
+  # image carries the reconstructed corpus, so the tests can assert real numbers.
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: false
+          load: true
+          tags: qurangraph-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: |
+          docker run -d --name qgapi -p 8080:8080 qurangraph-api:ci
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/v1/health >/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          test -n "$ok" || { echo "API did not come up"; docker logs qgapi; exit 1; }
+          # It loaded the whole corpus, not a partial one.
+          curl -fsS http://localhost:8080/api/v1/health | grep -q '"verses": 6236' \
+            || { echo "API loaded the wrong corpus"; curl -s http://localhost:8080/api/v1/health; exit 1; }
+          # A real query resolves and comes back with a UI deep link attached.
+          curl -fsS "http://localhost:8080/api/v1/search?q=%D9%83%D8%AA%D8%A8&mode=root&limit=1" \
+            | grep -q 'ui_occurrences' || { echo "search response is missing its UI links"; exit 1; }
+      # Run the full API test suite against the image's data, so the assertions that
+      # need a real corpus actually execute somewhere.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Copy the reconstructed corpus out of the image
+        run: docker cp qgapi:/app/public/data ./public/data
+      - run: npx vitest run server/
+      - run: docker rm -f qgapi
+        if: always()

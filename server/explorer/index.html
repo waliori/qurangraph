@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive explorer for the آيات.network API — the Qurʾānic word, lemma and root network as JSON.">
+<title>آيات.network — API explorer</title>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="../" title="Service index">
+    <span class="glyph" aria-hidden="true">۞</span>
+    <span class="brand-t"><b><bdi>آيات</bdi>.network</b><small>API explorer</small></span>
+  </a>
+  <nav class="top-links">
+    <a id="lnk-guide" href="guide">Guide</a>
+    <a id="lnk-spec" href="openapi.json">OpenAPI</a>
+    <a id="lnk-app" href="#">Open the app ↗</a>
+    <button id="theme" class="icon-btn" type="button" title="Light / dark" aria-label="Toggle theme">◐</button>
+  </nav>
+</header>
+
+<div class="shell">
+  <aside class="side" id="side">
+    <div class="side-search">
+      <input id="filter" type="search" placeholder="Filter endpoints…" autocomplete="off" aria-label="Filter endpoints">
+    </div>
+    <nav id="nav" class="nav" aria-label="Endpoints"></nav>
+    <footer class="side-foot">
+      <span id="corpus-note"></span>
+    </footer>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="empty" id="boot">Loading the API description…</div>
+  </main>
+</div>
+
+<script>/*__JS__*/</script>
+</body>
+</html>

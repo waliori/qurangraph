@@ -1,0 +1,221 @@
+/* ═══ /docs — the API explorer ═══
+ *
+ * The app's own palette (parchment + gold in light, deep navy + amber in dark) so the
+ * docs read as part of the site rather than a bolted-on tool. `data-theme` on <html> is
+ * "auto" until the visitor picks a side, at which point it becomes light|dark.
+ */
+
+:root {
+  --bg:#e3d9bf; --panel:#efe8d6; --panel-2:#e9e1cb; --fg:#3a3322; --mut:#6f6449;
+  --gold:#7a5a00; --gold-2:#9a7400; --line:#cfc3a4; --code:#f7f2e4;
+  --ok:#2e7d32; --warn:#a35200; --err:#a12727;
+  --get:#1f6f4a;
+  --radius:10px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --arabic:"Amiri","Scheherazade New","IBM Plex Sans Arabic",serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg:#070a12; --panel:#0e1422; --panel-2:#131b2c; --fg:#c7cbd6; --mut:#8b93a7;
+    --gold:#fcd34d; --gold-2:#f5b301; --line:#1e2740; --code:#0b1120;
+    --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --get:#34d399;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#070a12; --panel:#0e1422; --panel-2:#131b2c; --fg:#c7cbd6; --mut:#8b93a7;
+  --gold:#fcd34d; --gold-2:#f5b301; --line:#1e2740; --code:#0b1120;
+  --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --get:#34d399;
+}
+
+* { box-sizing:border-box; }
+html, body { height:100%; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font:15px/1.6 var(--sans);
+  -webkit-text-size-adjust:100%;
+}
+a { color:var(--gold); text-decoration:none; }
+a:hover { text-decoration:underline; }
+code, pre, .mono { font-family:var(--mono); }
+
+/* ── header ── */
+.top {
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:10px 18px; border-bottom:1px solid var(--line);
+  background:var(--panel); position:sticky; top:0; z-index:20;
+}
+.brand { display:flex; align-items:center; gap:10px; color:inherit; }
+.brand:hover { text-decoration:none; }
+.glyph { font-size:26px; color:var(--gold-2); line-height:1; }
+.brand-t { display:flex; flex-direction:column; line-height:1.15; }
+.brand-t b { font-size:15px; color:var(--gold); }
+.brand-t small { font-size:11.5px; color:var(--mut); letter-spacing:.06em; text-transform:uppercase; }
+.top-links { display:flex; align-items:center; gap:14px; font-size:13.5px; }
+.icon-btn {
+  background:var(--panel-2); border:1px solid var(--line); color:var(--fg);
+  border-radius:8px; width:32px; height:30px; cursor:pointer; font-size:15px;
+}
+.icon-btn:hover { border-color:var(--gold); }
+
+/* ── layout ── */
+.shell { display:grid; grid-template-columns:290px minmax(0,1fr); min-height:calc(100vh - 52px); }
+.side { border-right:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column;
+  position:sticky; top:52px; height:calc(100vh - 52px); }
+.side-search { padding:12px 12px 8px; }
+#filter {
+  width:100%; padding:8px 11px; border-radius:8px; border:1px solid var(--line);
+  background:var(--code); color:var(--fg); font:13.5px var(--sans);
+}
+#filter:focus { outline:none; border-color:var(--gold); }
+.nav { overflow-y:auto; flex:1; padding:0 8px 14px; }
+.nav h3 {
+  font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--mut);
+  margin:16px 8px 6px; font-weight:600;
+}
+.nav a {
+  display:block; padding:5px 9px; border-radius:7px; color:var(--fg);
+  font:12.5px/1.45 var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  border-left:2px solid transparent;
+}
+.nav a:hover { background:var(--panel-2); text-decoration:none; }
+.nav a.on { background:var(--panel-2); border-left-color:var(--gold); color:var(--gold); font-weight:600; }
+.side-foot { padding:10px 14px; border-top:1px solid var(--line); font-size:11.5px; color:var(--mut); }
+
+.main { padding:26px 30px 90px; overflow-x:hidden; min-width:0; }
+.empty { color:var(--mut); padding:40px 0; }
+
+/* ── endpoint ── */
+.ep-head { border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px; }
+.ep-path { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.verb {
+  font:600 11px var(--mono); letter-spacing:.08em; color:var(--get);
+  border:1px solid currentColor; border-radius:5px; padding:2px 7px;
+}
+.ep-path h1 { font:600 19px/1.3 var(--mono); margin:0; word-break:break-all; }
+.ep-sum { font-size:16px; margin:0 0 8px; }
+.ep-desc { color:var(--mut); font-size:14px; max-width:70ch; margin:0; }
+.ep-desc code { background:var(--code); border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:12.5px; }
+
+h2.sec {
+  font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--mut);
+  margin:26px 0 10px; font-weight:600;
+}
+
+/* ── examples ── */
+.examples { display:flex; gap:8px; flex-wrap:wrap; }
+.ex {
+  background:var(--panel); border:1px solid var(--line); border-radius:999px;
+  padding:5px 13px; font-size:13px; cursor:pointer; color:var(--fg);
+}
+.ex:hover { border-color:var(--gold); color:var(--gold); }
+
+/* ── parameter form ── */
+.params { display:grid; gap:12px; }
+.row { display:grid; grid-template-columns:150px minmax(0,1fr); gap:14px; align-items:start; }
+.row > label { padding-top:7px; }
+.pname { font:13px var(--mono); }
+.pname .req { color:var(--err); margin-left:3px; }
+.pin { font-size:10.5px; color:var(--mut); display:block; text-transform:uppercase; letter-spacing:.06em; }
+.pctl input[type=text], .pctl input[type=number] {
+  width:100%; max-width:420px; padding:7px 11px; border-radius:8px;
+  border:1px solid var(--line); background:var(--code); color:var(--fg); font:14px var(--sans);
+}
+.pctl input:focus { outline:none; border-color:var(--gold); }
+.pctl input.rtl { direction:rtl; text-align:right; font-family:var(--arabic); font-size:17px; }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.seg button {
+  background:var(--code); border:0; border-right:1px solid var(--line); color:var(--mut);
+  padding:6px 13px; font:13px var(--sans); cursor:pointer;
+}
+.seg button:last-child { border-right:0; }
+.seg button.on { background:var(--gold); color:var(--bg); font-weight:600; }
+.phelp { font-size:12.5px; color:var(--mut); margin-top:4px; max-width:62ch; }
+.phelp code { background:var(--code); border-radius:4px; padding:0 3px; }
+
+/* ── run ── */
+.runbar { display:flex; align-items:center; gap:12px; margin:22px 0 0; flex-wrap:wrap; }
+.run {
+  background:var(--gold); color:var(--bg); border:0; border-radius:9px;
+  padding:9px 22px; font:600 14px var(--sans); cursor:pointer;
+}
+.run:hover { background:var(--gold-2); }
+.run:disabled { opacity:.55; cursor:default; }
+.ghost {
+  background:var(--panel); color:var(--fg); border:1px solid var(--line);
+  border-radius:9px; padding:8px 14px; font:13px var(--sans); cursor:pointer;
+}
+.ghost:hover { border-color:var(--gold); }
+
+.urlbar {
+  margin-top:12px; background:var(--code); border:1px solid var(--line); border-radius:var(--radius);
+  padding:10px 13px; font:12.5px/1.6 var(--mono); word-break:break-all; color:var(--mut);
+}
+.urlbar b { color:var(--fg); font-weight:400; }
+
+/* ── response ── */
+.resp { margin-top:26px; }
+.resp-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+.status { font:600 13px var(--mono); padding:3px 10px; border-radius:6px; border:1px solid currentColor; }
+.status.s2 { color:var(--ok); } .status.s4 { color:var(--warn); } .status.s5 { color:var(--err); }
+.meta-bits { font-size:12.5px; color:var(--mut); }
+.uichips { display:flex; gap:7px; flex-wrap:wrap; margin:12px 0 14px; }
+.uichip {
+  display:inline-flex; align-items:center; gap:6px; font-size:12.5px;
+  background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px 12px;
+}
+.uichip:hover { border-color:var(--gold); text-decoration:none; }
+.uichip b { font-weight:600; }
+
+pre.json {
+  background:var(--code); border:1px solid var(--line); border-radius:var(--radius);
+  padding:14px 16px; overflow:auto; max-height:70vh; font-size:12.5px; line-height:1.65;
+  white-space:pre; tab-size:2;
+}
+.j-key { color:var(--gold-2); }
+.j-str { color:var(--ok); }
+.j-num { color:var(--warn); }
+.j-bool, .j-null { color:var(--mut); font-style:italic; }
+.j-ar { font-family:var(--arabic); font-size:15px; direction:rtl; unicode-bidi:isolate; }
+.j-link { text-decoration:underline dotted; }
+.j-more { color:var(--mut); font-style:italic; }
+/* Fold controls for the JSON tree. Plain spans, not <details>: inside a <pre> the content
+ * must be inline (a block box injects a line break before and after every nested object),
+ * and `content-visibility` — how the UA hides a closed <details> — does not apply to
+ * inline boxes. See the note on foldable() in explorer.js. */
+pre.json .j-tog { cursor:pointer; color:var(--mut); border-radius:3px; }
+pre.json .j-tog:hover { color:var(--gold); }
+pre.json .j-tog:focus-visible { outline:2px solid var(--gold); outline-offset:1px; }
+pre.json summary::before { content:"▸ "; color:var(--mut); }
+pre.json details[open] > summary::before { content:"▾ "; }
+
+.hint { color:var(--mut); font-size:13px; margin-top:8px; }
+
+/* ── landing ── */
+.land { max-width:74ch; }
+.land h1 { font-size:26px; color:var(--gold); margin:0 0 6px; }
+.land .lede { font-size:16px; color:var(--fg); margin:0 0 20px; }
+.land p { color:var(--mut); }
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; margin:18px 0 26px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:13px 15px; }
+.card b { display:block; font-size:20px; color:var(--gold); font-variant-numeric:tabular-nums; }
+.card span { font-size:12.5px; color:var(--mut); }
+.land pre {
+  background:var(--code); border:1px solid var(--line); border-radius:var(--radius);
+  padding:13px 15px; overflow-x:auto; font-size:12.5px;
+}
+.note {
+  background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--gold);
+  border-radius:8px; padding:12px 15px; margin:18px 0;
+}
+
+@media (max-width:860px) {
+  .shell { grid-template-columns:1fr; }
+  .side { position:static; height:auto; max-height:none; border-right:0; border-bottom:1px solid var(--line); }
+  .nav { max-height:230px; }
+  .main { padding:20px 16px 70px; }
+  .row { grid-template-columns:1fr; gap:5px; }
+  .row > label { padding-top:0; }
+  .top-links a { display:none; }
+  .top-links #lnk-spec, .top-links #lnk-guide { display:inline; }
+}

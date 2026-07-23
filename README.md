@@ -66,6 +66,11 @@ morphology, and lexicon glosses are never translated.
 - **Shareable deep-link URLs** (encode the entire graph state, including any open
   analysis view and the exact node layout), **PNG/SVG export**, **undo/redo** of
   exploration, and full keyboard/screen-reader accessibility.
+- **A public HTTP API** — `ayat.network/api/v1`: the whole corpus, morphology, lexicons and
+  every analysis as JSON (or CSV), where **each answer carries the link that opens the same
+  thing in the UI**. Open access, no key, and an
+  [interactive explorer](https://ayat.network/api/v1/docs) that runs any request in the
+  browser. See [docs/API.md](docs/API.md).
 - Pan, zoom, drag nodes, light/dark themes — all in the browser, offline-capable.
 
 ## The Qurʾān text
@@ -94,6 +99,7 @@ Other scripts:
 ```bash
 npm run build      # production build → dist/
 npm run preview    # serve the production build
+npm run api        # the HTTP API on :8080 (npm run api:dev to pair with vite dev)
 npm run lint       # eslint
 npm test           # unit tests (vitest)
 ```
@@ -105,12 +111,20 @@ want to re-fetch the upstream corpora from scratch (it runs `data:download` firs
 ### Run with Docker
 
 ```bash
-docker build -t qurangraph .
-docker run -p 8080:80 qurangraph   # → http://localhost:8080
+docker compose up -d --build       # site + API
 ```
 
-The image reconstructs the data from `data/source/` and serves the static build
-through nginx (no network at build time unless a corpus is missing).
+Two services: `qurangraph` (nginx serving the static build) and `qurangraph-api`
+(the Node API). nginx proxies `/api/` to the API container, so both live on one
+hostname. Both images reconstruct the data from `data/source/` at build time — no
+network needed unless a corpus is missing.
+
+Just the site, no API:
+
+```bash
+docker build --target runtime -t qurangraph .
+docker run -p 8080:80 qurangraph   # → http://localhost:8080
+```
 
 ---
 
@@ -121,6 +135,7 @@ through nginx (no network at build time unless a corpus is missing).
 | [docs/FEATURES.md](docs/FEATURES.md) | End-user guide: every mode, panel, modal, and analysis view. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Code map: state model, graph build → layout → render pipeline, i18n, hooks. |
 | [docs/DATA.md](docs/DATA.md) | The data pipeline: source corpora → derived JSON, file formats, coverage. |
+| [docs/API.md](docs/API.md) | The HTTP API: endpoints, the UI deep links in every response, keys, self-hosting. |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | PWA/service worker, Docker, nginx, CSP, CI. |
 
 ## Sources & licences
