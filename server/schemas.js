@@ -62,6 +62,9 @@ export const SCHEMAS = {
     limit: int("Requested page size.", 50),
     offset: int("Rows skipped.", 0),
     has_more: { type: "boolean", description: "More pages remain; follow `links.next`.", example: true },
+    exact_verse_matches: int("`/verses/find` only: how many of the results are the whole āya rather "
+      + "than a fragment of one. They sort first, so a non-zero count means `data[0]` is the "
+      + "complete āya the quotation came from.", 1),
   }, "Where this page sits in the whole result."),
 
   /* ── lexical ── */

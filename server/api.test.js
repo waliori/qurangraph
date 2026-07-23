@@ -209,6 +209,108 @@ describe.skipIf(!HAVE_DATA)("API", () => {
     });
   });
 
+  /* The inverse direction: text in, āya out. The cases below are not decoration — each is
+   * a spelling or tokenisation difference between the muṣḥaf and how the same words get
+   * typed, and each one broke a matcher that looked reasonable. */
+  describe("find — which āya is this text?", () => {
+    const find = (text, extra = "") => call(`${V1}/verses/find?text=${ar(text)}${extra}`);
+    const keys = (r) => r.json.data.map((v) => v.verse_key);
+
+    it("locates an āya from its vocalized Uthmani text", async () => {
+      const r = await find("ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ");
+      expect(r.status).toBe(200);
+      expect(keys(r)[0]).toBe("1:2");
+      // Whole-āya matches sort ahead of the āyāt that merely contain the phrase.
+      expect(r.json.meta.exact_verse_matches).toBe(1);
+    });
+
+    it("locates the same āya from plain imlāʾī, and marks which words matched", async () => {
+      const r = await find("الحمد لله رب العالمين");
+      expect(keys(r)[0]).toBe("1:2");
+      expect(r.json.data[0].matches).toEqual({ word_indices: [0, 1, 2, 3], count: 4 });
+    });
+
+    it("resolves spellings that no single normalisation reaches", async () => {
+      // Each of these fails under one fold and succeeds under another, which is why the
+      // index keys every token under its whole set (src/arabic-utils.js, quoteKeys):
+      //   ٱلْعَٰلَمِينَ needs the dagger written out as an alif;  ٱلرَّحْمَٰن needs it left alone;
+      //   ٱلصَّلَوٰة needs the wāw-seat folded;  ءَالَآءِ / وَءَاتُوا۟ need the bare hamza dropped.
+      for (const [text, want] of [
+        ["الرحمن الرحيم", "1:3"],
+        ["وأقيموا الصلاة وآتوا الزكاة", "2:43"],
+        ["فبأي آلاء ربكما تكذبان", "55:13"],
+        ["إياك نعبد وإياك نستعين", "1:5"],
+      ]) {
+        const r = await find(text);
+        expect(r.status, text).toBe(200);
+        expect(keys(r), text).toContain(want);
+      }
+    });
+
+    it("matches across a fusion the muṣḥaf writes as one word", async () => {
+      // يا أيها is typed as two words and written يَٰٓأَيُّهَا as one.
+      const r = await find("يا أيها الذين آمنوا اتقوا الله");
+      expect(r.status).toBe(200);
+      expect(keys(r)).toContain("3:102");
+    });
+
+    it("ignores the ﴿ ﴾ brackets and tatweel a quotation arrives wrapped in", async () => {
+      const r = await find("﴿ قــل هــو الله أحــد ﴾");
+      expect(keys(r)).toEqual(["112:1"]);
+    });
+
+    it("runs a quotation across an āya boundary but not a sūrah one", async () => {
+      const spans = await find("الحمد لله رب العالمين الرحمن الرحيم");
+      expect(keys(spans)).toEqual(["1:2", "1:3"]);
+      // Both āyāt are covered in full, so both count as whole matches.
+      expect(spans.json.meta.exact_verse_matches).toBe(2);
+      expect(spans.json.data[1].matches.word_indices).toEqual([0, 1]);
+
+      // The last āya of An-Nās and the first of Al-Baqara are adjacent in muṣḥaf order and
+      // are not a passage; a run across that seam would be an artefact of the ordering.
+      expect((await find("من الجنة والناس الم ذلك الكتاب")).status).toBe(404);
+    });
+
+    it("reports every āya a fragment occurs in, in muṣḥaf order", async () => {
+      const r = await find("لا إله إلا هو", "&limit=3");
+      expect(r.json.meta.total).toBeGreaterThan(20);
+      expect(keys(r)).toEqual(["2:163", "2:255", "3:2"]);
+      expect(r.json.meta.exact_verse_matches).toBe(0);   // none of them IS the fragment
+    });
+
+    it("links straight into the app, at the best match", async () => {
+      const r = await find("قل هو الله أحد");
+      expect(uiState(r.json.links.ui)).toMatchObject({ surah: 112, ayah: 1 });
+      expect(uiState(r.json.data[0].links.ui_aya_lab).view).toMatchObject({ t: "aya", c: "112:1" });
+    });
+
+    it("takes the text in the path too — the curl-safe form", async () => {
+      const a = await find("قل هو الله أحد");
+      const b = await call(`${V1}/verses/find/${ar("قل هو الله أحد")}`);
+      expect(b.status).toBe(200);
+      expect(keys(b)).toEqual(keys(a));
+    });
+
+    it("separates 'not a quotation' from 'not in the Qurʾān'", async () => {
+      expect((await call(`${V1}/verses/find`)).status).toBe(400);         // nothing passed
+      expect((await find("hello world")).status).toBe(400);               // no Arabic in it
+      const miss = await find("هذا كلام ليس في القرآن");
+      expect(miss.status).toBe(404);
+      expect(miss.json.error.hint).toMatch(/whole and in order/);
+      // A single word is a search, not a quotation — say so rather than dumping 151 āyāt
+      // of hint-free results on a caller who wanted /search.
+      const one = await find("الكتاب", "&limit=1");
+      expect(one.status).toBe(200);
+      expect((await find("زقنبوت")).json.error.hint).toMatch(/\/search/);
+    });
+
+    it("does not shadow the routes it was registered in front of", async () => {
+      expect((await call(`${V1}/verses/2:255`)).json.data.verse_key).toBe("2:255");
+      expect((await call(`${V1}/verses/2/255`)).json.data.verse_key).toBe("2:255");
+      expect((await call(`${V1}/verses/al-baqarah/255`)).json.data.verse_key).toBe("2:255");
+    });
+  });
+
   describe("search — the core question", () => {
     it("finds every āya carrying a root, and counts tokens not verses", async () => {
       const r = await call(`${V1}/search?q=${ar("كتب")}&mode=root&limit=3`);

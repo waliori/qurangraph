@@ -2,8 +2,9 @@
 
 import { notFound, badRequest, qBool, paging, page } from "../http.js";
 import { verseShape, resolveSurahId } from "../terms.js";
-import { surahLinks } from "../links.js";
+import { surahLinks, verseLink } from "../links.js";
 import { muqattaatOf } from "../../src/analytics/letters.js";
+import { norm, quoteKeys } from "../../src/arabic-utils.js";
 import { P, PP, PAGED } from "../params.js";
 
 /* "2:255", "2/255" and "2,255" all name the same āya — accept them all, since the key
@@ -100,6 +101,111 @@ export function register(router, ctx) {
     ],
   });
 
+  /* ── find ── the inverse of /verses/{key}: text in, āya out ──
+   *
+   * Answers "which āya is this?" for text pulled out of a book, an article or an editor
+   * selection. Matching runs over the normalized token stream (server/corpus.js,
+   * buildTextIndex), so the caller's spelling barely matters: harakāt, tatweel, the alif
+   * family and the ﴿ ﴾ brackets all fold away before anything is compared, and Uthmani
+   * (ٱلْحَمْدُ لِلَّهِ) and imlāʾī (الحمد لله) land on the same key.
+   *
+   * Both shapes are offered for the same reason /search is: curl percent-encodes a URL's
+   * path but passes its query string through verbatim, so `?text=الحمد` puts raw UTF-8 in
+   * the request line and the HTTP parser rejects it before the API sees it.
+   *
+   * REGISTRATION ORDER IS LOAD-BEARING: the router matches in declaration order among
+   * routes of equal segment count, so these must precede /verses/{key} and
+   * /verses/{surah}/{ayah}, which would otherwise read "find" as a sūrah name. */
+  const find = (raw) => ({ V, query, url }) => {
+    const needle = queryTokens(raw);
+    if (!needle.length) {
+      throw badRequest(
+        raw ? `"${String(raw).trim()}" has no Arabic to match on` : `"text" is required`,
+        "Pass the quotation as you have it — vocalized or not, with or without ﴿ ﴾: "
+        + "?text=الحمد لله رب العالمين",
+      );
+    }
+    const entries = V.textIndex();
+    // Which words of which āyāt the quotation covers, unioned over every place it occurs —
+    // a refrain repeated inside one āya, or a fragment recurring across the muṣḥaf, both
+    // land here as marks on the āyāt they touch.
+    const covered = new Map(); // verse ordinal → Set of word index
+    for (let i = 0; i < entries.length; i++) {
+      const keys = entries[i].keys;
+      for (let p = 0; p < keys.length; p++) {
+        const cover = matchAt(entries, i, p, needle, V.verseData);
+        if (!cover) continue;
+        for (const c of cover) {
+          let set = covered.get(c.ord);
+          if (!set) covered.set(c.ord, (set = new Set()));
+          for (let w = c.at; w < c.at + c.count; w++) set.add(w);
+        }
+      }
+    }
+    if (!covered.size) {
+      throw notFound(`No āya contains "${String(raw).trim()}".`,
+        needle.length === 1
+          ? "For a single word, /search?q=… is the better tool — it resolves spelling variants "
+            + "and groups by lemma or root. This endpoint matches a contiguous quotation literally."
+          : "Words are matched whole and in order, and a quotation may run across an āya "
+            + "boundary but not a sūrah one. Check for a dropped or transposed word, or quote "
+            + "a shorter run of it.");
+    }
+    // An āya the quotation covers ENTIRELY is a stronger answer than one it merely clips,
+    // so those come first; within each group, muṣḥaf order (textIndex is already ordered).
+    const hits = [...covered.entries()]
+      .map(([ord, set]) => ({
+        ord,
+        vk: entries[ord].vk,
+        indices: [...set].sort((a, b) => a - b),
+        whole: set.size === entries[ord].keys.length,
+      }))
+      .sort((a, b) => (b.whole - a.whole) || (a.ord - b.ord));
+
+    const withWords = qBool(query, "words", false);
+    const p = page(hits, paging(query), url);
+    return {
+      data: p.items.map((h) => verseShape(V, C, h.vk, {
+        words: withWords,
+        hits: { word_indices: h.indices, count: h.indices.length },
+      })),
+      meta: { ...p.meta, exact_verse_matches: hits.filter((h) => h.whole).length },
+      // The best hit gets the headline link, so a caller holding one answer doesn't have to
+      // reach into data[0] to cite it.
+      links: { ui: verseLink(hits[0].vk), ...p.links },
+    };
+  };
+
+  const FIND_DESC = "Give it a quotation and it tells you which āya it is. Spelling is folded "
+    + "before matching — harakāt, tatweel, the alif family, ﴿ ﴾ — so Uthmani and imlāʾī both "
+    + "resolve. Words match whole and in order: a fragment returns every āya containing it, "
+    + "with `matches.word_indices` marking where, and a complete āya sorts first. "
+    + "For a single word, use `/search` instead: it resolves variants and groups by lemma or root.";
+
+  router.add("/verses/find", (c) => find(c.query.get("text"))(c), {
+    summary: "Which āya is this text?",
+    description: FIND_DESC,
+    tags: ["corpus"],
+    params: [P.findText, P.words, ...PAGED],
+    response: "VerseListResponse",
+    examples: [
+      { label: "A whole āya, vocalized", path: "/verses/find?text=ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ" },
+      { label: "…the same, written plainly", path: "/verses/find?text=الحمد لله رب العالمين" },
+      { label: "A fragment — every āya that carries it", path: "/verses/find?text=لا إله إلا هو" },
+    ],
+  });
+
+  router.add("/verses/find/:text", (c) => find(c.params.text)(c), {
+    summary: "Same as /verses/find, with the text in the path.",
+    description: "Identical to `/verses/find?text=…`, and the form to use from curl: curl "
+      + "encodes a URL's path for you but passes its query string through verbatim, and raw "
+      + "UTF-8 in the request line is rejected before the API sees it.",
+    tags: ["corpus"],
+    params: [PP.findText, P.words, ...PAGED],
+    response: "VerseListResponse",
+    examples: [{ label: "The curl-safe form", path: "/verses/find/الحمد لله رب العالمين" }],
+  });
+
   router.add("/verses/:key", ({ V, params, query }) => {
     const vk = parseVerseKey(params.key, C.surahIndex);
     if (!V.verseData[vk]) throw notFound(`No āya ${vk}.`);
@@ -132,6 +238,70 @@ export function register(router, ctx) {
       { label: "By transliteration", path: "/verses/al-baqarah/255" },
     ],
   });
+}
+
+/* The query, put through exactly what the index did to the corpus (server/corpus.js,
+ * buildTextIndex): one key set per whitespace-separated token, and tokens the corpus keeps
+ * out of `words` kept out here too — it drops anything normalising to under two
+ * characters, so admitting them here would make every quotation containing one miss.
+ * Whatever isn't Arabic — the ﴿ ﴾ brackets, āya numbers, a footnote mark dragged along
+ * with the selection — falls out inside norm() and takes its token with it. */
+function queryTokens(raw) {
+  const words = String(raw ?? "")
+    .split(/\s+/)
+    .filter((t) => norm(t).length >= 2);
+  return words
+    .map((t, i) => ({
+      keys: quoteKeys(t),
+      // The muṣḥaf sometimes writes as ONE word what everyone types as two — يَٰٓأَيُّهَا
+      // against يا أيها above all, which opens more quoted passages than any other phrase.
+      // That is a tokenisation difference, not a spelling one, so no amount of folding
+      // reaches it; carrying each token's fusion with the next lets the matcher spend two
+      // query words on one corpus word when, and only when, the plain comparison fails.
+      join: i + 1 < words.length ? quoteKeys(t + words[i + 1]) : null,
+    }))
+    .filter((t) => t.keys.length);
+}
+
+/* Two tokens are the same word when any of their spellings coincide. Both sides are tiny
+ * (one to three keys), so a nested scan beats building a Set per comparison. */
+const agree = (a, b) => a.some((k) => b.includes(k));
+
+/* Try to lay the whole `needle` down starting at word `p` of verse ordinal `i`.
+ *
+ * It walks ON into the following āya when it runs off the end of this one, because people
+ * quote passages, not verse records — ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ is one
+ * quotation and two āyāt, and refusing it would fail on the most ordinary input there is.
+ * It will NOT cross a sūrah boundary: consecutive āyāt of one sūrah are continuous text,
+ * but the last āya of one sūrah and the first of the next are not, and a run spanning them
+ * would be an artefact of muṣḥaf order rather than a passage anybody quoted.
+ *
+ * Returns the āyāt it covered as `[{ ord, at, count }]`, or null if the run breaks. */
+function matchAt(entries, i, p, needle, verseData) {
+  const cover = [];
+  let ord = i, w = p, j = 0, start = p, count = 0;
+  while (j < needle.length) {
+    const keys = entries[ord].keys;
+    if (w >= keys.length) {
+      // Off the end of this āya — bank what it contributed and step to the next one.
+      if (count) cover.push({ ord, at: start, count });
+      const next = entries[ord + 1];
+      if (!next || verseData[next.vk].s !== verseData[entries[ord].vk].s) return null;
+      ord += 1; w = 0; start = 0; count = 0;
+      continue;
+    }
+    // Spend one query word on this corpus word, or two when the muṣḥaf fuses them
+    // (يا أيها → يَٰٓأَيُّهَا). The fused reading is only tried once the plain one has failed,
+    // so it can never pre-empt a straightforward match.
+    let spend = 0;
+    if (agree(keys[w], needle[j].keys)) spend = 1;
+    else if (needle[j].join && agree(keys[w], needle[j].join)) spend = 2;
+    else return null;
+    if (!count) start = w;
+    count += 1; w += 1; j += spend;
+  }
+  if (count) cover.push({ ord, at: start, count });
+  return cover;
 }
 
 function surahRow(V, s) {

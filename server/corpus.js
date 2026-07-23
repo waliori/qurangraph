@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { setRootMap, setLemmaMap, wordGroupKey, norm } from "../src/arabic-utils.js";
+import { setRootMap, setLemmaMap, wordGroupKey, norm, quoteKeys } from "../src/arabic-utils.js";
 import { buildVerseIndices, buildLemmaIndex, buildStopSet, orderedVerseKeys } from "../src/corpusIndices.js";
 import { buildRomanIndex } from "../src/search.js";
 import { buildSeedIndex } from "../src/analytics/phrases.js";
@@ -134,16 +134,56 @@ function buildVariant({ quranRaw, morph, precision }) {
   // entries, so it is built on first use and then reused, not at boot. Kept behind a
   // function (not a getter) because this object gets spread, which would trigger one.
   let seed = null;
+  const ordered = orderedVerseKeys(quranRaw);
+  let text = null;
   return {
     ...base,
     precision,
     l2v,
     indices: { exact: base.w2v, root: base.r2v, lemma: l2v },
-    orderedKeys: orderedVerseKeys(quranRaw),
+    orderedKeys: ordered,
     romanIndex: buildRomanIndex(Object.keys(base.w2v)),
     stopSet: buildStopSet({ hideStop: true }),
     seedIndex: () => (seed ||= buildSeedIndex(base.verseData)),
+    textIndex: () => (text ||= buildTextIndex(base.verseData, ordered)),
   };
+}
+
+/* ═══ Quotation index — the text → āya lookup behind /verses/find ═══
+ *
+ * The inverse of /verses/{key}: given Arabic text, which āya is it? Each āya becomes an
+ * array of per-token KEY SETS, and two tokens are "the same word" when their sets
+ * intersect. It has to be a set per token, not one canonical key, because no single
+ * normalisation reconciles the muṣḥaf with how people actually type:
+ *
+ *   ٱلْعَٰلَمِينَ  norm → العلمين   (dagger stripped)   searchAlef → العالمين  ← the typed form
+ *   ٱلرَّحْمَٰن   norm → الرحمن    ← the typed form     searchAlef → الرحمان
+ *
+ * Each key wins one of those and loses the other, and a single quotation routinely
+ * contains both kinds of word (رب العالمين الرحمن الرحيم), so folding the āya down to one
+ * string and running indexOf cannot work whichever fold is chosen. quoteKeys() already
+ * enumerates the spellings a word may be written under — the same ones the corpus index
+ * and the search bar resolve through — so agreement on any one of them is the match test.
+ *
+ * Built over `words` (not the raw text) so the token stream — and so the `word_indices`
+ * this yields — is the one `words=true`, the morphology and the app's highlighting all
+ * share. Tokens the corpus drops as too short are absent here and from the query alike, so
+ * a quotation containing one still matches.
+ *
+ * Lazy, like seedIndex: ~81k token entries is not much, but a deployment that never asks
+ * for a quotation lookup shouldn't pay for it at boot. Keys are interned through a pool
+ * because the corpus reuses a few thousand spellings across 6236 āyāt, and holding one
+ * string per distinct key rather than per occurrence is most of the footprint. */
+function buildTextIndex(verseData, orderedKeys) {
+  const pool = new Map();
+  const intern = (s) => { const hit = pool.get(s); if (hit !== undefined) return hit; pool.set(s, s); return s; };
+  const entries = [];
+  for (const vk of orderedKeys) {
+    const v = verseData[vk];
+    if (!v) continue;
+    entries.push({ vk, keys: v.words.map((w) => quoteKeys(w.orig).map(intern)) });
+  }
+  return entries;
 }
 
 /* Count the occurrences (tokens, not verses) of `lookup` in a verse. */

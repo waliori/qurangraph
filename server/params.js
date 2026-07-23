@@ -69,6 +69,12 @@ export const P = {
   from: q("from", { type: "integer", minimum: 1, example: 1, description: "First āya number (within the sūrah)." }),
   to: q("to", { type: "integer", minimum: 1, example: 10, description: "Last āya number (within the sūrah)." }),
   verses: q("verses", { type: "boolean", default: true, description: "Include the āyāt themselves, not just the header." }),
+  findText: q("text", {
+    type: "string", required: true, rtl: true, example: "الحمد لله رب العالمين",
+    description: "A quotation to locate. Any spelling — vocalized Uthmani (ٱلْحَمْدُ لِلَّهِ), plain "
+      + "imlāʾī (الحمد لله), with or without the ﴿ ﴾ brackets. Words are matched whole and in "
+      + "order; a fragment returns every āya that carries it.",
+  }),
 
   window: q("window", {
     type: "integer", default: 99, minimum: 1, maximum: 99,
@@ -136,6 +142,7 @@ export const PP = {
   wordKey: path("key", { type: "string", rtl: true, example: "الصلاة", description: "A surface form, in any spelling." }),
   lemmaKey: path("key", { type: "string", rtl: true, example: "كِتاب", description: "A lemma (صيغة)." }),
   searchTerm: path("q", { type: "string", rtl: true, example: "كتب", description: "The term to look up." }),
+  findText: path("text", { type: "string", rtl: true, example: "الحمد لله رب العالمين", description: "A quotation to locate, in any spelling." }),
   lexiconId: path("id", { type: "string", enum: ["ayn", "sihah", "maqayis", "muhkam", "mufradat", "lisan"], example: "maqayis", description: "Which dictionary." }),
 };
 

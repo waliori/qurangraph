@@ -170,6 +170,20 @@ export const fuzzyKeys = (raw) => {
   const strong = new Set(strongKeys(raw));
   return looseKeys(raw).filter((k) => !strong.has(k));
 };
+// QUOTATION keys: every strong key PLUS the hamza-dropped fuzzy one — the full set a word
+// may be written under, used to decide "are these two tokens the same word?" when matching
+// a running quotation against the text (server/routes/corpus.js, /verses/find).
+//
+// The muṣḥaf's bare-hamza spellings are the reason the fuzzy key has to be in here: ءَالَآءِ
+// and وَءَاتُوا۟ are آلاء and وآتوا to everyone who types them, and norm() keeps ء on purpose
+// (dropping it corpus-wide would merge ماء into ما), so no strong key ever bridges the two.
+//
+// The warning on fuzzyKeys — that the dropped-hamza form is degraded and collides with
+// unrelated stems — is about resolving ONE word typed into a search box. It does not bite
+// here: a match must line up several consecutive words, and each neighbour has to agree
+// too, so a stray collision on any single token dies against the ones around it. The one
+// place it would bite is a single-word query, and /verses/find sends those to /search.
+export const quoteKeys = (raw) => [...new Set([...strongKeys(raw), ...fuzzyKeys(raw)])];
 
 /* ═══ Rasm (orthographic skeleton) keys ═══
  *
