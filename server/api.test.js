@@ -247,6 +247,23 @@ describe.skipIf(!HAVE_DATA)("API", () => {
       }
     });
 
+    it("matches a word whose second letter exists only as a shadda", async () => {
+      // The muṣḥaf writes ٱلَّيْل / ٱلَّذِين with one lām and a shadda where the article meets a
+      // lām-initial word; everyone types both lāms. norm() strips the shadda, so without
+      // writing the gemination out (src/arabic-utils.js, geminateOut) these reduce to
+      // "اليل" against "الليل" and nothing bridges them.
+      for (const text of [
+        "ثُمَّ أَتِمُّوا الصِّيَامَ إِلَى اللَّيْلِ",   // as typed, with harakāt
+        "ثم أتموا الصيام إلى الليل",              // bare imlāʾī
+        "ثُمَّ أَتِمُّوا۟ ٱلصِّيَامَ إِلَى ٱلَّيْلِ",    // the muṣḥaf's own spelling
+      ]) {
+        const r = await find(text);
+        expect(r.status, text).toBe(200);
+        expect(keys(r), text).toEqual(["2:187"]);
+      }
+      expect(keys(await find("والليل إذا يغشى"))).toEqual(["92:1"]);
+    });
+
     it("matches across a fusion the muṣḥaf writes as one word", async () => {
       // يا أيها is typed as two words and written يَٰٓأَيُّهَا as one.
       const r = await find("يا أيها الذين آمنوا اتقوا الله");

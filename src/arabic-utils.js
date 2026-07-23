@@ -170,6 +170,23 @@ export const fuzzyKeys = (raw) => {
   const strong = new Set(strongKeys(raw));
   return looseKeys(raw).filter((k) => !strong.has(k));
 };
+/* Write a shadda out as the doubled letter it stands for: ٱلَّيْل → ٱللـيْل.
+ *
+ * Arabic spells a geminated consonant once and marks it with ّ, but where the definite
+ * article meets a lām-initial word the muṣḥaf keeps that convention (ٱلَّيْل, ٱلَّذِين) while
+ * modern spelling writes both lāms (الليل, الذين). norm() strips the shadda and with it the
+ * only trace of the second consonant, so the two spellings reduce to different skeletons —
+ * "اليل" against "الليل" — and no other fold bridges them.
+ *
+ * Used to add ONE MORE variant to a word's key set, never to replace the plain one: ٱللَّه
+ * already writes both lāms, so expanding it gives the spurious "اللله", which is harmless
+ * as an extra key and wrong as the only one. Consumers must keep both.
+ *
+ * The class between letter and shadda is the harakāt EXCEPT ّ itself (the muṣḥaf orders
+ * them letter-vowel-shadda, so the vowel sits in between), which also stops the pattern
+ * from treating one shadda as filler for the next. */
+export const geminateOut = (s) => (s || "").replace(/([ء-ي])([ً-ِْ-ٰ]*)ّ/g, "$1$1$2");
+
 // QUOTATION keys: every strong key PLUS the hamza-dropped fuzzy one — the full set a word
 // may be written under, used to decide "are these two tokens the same word?" when matching
 // a running quotation against the text (server/routes/corpus.js, /verses/find).
@@ -183,7 +200,16 @@ export const fuzzyKeys = (raw) => {
 // here: a match must line up several consecutive words, and each neighbour has to agree
 // too, so a stray collision on any single token dies against the ones around it. The one
 // place it would bite is a single-word query, and /verses/find sends those to /search.
-export const quoteKeys = (raw) => [...new Set([...strongKeys(raw), ...fuzzyKeys(raw)])];
+//
+// The geminated variant is in here for ٱلَّيْل / ٱلَّذِين against a typed الليل / الذين — see
+// geminateOut above. Added, not substituted, so words that already write both letters keep
+// resolving through their plain key.
+export const quoteKeys = (raw) => {
+  const gem = geminateOut(raw);
+  const keys = [...strongKeys(raw), ...fuzzyKeys(raw)];
+  if (gem !== raw) keys.push(...strongKeys(gem));
+  return [...new Set(keys.filter((k) => k && k.length >= 2))];
+};
 
 /* ═══ Rasm (orthographic skeleton) keys ═══
  *

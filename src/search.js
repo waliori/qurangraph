@@ -1,4 +1,4 @@
-import { norm, normStrict, groupKey, looseKeys, strongKeys, STOP_PARTICLES } from "./arabic-utils.js";
+import { norm, normStrict, groupKey, looseKeys, strongKeys, geminateOut, STOP_PARTICLES } from "./arabic-utils.js";
 import { arabicSkeletons, latinSkeleton, isLatinQuery } from "./romanize.js";
 
 /* ═══ Forgiving term resolution ═══
@@ -254,10 +254,16 @@ const mushafCmp = (x, y) => { const [sa, aa] = x.split(":").map(Number), [sb, ab
 //   2) seats → ا  ([وى]ٰ and bare ٰ → ا)         — gives الصلاة, الربا, الرحمان
 //   3) (2) plus alif-maqṣūra ى → ا              — gives القرا, موسا  (meets a typed القرى/موسى)
 // each also in a hamza-dropped form, so آتاكم ≈ ءَاتَىٰكُمُ. Any shared variant = a match.
+//   4) shadda written out as the doubled letter — gives الليل, الذين for ٱلَّيْل, ٱلَّذِين,
+//      whose second lām exists only as the shadda that norm() strips (see geminateOut).
 export function ftKeys(raw) {
   const s = (raw || "").normalize("NFKC");
   const seat = s.replace(/[وى]ٰ/g, "ا").replace(/ٰ/g, "ا");
   const base = [norm(s), norm(seat).replace(/ا{2,}/g, "ا"), norm(seat.replace(/ى/g, "ا")).replace(/ا{2,}/g, "ا")];
+  // Additive: ٱللَّه already writes both lāms, so its expansion is spurious and only the
+  // plain key above resolves it. Skipped entirely when the word carries no shadda.
+  const gem = geminateOut(seat);
+  if (gem !== seat) base.push(norm(gem).replace(/ا{2,}/g, "ا"));
   const out = new Set();
   for (const k of base) { if (k.length >= 2) { out.add(k); const h = k.replace(/ء/g, ""); if (h.length >= 2) out.add(h); } }
   // Fused vocative يَٰ (yā + dagger): the muṣḥaf glues the call onto its noun — يَٰٓأَيُّهَا, يَٰقَوْمِ,
