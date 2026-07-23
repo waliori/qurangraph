@@ -216,8 +216,17 @@ export const geminateOut = (s) => (s || "").replace(/([ء-ي])([ً-ِْ-ٰ]*)ّ/
 // characters: أرض and أمر reduce to "رض"/"مر", which are stumps common enough to meet
 // unrelated words. Above that floor the run of neighbouring words that must ALSO agree
 // makes a stray collision harmless, which is the same argument the fuzzy key rests on.
+//   alif maqṣūra — the muṣḥaf writes a final long-ā as a bare alif where modern spelling
+//     uses ى: ٱلْأَقْصَا against a typed الْأَقْصَى. norm() folds ى→ي, which sends the two the
+//     opposite way from each other, so the maqṣūra has to be read as the ا it sounds like.
+//     This is variant 3 of ftKeys (src/search.js) — the two vocabularies overlap heavily
+//     and are worth consolidating once this stops growing.
 const otioseAlif = (s) => s.replace(/وا$/, "و");
 const hamzaBlind = (s) => s.replace(/[ءئؤأإآ]/g, "");
+const maqsuraToAlif = (s) => {
+  const seat = String(s || "").normalize("NFKC").replace(/[وى]ٰ/g, "ا").replace(/ٰ/g, "ا");
+  return norm(seat.replace(/ى/g, "ا")).replace(/ا{2,}/g, "ا");
+};
 
 export const quoteKeys = (raw) => {
   const keys = [...strongKeys(raw), ...fuzzyKeys(raw)];
@@ -227,6 +236,7 @@ export const quoteKeys = (raw) => {
   if (bare !== raw) keys.push(norm(bare));
   const blind = norm(hamzaBlind(raw));
   if (blind.length >= 3) keys.push(blind);
+  keys.push(maqsuraToAlif(raw));
   return [...new Set(keys.filter((k) => k && k.length >= 2))];
 };
 

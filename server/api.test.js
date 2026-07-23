@@ -270,6 +270,9 @@ describe.skipIf(!HAVE_DATA)("API", () => {
       //   أَرَءَيْتُمْ — bare hamza where a typed أرأيتم puts it on an alif seat.
       expect(keys(await find("وَجَاءُوا أَبَاهُمْ عِشَاءً يَبْكُونَ"))).toEqual(["12:16"]);
       expect(keys(await find("قُلْ أَرَأَيْتُمْ إِن جَعَلَ اللَّهُ عَلَيْكُمُ اللَّيْلَ سَرْمَدًا"))).toEqual(["28:71"]);
+      // ٱلْأَقْصَا ends in a bare alif in the muṣḥaf; typed, it takes an alif maqṣūra — and
+      // norm() folds ى→ي, which sends the two spellings in opposite directions.
+      expect(keys(await find("سُبْحَانَ الَّذِي أَسْرَىٰ بِعَبْدِهِ لَيْلًا مِّنَ الْمَسْجِدِ الْحَرَامِ إِلَى الْمَسْجِدِ الْأَقْصَى"))).toEqual(["17:1"]);
     });
 
     it("matches across a fusion the muṣḥaf writes as one word", async () => {
