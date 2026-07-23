@@ -13,6 +13,7 @@ import { applyPositions } from "./graph/applyPositions.js";
 import { morphAt, formRoman, morphFilterActive, morphFilterSummary, filterOccurrencesByMorph, EMPTY_MORPH_FILTER } from "./morphology.js";
 import { serializeSvg, exportSvgFile, exportPngFile, buildBibtex, exportTextFile, setExportCorpusVersion } from "./graph/exportGraph.js";
 import { readUrlState, writeUrlState, encodeState, decodeState } from "./hooks/useUrlState.js";
+import { arrivedViaSharedLink } from "./onboarding.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { StickyNotes } from "./components/StickyNotes.jsx";
 import { RasmGlyph } from "./components/icons.jsx";
@@ -178,7 +179,7 @@ export default function QuranGraph() {
   const positionsRef = useRef(positions);
   const pendingPosRef = useRef(null); // shared node positions to apply on next structural build
   const pendingViewRef = useRef(null); // analysis view (from a deep link) to reopen once hydrated
-  const arrivedViaViewRef = useRef(false); // a deep link carried an open view → suppress the auto-tour
+  const arrivedViaLinkRef = useRef(false); // opened a SHARED link → suppress the auto-intro/tour
   const graphNodesRef = useRef([]);   // latest node set, for position snapshots off the render path
   // Flat [x0,y0,…] of live node positions in sorted-node-id order — so a share link
   // can reproduce the exact arrangement. Capped to keep the URL sane on huge graphs.
@@ -395,7 +396,9 @@ export default function QuranGraph() {
     const u = readUrlState();
     applyState(u);
     pendingViewRef.current = u?.view || null; // reopened by the view-restore effect below
-    arrivedViaViewRef.current = !!u?.view;     // …and the auto-tour must not clobber it
+    // Any shared link — an analysis view or just a graph — means the visitor came for
+    // THAT, so the onboarding must not run over it (see arrivedViaSharedLink).
+    arrivedViaLinkRef.current = arrivedViaSharedLink(!!u);
     setHydrated(true);
   }, [hydrated, loading, quranRaw, applyState]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -1892,10 +1895,12 @@ export default function QuranGraph() {
   useEffect(() => {
     if (autoTourRef.current || loading || error || !currentVerse) return;
     autoTourRef.current = true;
-    // Arrived via a shared link that opens an analysis view? Don't auto-run the intro/tour —
-    // it would tourReset() the just-restored dialog away (the "shared link works only when the
-    // tour is disabled" bug). The user came for that view, not the walkthrough.
-    if (arrivedViaViewRef.current) return;
+    // Arrived via a shared link? Never auto-run the welcome/tour — even on a first-ever
+    // visit. The person tapped a link to see a specific graph or analysis; stacking the
+    // intro and then the tour in front of it (the tour's reset would also wipe the
+    // just-restored state) buries the very thing they were sent. They get the onboarding
+    // the next time they come to the site directly.
+    if (arrivedViaLinkRef.current) return;
     let introHidden = false;
     try { introHidden = localStorage.getItem("qg.introHide") === "1"; } catch { /* ignore */ }
     // Changelog gate. A null lastSeenVersion means a brand-new install OR an
