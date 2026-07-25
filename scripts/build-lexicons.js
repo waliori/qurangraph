@@ -32,7 +32,7 @@ const SECTIONED = {
 // non-root dividers (فصل/أبواب/الجزء…), which end the current entry without starting one.
 // Tracks inline page milestones so each entry carries its (approximate) page.
 function parseSectioned(text, { headerRe, rootOf }) {
-  const entries = {}, lines = text.split("\n");
+  const entries = {}, lines = text.split(/\r?\n/);
   let cur = null, body = [], lastPage = null, entryPage = null;
   const flush = () => { if (cur && !entries[cur]) { const p = parseMaqayisEntry(body); if (p) { const cite = entryPage || lastPage; if (cite) p.cite = cite; entries[cur] = p; } } };
   for (const line of lines) {
@@ -55,7 +55,7 @@ function parseSectioned(text, { headerRe, rootOf }) {
 // the first body bracket; named-letter primaries with no bracket are skipped (sound over
 // complete — better no entry than a wrong-order root with the wrong gloss).
 function parseMuhkam(text) {
-  const entries = {}, lines = text.split("\n");
+  const entries = {}, lines = text.split(/\r?\n/);
   let cur = null, body = [], lastPage = null, entryPage = null;
   const flush = () => { if (cur && !entries[cur]) { const p = parseMaqayisEntry(body); if (p) { const cite = entryPage || lastPage; if (cite) p.cite = cite; entries[cur] = p; } } };
   const open = (root) => { flush(); cur = root; body = []; entryPage = null; };

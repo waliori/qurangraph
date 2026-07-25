@@ -1,0 +1,12 @@
+# ── Line endings ──
+#
+# The corpora in data/source/ are parsed BYTE-EXACTLY, so no platform may rewrite them.
+# quran-morphology.txt is tab-separated and its LAST field is the feature string: a CRLF
+# checkout leaves a stray \r on every feature list, which makes /(?:^|\|)P(?:\||$)/ stop
+# matching and takes preposition detection with it — the expressions build silently drops
+# from 1458 government frames to 0, while the tag-driven analyses (collocations, compounds)
+# carry on looking healthy. That is a very expensive hour to spend, and it only happens on
+# Windows, so it will only ever be found by whoever is least expecting it.
+#
+# `-text` means: check these out exactly as they are stored. They are stored with LF.
+data/source/** -text

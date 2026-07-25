@@ -53,7 +53,7 @@ const hasDet = (word) => word.some((sg) => /(?:^|\|)DET(?:\||$)/.test(sg.feature
 
 /* ── Parse the corpus into verse → words → segments ─────────────────────────── */
 const verses = {}; // vk → [ [seg,…], … ]  (word index 0-based)
-for (const ln of readFileSync(MORPH, "utf8").trim().split("\n")) {
+for (const ln of readFileSync(MORPH, "utf8").trim().split(/\r?\n/)) {
   const t = ln.split("\t");
   const m = /^(\d+):(\d+):(\d+):(\d+)$/.exec(t[0]);
   if (!m) continue;
