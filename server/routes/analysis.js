@@ -9,7 +9,7 @@
 import { notFound, badRequest, qInt, qBool, qEnum, paging, page } from "../http.js";
 import { resolveTerm, termShape, verseShape, resolveSurahId, MODES } from "../terms.js";
 import { hitIndices } from "../corpus.js";
-import { termLinks, verseLinks, surahLinks, compareLink, pairingLink, verseLink } from "../links.js";
+import { termLinks, verseLinks, surahLinks, compareLink, pairingLink, verseLink, viewLink, rasmLink } from "../links.js";
 import { parseVerseKey } from "./corpus.js";
 
 import { distributionBySura, collocations, directNeighbors, mergeCollocations } from "../../src/analytics/stats.js";
@@ -29,6 +29,9 @@ import { suraIltifat } from "../../src/analytics/iltifat.js";
 import { pairingMatrix } from "../../src/analytics/pairing.js";
 import { rhetoricScan } from "../../src/analytics/rhetoric.js";
 import { wordGroupKey } from "../../src/arabic-utils.js";
+import { frameOccIndex, headOccurrences, availableFacets, runConstruction } from "../../src/analytics/construction.js";
+import { EMPTY_MORPH_FILTER } from "../../src/morphology.js";
+import { rasmVariants, rasmProfile, rasmOrthography, orthoProfile } from "../../src/analytics/rasm.js";
 import { P, PP, PAGED } from "../params.js";
 
 export function register(router, ctx) {
@@ -373,6 +376,220 @@ export function register(router, ctx) {
     params: [PP.root],
     response: "Envelope",
     examples: [{ label: "ع-ل-م by role", path: "/analysis/roles/علم" }],
+  });
+
+  /* ── construction query (الاستعلام التركيبي) ──
+   *
+   * The one move a form-based concordance cannot make: pin a root to ONE exact construction
+   * and read just those tokens. أشرك (Form IV) + بـ, held apart from أشرك مع, from the nominal
+   * شركاء, and from the passive أن يُشرَك بـ.
+   *
+   * `facets` comes back on every response whether or not anything was pinned, because the
+   * caller cannot know what is available to pin until it has looked: which Forms this root
+   * actually appears in, which particles it actually governs, whether a bare (un-governed)
+   * residual exists at all. Ask with no filter first, then narrow. */
+  router.add("/analysis/construction/:root", ({ V, params, query, url }) => {
+    if (!C.morph) throw notFound("The construction query needs the morphology data, which this deployment did not load.");
+    const mode = qEnum(query, "mode", MODES, "root");
+    const t = resolveTerm(V, C, params.root, mode);
+    const keys = V.indices[mode][t.key] || [];
+    const frameIdx = C.expressions ? frameOccIndex(C.expressions) : new Map();
+    const heads = headOccurrences(t.key, mode, keys, V.verseData, C.morph);
+
+    const list = (name) => (query.get(name) || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const headFilter = {
+      ...EMPTY_MORPH_FILTER,
+      form: list("form").map(Number).filter(Number.isInteger),
+      voice: list("voice"),
+      pos: list("pos"),
+      aspect: list("aspect"),
+    };
+    const particles = list("particle");
+    const particleMode = qEnum(query, "particle_mode", ["present", "absent", "any"], particles.length ? "present" : "any");
+    const prep = particles.length || particleMode !== "any"
+      ? { set: particles, mode: particleMode, source: qEnum(query, "particle_source", ["frame", "standalone", "any"], "any") }
+      : null;
+    const definite = query.get("definite");
+    const spec = {
+      headFilter,
+      prep,
+      object: definite ? { definite: /^(1|true|yes|on)$/i.test(definite) } : null,
+      span: qInt(query, "span", { min: 1, max: 12, def: 4 }),
+    };
+
+    const res = runConstruction({ lookup: t.key, mode, keys, verseData: V.verseData, M: C.morph, frameIdx, spec });
+    const p = page(res.occ, paging(query), url);
+    const anchor = res.occ[0]?.vk || keys[0];
+    return {
+      data: {
+        term: termShape(V, t, { anchor }),
+        facets: availableFacets(heads, frameIdx),
+        head_occurrences: heads.length,
+        matched: res.total,
+        // `bareCount` and `byPrep` are only computed when a particle facet was actually
+        // requested — with none, the scan never looks for a particle and would report every
+        // occurrence as "bare", which is false. Omit them rather than answer 168 out of 168;
+        // `facets.preps` and `facets.hasBare` already give the unfiltered picture.
+        ...(prep
+          ? {
+            bare: res.bareCount,
+            by_preposition: [...res.byPrep.entries()]
+              .map(([preposition, count]) => ({ preposition, count }))
+              .sort((a, b) => b.count - a.count),
+          }
+          : { note: "No particle facet was requested, so governed-vs-bare was not evaluated — see `facets.preps` and `facets.hasBare` for what this head governs." }),
+        occurrences: p.items.map((o) => ({
+          verse_key: o.vk, head: o.head, head_index: o.headIdx,
+          form: o.vf || undefined, voice: o.voice || undefined,
+          preposition: o.prep || undefined, preposition_index: o.prepIdx ?? undefined,
+          object_index: o.objIdx ?? undefined, object_definite: o.definite ?? undefined,
+          before: o.before, after: o.after,
+          text: V.verseData[o.vk]?.text,
+          links: verseLinks(o.vk, mode, true),
+        })),
+      },
+      meta: p.meta,
+      links: {
+        ...termLinks(t, anchor),
+        ui: anchor ? viewLink({ t: "constr", r: t.key, l: t.label }, anchor, mode) : undefined,
+        ...p.links,
+      },
+    };
+  }, {
+    summary: "Pin a root to one exact construction and read just those tokens.",
+    description: "Crosses four facets on every head occurrence: head morphology (Form, voice, part of "
+      + "speech), the particle it governs (authoritatively, from the mined frames — or a standalone scan), "
+      + "the definiteness of its object, and presence versus ABSENCE of the construction. "
+      + "`facets` reports what this root actually offers before you pin anything. Definiteness and the "
+      + "standalone-particle scan are heuristics — the record carries the evidence, the reading is yours.",
+    tags: ["analysis"],
+    params: [PP.root, P.mode, P.constrForm, P.constrVoice, P.constrPos, P.constrAspect,
+      P.constrParticle, P.constrParticleMode, P.constrParticleSource, P.constrDefinite, P.constrSpan, ...PAGED],
+    response: "Envelope",
+    examples: [
+      { label: "Everything ش-ر-ك offers", path: "/analysis/construction/شرك" },
+      { label: "أشرك (Form IV) governing بـ", path: "/analysis/construction/شرك?form=4&particle=ب" },
+      { label: "…and the bare residual instead", path: "/analysis/construction/شرك?form=4&particle_mode=absent" },
+      { label: "آمن with an indefinite object", path: "/analysis/construction/أمن?definite=false" },
+    ],
+  });
+
+  /* ── rasm: orthographic variation (الرسم) ──
+   *
+   * The Uthmanic muṣḥaf draws one spoken word more than one way — إِبْرَٰهِۦمَ beside إِبْرَٰهِيمَ,
+   * كتب beside كتاب. `/analysis/rasm` is the catalogue; `/analysis/rasm/{id}` the deep dive.
+   *
+   * The catalogue drops each row's occurrence list: كتب alone carries 226 of them, and a
+   * caller browsing the catalogue wants the counts. Follow an `id` for the positions. */
+  router.add("/analysis/rasm", ({ V, query, url }) => {
+    const kind = qEnum(query, "kind", ["variants", "orthography"], "variants");
+    if (kind === "orthography") {
+      const o = rasmOrthography(V.verseData);
+      const p = page(o.forms || [], paging(query), url);
+      return {
+        data: {
+          kind,
+          total: o.total,
+          // byCategory nests the whole form list, occurrence positions included — a third of
+          // a megabyte for a two-row page. The counts are what a summary is for; the forms
+          // are already the paged list below.
+          by_category: (o.byCategory || []).map((c) => ({ category: c.key, forms: (c.forms || []).length, occurrences: c.count })),
+          forms: p.items.map((f) => ({
+            id: f.id, rasm: f.rasm, drawn: f.drawn, plene: f.plene, category: f.category,
+            occurrences: f.count, surahs: f.suraCount,
+            links: { self: `${ctx.base}/analysis/rasm/${encodeURIComponent(f.id)}` },
+          })),
+        },
+        meta: p.meta, links: p.links,
+      };
+    }
+    const rows = rasmVariants(V.verseData);
+    const p = page(rows, paging(query), url);
+    return {
+      data: {
+        kind,
+        variants: p.items.map((r) => ({
+          id: r.id, pronounced: r.pron, lemma: r.lemma, display: r.display,
+          occurrences: r.total, surahs: r.suraCount,
+          spellings: (r.forms || []).map((f) => ({
+            rasm: f.rasm, display: f.display, occurrences: f.count, verses: f.verses, first: f.first, last: f.last,
+          })),
+          links: { self: `${ctx.base}/analysis/rasm/${encodeURIComponent(r.id)}` },
+        })),
+      },
+      meta: p.meta, links: p.links,
+    };
+  }, {
+    summary: "Words the muṣḥaf draws more than one way (الرسم).",
+    description: "`kind=variants` (default) catalogues the words with two or more drawn skeletons for "
+      + "one spoken word — detected by bucketing tokens on pronunciation AND lemma, so homographs "
+      + "don't masquerade as one word's two spellings. `kind=orthography` catalogues the systematic "
+      + "conventions instead (the dagger alif, the wāw seat). Occurrence positions come from "
+      + "`/analysis/rasm/{id}`.",
+    tags: ["analysis"],
+    params: [P.rasmKind, ...PAGED],
+    response: "Envelope",
+    examples: [
+      { label: "Words drawn two ways", path: "/analysis/rasm?limit=20" },
+      { label: "Orthographic conventions", path: "/analysis/rasm?kind=orthography&limit=20" },
+    ],
+  });
+
+  router.add("/analysis/rasm/:id", ({ V, params, query }) => {
+    // An `o|…` id is an orthography entry, anything else a variant word — the same split the
+    // Rasm Lab makes when a row is opened. The two profiles are genuinely different objects,
+    // not one shape with optional fields, so they are answered separately rather than merged
+    // into a union where half the keys are always null.
+    const id = params.id;
+    const isOrtho = id.startsWith("o|");
+    const prof = isOrtho ? orthoProfile(V.verseData, id) : rasmProfile(V.verseData, id);
+    if (!prof) {
+      throw notFound(`No rasm entry "${id}".`,
+        "Take an `id` from /analysis/rasm — e.g. `سيماهم|سِيما` for a variant word, or `o|كتب` for an orthographic convention.");
+    }
+    const cap = qInt(query, "verses", { min: 0, max: 500, def: 20 });
+    // `verseList` groups by āya ({vk, idx:[…]}); `occ` is one row per token ({vk, wi}).
+    const source = prof.verseList || prof.occ || [];
+    const verses = source.slice(0, cap).map((o) => ({
+      verse_key: o.vk,
+      word_indices: o.idx || (o.wi != null ? [o.wi] : undefined),
+      text: V.verseData[o.vk]?.text,
+      links: verseLinks(o.vk, "exact", true),
+    }));
+    const common = {
+      id: prof.id, surahs: prof.suraCount, by_surah: prof.bySura, verses,
+      verses_total: source.length,
+    };
+    return {
+      data: isOrtho
+        ? {
+          kind: "orthography", ...common,
+          rasm: prof.rasm, drawn: prof.drawn, plene: prof.plene, category: prof.category,
+          occurrences: prof.count,
+        }
+        : {
+          kind: "variant", ...common,
+          pronounced: prof.pron, lemma: prof.lemma, display: prof.display,
+          occurrences: prof.total,
+          spellings: prof.forms,
+          timeline: prof.timeline,
+          longest_run: prof.longestRun,
+          switch_points: prof.switches,
+        },
+      links: { ui: rasmLink(id, source[0]?.vk) },
+    };
+  }, {
+    summary: "One rasm entry: every spelling, where each is used, and where the text switches.",
+    description: "Per-spelling counts and ratio, the by-sūrah distribution, the muṣḥaf-order timeline, "
+      + "the longest unbroken run of one spelling, and the switch-points where the text moves from one "
+      + "to the other.",
+    tags: ["analysis"],
+    params: [PP.rasmId, P.rasmVerses],
+    response: "Envelope",
+    examples: [
+      { label: "سيماهم — drawn three ways", path: "/analysis/rasm/سيماهم|سِيما" },
+      { label: "The dagger alif in كتب", path: "/analysis/rasm/o|كتب" },
+    ],
   });
 
   /* ── semantic neighbours + curated opposites ── */

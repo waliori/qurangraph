@@ -1,12 +1,17 @@
 /* ═══ The tool table ═══
  *
- * Twelve tools over roughly forty endpoints, and the compression is the point. A client
- * loads every schema in this file into its context before the conversation starts, so the
- * table is a fixed tax on every turn: forty thin tools would cost more and choose worse
- * than twelve fat ones. Related endpoints therefore fold behind an enum (`analyze_term`
- * carries nine analyses; `corpus_info` carries six documents), and each description says
- * WHEN to reach for the tool, not merely what it does — a trigger condition in the
- * description is what actually drives selection.
+ * Fourteen tools over the whole API, and the compression is the point. A client loads every
+ * schema in this file into its context before the conversation starts, so the table is a
+ * fixed tax on every turn: fifty thin tools would cost more and choose worse than fourteen
+ * fat ones. Related endpoints therefore fold behind an enum — `analyze_term` carries ten
+ * analyses, `browse_catalogue` nine catalogues, `relate` four relations, `corpus_info` six
+ * documents — and each description says WHEN to reach for the tool, not merely what it does,
+ * because a trigger condition in the description is what actually drives selection.
+ *
+ * The enums are not arbitrary groupings. Each answers a different SHAPE of question:
+ * one term (`analyze_term`), one āya (`analyze_verse`), one sūrah (`analyze_surah`), the
+ * corpus as a whole (`browse_catalogue`), two things held against each other (`relate`).
+ * A model picking between five shapes chooses better than one picking between fifty names.
  *
  * Two endpoint families are deliberately absent:
  *
@@ -415,7 +420,7 @@ export function buildTools({ invoke }) {
   /* ════════════════════════════════════════════════════════════════════════ */
   const TERM_ANALYSES = [
     "distribution", "collocations", "neighbours", "semantic_neighbours",
-    "opposites", "derivation", "valency", "roles", "expressions",
+    "opposites", "derivation", "valency", "roles", "expressions", "construction",
   ];
   const ROOT_ONLY = new Set(["semantic_neighbours", "opposites", "derivation", "valency", "roles", "expressions"]);
 
@@ -435,8 +440,12 @@ export function buildTools({ invoke }) {
       + "· derivation — every lemma built on the root, with its grammatical shape\n"
       + "· valency — which prepositions a verb root governs and which nouns it takes directly\n"
       + "· roles — how its occurrences divide between subject, object, genitive and so on\n"
-      + "· expressions — the multi-word units it enters: government frames, verb–noun collocations, iḍāfa\n\n"
-      + "The last six are ROOT-scoped: whatever you pass is resolved to a root first, and `mode` is "
+      + "· expressions — the multi-word units it enters: government frames, verb–noun collocations, iḍāfa\n"
+      + "· construction — pin it to ONE exact construction and read just those tokens: أشرك (Form IV) + بـ, "
+      + "held apart from أشرك مع and from the passive. Ask with no filter first — `facets` reports which "
+      + "Forms, voices and particles this head actually offers — then narrow with `form` / `particle` / "
+      + "`particle_mode` / `definite`\n\n"
+      + "The six marked ROOT-scoped: whatever you pass is resolved to a root first, and `mode` is "
       + "ignored for them.\n\n"
       + "These are distributional facts. Turning them into a claim about meaning is your argument, and "
       + "should be presented as such.",
@@ -457,6 +466,20 @@ export function buildTools({ invoke }) {
         },
         window: { type: "integer", minimum: 1, maximum: 99, default: 99, description: "`collocations` only: words either side. 99 (default) means the whole āya." },
         cross_verse: { type: "boolean", default: false, description: "`neighbours` only: let adjacency continue past the āya boundary within a sūrah." },
+        form: { type: "string", description: "`construction` only: verb Form(s) (وزن) to pin, comma-separated — 1–10. Read the available ones off `facets.forms`." },
+        voice: { type: "string", enum: ["act", "pass"], description: "`construction` only: pin the head's voice." },
+        particle: { type: "string", description: "`construction` only: the governed particle(s), comma-separated, as bare skeletons (ب، ل، على). Read what this head governs off `facets.preps`." },
+        particle_mode: {
+          // No `default` on purpose. A default here is SENT on every call and overrides the
+          // API's context-sensitive one — naming a particle already implies "present", and
+          // shipping "any" silently widened `form=4&particle=ب` from 28 governed occurrences
+          // to all 120. Omit it and let the endpoint decide.
+          type: "string", enum: ["present", "absent", "any"],
+          description: "`construction` only. Defaults to `present` when you name a `particle` (the governed "
+            + "occurrences) and `any` when you don't. Set `absent` for the BARE residual — the occurrences "
+            + "with no governed particle, which is what makes the contrast legible.",
+        },
+        definite: { type: "boolean", description: "`construction` only: pin the object's definiteness — true = معرفة, false = نكرة. Heuristic; the record carries the evidence." },
       },
     },
     async run(a) {
@@ -526,6 +549,27 @@ export function buildTools({ invoke }) {
           const [comps, f3] = cap(bare(r.data.compounds), a.limit, "iḍāfa compounds");
           body = { term: r.data.term, government_frames: frames, collocations: colls, compounds: comps };
           ns.push(f1, f2, f3);
+          break;
+        }
+        case "construction": {
+          r = await invoke(`/analysis/construction/${t}`, {
+            mode: a.mode, form: a.form, voice: a.voice, particle: a.particle,
+            particle_mode: a.particle_mode, definite: a.definite, limit: a.limit,
+          });
+          const d = r.data;
+          body = {
+            term: d.term, facets: d.facets,
+            head_occurrences: d.head_occurrences, matched: d.matched,
+            ...(d.bare !== undefined ? { bare: d.bare } : {}),
+            ...(d.by_preposition ? { by_preposition: d.by_preposition } : {}),
+            occurrences: bare(d.occurrences),
+            meta: r.meta,
+          };
+          ns.push(
+            d.note,
+            "`facets` lists what this head actually offers — pin `form`, `particle` or `definite` from it.",
+            "Definiteness and the standalone-particle scan are heuristics; the KWIC window is the evidence.",
+          );
           break;
         }
         default: {
@@ -785,11 +829,234 @@ export function buildTools({ invoke }) {
     },
   };
 
+  /* ════════════════════════════════════════════════════════════════════════
+   * The corpus-wide catalogues.
+   *
+   * Nine endpoints, one tool. Each answers "what does the Qurʾān do in general",
+   * as against every other tool here, which answers "what does it do with THIS
+   * root / THIS āya". That distinction is the whole reason they belong together:
+   * a model that wants the idiom list is in a different mode from one tracing a
+   * word, and one enum keeps nine schemas out of every conversation's context.
+   */
+  const CATALOGUES = {
+    idioms: { path: "/expressions/idioms", label: "curated Qurʾānic idioms" },
+    compounds: { path: "/expressions/compounds", label: "iḍāfa constructs, by frequency" },
+    collocations: { path: "/expressions/collocations", label: "verb–noun collocations, by log-likelihood" },
+    government_frames: { path: "/expressions", label: "governing heads and the prepositions they take" },
+    opposites: { path: "/analysis/relations", label: "the curated antithesis (طباق) catalogue" },
+    near_identical: { path: "/analysis/mutashabihat", label: "near-identical āyāt (المتشابهات)" },
+    seams: { path: "/analysis/munasabat", label: "coherence between consecutive sūrahs (المناسبات)" },
+    divine_names: { path: "/analysis/names", label: "the 99 names and their roots' corpus footprint" },
+    rasm: { path: "/analysis/rasm", label: "words the muṣḥaf draws more than one way (الرسم)" },
+  };
+
+  const browse_catalogue = {
+    name: "browse_catalogue",
+    title: "Browse a corpus-wide catalogue",
+    description:
+      "The lists that describe the Qurʾān AS A WHOLE, rather than one root or one āya. Reach for it "
+      + "when the question has no single term in it — 'what idioms does the Qurʾān use', 'which āyāt are "
+      + "near-identical', 'what are the 99 names'. Pick one with `kind`:\n\n"
+      + "· idioms — curated multi-word units whose sense is not the sum of their parts\n"
+      + "· compounds — iḍāfa constructs (مالك يوم الدين), by frequency\n"
+      + "· collocations — verb–noun pairings (أقام الصلاة), by log-likelihood\n"
+      + "· government_frames — every governing head and the prepositions it takes (آمَنَ بـ vs آمَنَ لـ), "
+      + "with the bare residual beside them\n"
+      + "· opposites — the curated antithesis (طباق) catalogue. `framed_only` keeps just the pairs with "
+      + "an attested antithesis construction rather than mere co-occurrence\n"
+      + "· near_identical — āyāt differing by at most two words: the passages readers confuse\n"
+      + "· seams — the roots binding each sūrah to its neighbour\n"
+      + "· divine_names — the 99 names, each with its root's footprint in the text\n"
+      + "· rasm — words drawn more than one way (إِبْرَٰهِۦمَ beside إِبْرَٰهِيمَ). `rasm_kind: \"orthography\"` "
+      + "switches to the systematic conventions instead; pass `entry` with an id from the list for one "
+      + "word's full profile — every spelling, where each is used, and where the text switches\n\n"
+      + "For what a PARTICULAR root does inside these, use `analyze_term` with analysis \"expressions\" "
+      + "or \"opposites\".",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: Object.keys(CATALOGUES), description: "Which catalogue." },
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 20, description: "Rows to return. `meta.total` reports the full size." },
+        offset: P.offset,
+        verses: {
+          type: "integer", minimum: 0, maximum: 20, default: 0,
+          description: "Example āyāt to attach per row, on the expression catalogues. These lists run to "
+            + "thousands; 0 (the default) omits them and keeps the answer readable.",
+        },
+        framed_only: { type: "boolean", default: false, description: "`opposites` only: keep just the pairs with an attested antithesis construction in the text." },
+        rasm_kind: {
+          type: "string", enum: ["variants", "orthography"], default: "variants",
+          description: "`rasm` only. `variants` = words drawn two ways; `orthography` = the systematic conventions (dagger alif, wāw seat).",
+        },
+        entry: { type: "string", description: "`rasm` only: an `id` from the list — returns that entry's full profile instead of the catalogue." },
+      },
+    },
+    async run(a) {
+      const cat = CATALOGUES[a.kind];
+
+      if (a.kind === "rasm" && a.entry) {
+        const r = await invoke(`/analysis/rasm/${seg(a.entry)}`, { verses: Math.min(a.verses || 5, 20) });
+        return { kind: "rasm", entry: r.data, api_url: r.url };
+      }
+      if (a.kind === "rasm") {
+        const r = await invoke("/analysis/rasm", { kind: a.rasm_kind, limit: a.limit, offset: a.offset });
+        const rows = r.data.variants || r.data.forms || [];
+        return {
+          kind: "rasm", rasm_kind: a.rasm_kind,
+          ...(r.data.by_category ? { by_category: r.data.by_category } : {}),
+          entries: bare(rows),
+          meta: r.meta,
+          notes: notes(
+            r.meta?.has_more && `Showing ${r.meta.count} of ${r.meta.total}.`,
+            "Pass one of these `id` values as `entry` for its full profile.",
+          ),
+          api_url: r.url,
+        };
+      }
+
+      const r = await invoke(cat.path, {
+        limit: a.limit, offset: a.offset,
+        ...(a.verses ? { verses: a.verses } : { verses: 0 }),
+        ...(a.kind === "opposites" && a.framed_only ? { framed: true } : {}),
+      });
+      // /analysis/names is the one list endpoint the API does not page — it answers with all
+      // 99 whatever you ask for — so the tool's own `limit` is honoured here instead.
+      const rows = Array.isArray(r.data) ? r.data : [r.data];
+      const [entries, capNote] = r.meta ? [rows, null] : cap(rows, a.limit, cat.label);
+      return {
+        kind: a.kind,
+        describes: cat.label,
+        entries: bare(entries),
+        meta: r.meta,
+        notes: notes(
+          capNote,
+          r.meta?.has_more && `Showing ${r.meta.count} of ${r.meta.total} — raise \`offset\` for more.`,
+          !a.verses && ["idioms", "compounds", "government_frames"].includes(a.kind)
+            && "Example āyāt were omitted — set `verses` to attach them.",
+        ),
+        api_url: r.url,
+      };
+    },
+  };
+
+  /* ════════════════════════════════════════════════════════════════════════
+   * The relational analyses: four endpoints that take TWO things, or a grid of
+   * them, rather than one. Same reasoning as the catalogues — a shared shape
+   * ("relate these") that would otherwise be four thin tools.
+   */
+  const relate = {
+    name: "relate",
+    title: "Relate two terms, two āyāt, or a grid of them",
+    description:
+      "Four analyses that hold things against each other. Pick one with `kind`:\n\n"
+      + "· pairing — a co-occurrence GRID: `rows` × `cols`, each cell the number of āyāt containing "
+      + "both. THE EMPTY CELL IS THE POINT — a pairing the text never makes is a finding, and a grid "
+      + "shows it where a ranked list cannot. Give comma-separated terms.\n"
+      + "· rhyme_mates — every āya sharing a given āya's rhyme ending. `by: \"key\"` matches the strict "
+      + "ending (ridf + rawiy); `by: \"rawiy\"` matches the rhyme consonant alone, the classical primary "
+      + "criterion and a much wider net.\n"
+      + "· shared_roots — the roots two named āyāt have in common.\n"
+      + "· bonds — rare words and phrases binding DISTANT āyāt inside one sūrah. A word counts only if "
+      + "it is rare corpus-wide (`max_global`) and the two āyāt are far apart (`min_distance`) — which "
+      + "is what makes the repetition structural rather than incidental.\n\n"
+      + "To compare two terms' frequencies and collocates rather than grid them, use `compare_terms`.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: ["pairing", "rhyme_mates", "shared_roots", "bonds"], description: "Which relation to compute." },
+        rows: { type: "string", description: "`pairing`: comma-separated terms for the grid rows — e.g. \"علم,جهل\"." },
+        cols: { type: "string", description: "`pairing`: comma-separated terms for the grid columns — e.g. \"نور,ظلم\"." },
+        mode: P.mode("root"),
+        verse_key: { type: "string", description: "`rhyme_mates`: the āya whose rhyme to match — 2:255." },
+        by: { type: "string", enum: ["key", "rawiy"], default: "key", description: "`rhyme_mates`: match the strict ending, or the rhyme consonant alone." },
+        verse_a: { type: "string", description: "`shared_roots`: the first āya." },
+        verse_b: { type: "string", description: "`shared_roots`: the second āya." },
+        surah: { type: "string", description: "`bonds`: which sūrah. Number, Arabic name, or transliteration." },
+        max_global: { type: "integer", minimum: 1, maximum: 50, default: 3, description: "`bonds`: a word counts only if it occurs in at most this many āyāt corpus-wide." },
+        min_distance: { type: "integer", minimum: 1, maximum: 200, default: 2, description: "`bonds`: minimum āya distance for a bond to be interesting." },
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 20, description: "Rows to return, where the answer is a list." },
+      },
+    },
+    async run(a) {
+      const need = (fields) => {
+        const missing = fields.filter((f) => !a[f]);
+        if (missing.length) {
+          const e = new Error(`\`${a.kind}\` needs ${missing.map((f) => `\`${f}\``).join(" and ")}.`);
+          e.validation = true;
+          throw e;
+        }
+      };
+
+      switch (a.kind) {
+        case "pairing": {
+          need(["rows", "cols"]);
+          const r = await invoke("/analysis/pairing", { rows: a.rows, cols: a.cols, mode: a.mode });
+          // Each cell carries the full verse-key list of its intersection — a 2×2 grid came
+          // back with 37 keys in one cell, and a 5×5 would be unreadable. The counts are the
+          // grid; a handful of keys per cell is enough to follow one up with get_verses.
+          const m = r.data.matrix || {};
+          const cells = (m.cells || []).map((row) => row.map((c) => ({
+            count: c.count,
+            ...(c.keys?.length ? { sample_keys: c.keys.slice(0, 5) } : {}),
+          })));
+          const clipped = (m.cells || []).some((row) => row.some((c) => (c.keys?.length || 0) > 5));
+          return {
+            kind: a.kind,
+            rows: r.data.rows, cols: r.data.cols,
+            matrix: { ...m, cells },
+            notes: notes(
+              "Each cell counts the āyāt containing BOTH terms. A zero is a real finding: the text never pairs them.",
+              clipped && "`sample_keys` shows at most 5 verse keys per cell — `count` is the true total.",
+            ),
+            api_url: r.url,
+          };
+        }
+        case "rhyme_mates": {
+          need(["verse_key"]);
+          const r = await invoke(`/analysis/rhyme/${seg(a.verse_key)}`, { by: a.by, limit: a.limit });
+          const [mates, note] = cap(r.data.mates, a.limit, "rhyme-mates");
+          return {
+            kind: a.kind, verse: r.data.verse, rhyme: r.data.rhyme, mates,
+            meta: r.meta, notes: notes(note), api_url: r.url,
+          };
+        }
+        case "shared_roots": {
+          need(["verse_a", "verse_b"]);
+          const r = await invoke("/analysis/shared-roots", { a: a.verse_a, b: a.verse_b });
+          return {
+            kind: a.kind, a: r.data.a, b: r.data.b, shared_roots: bare(r.data.shared_roots),
+            api_url: r.url,
+          };
+        }
+        case "bonds": {
+          need(["surah"]);
+          const r = await invoke(`/analysis/bonds/${seg(a.surah)}`, {
+            max_global: a.max_global, min_distance: a.min_distance, limit: a.limit,
+          });
+          return {
+            kind: a.kind, surah: a.surah, bonds: bare(r.data), meta: r.meta,
+            notes: notes(r.meta?.has_more && `Showing ${r.meta.count} of ${r.meta.total} bonds.`),
+            api_url: r.url,
+          };
+        }
+        default: {
+          const e = new Error(`Unknown relation "${a.kind}".`);
+          e.validation = true;
+          throw e;
+        }
+      }
+    },
+  };
+
   const tools = [
     search_quran, locate_quotation, get_verses, get_surah,
     browse_roots, root_dossier, lexicon_entry,
     analyze_term, compare_terms, analyze_verse, analyze_surah,
-    corpus_info,
+    browse_catalogue, relate, corpus_info,
   ];
 
   for (const t of tools) t.annotations = { title: t.title, ...READ_ONLY };

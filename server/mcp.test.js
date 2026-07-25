@@ -119,12 +119,72 @@ describe.skipIf(!HAVE_DATA)("MCP", () => {
 
     it("is a curated set, not one tool per endpoint", async () => {
       // The whole point of the curation: a client loads every schema on connect, so the
-      // table is a fixed per-turn cost. If this ever creeps towards the ~45 HTTP routes,
+      // table is a fixed per-turn cost. If this ever creeps towards the ~50 HTTP routes,
       // the curation has been lost.
-      expect(tools.length).toBe(12);
-      expect(JSON.stringify(tools).length).toBeLessThan(40_000);
+      expect(tools.length).toBe(14);
+      expect(JSON.stringify(tools).length).toBeLessThan(52_000);
       expect(tools.map((t) => t.name)).toContain("locate_quotation");
     });
+
+    /* Every HTTP route is reachable from a tool, reachable by an equivalent, or listed
+     * here with a reason. Adding a route without deciding which of the three it is fails
+     * this test — which is the only thing that keeps the two surfaces from drifting apart
+     * silently, the way /expressions/idioms sat unreachable for a whole release. */
+    it("accounts for every route in the API", async () => {
+      const { createServices } = await import("./index.js");
+      const { router } = createServices({ corpus: (await import("./corpus.js")).loadCorpus() });
+
+      // Reached by a different route that returns the same thing.
+      const ALIASED = {
+        "/search": "the /search/{q} path form, which is what search_quran calls",
+        "/verses/find": "the /verses/find/{text} path form, called by locate_quotation",
+        "/verses/:surah/:ayah": "the /verses/{key} colon form, called by get_verses",
+        "/words/:key": "search_quran with mode=exact",
+        "/lemmas/:key": "search_quran with mode=lemma",
+        "/occurrences": "search_quran — the same verses, with their text",
+        "/analysis/hapax": "browse_roots with hapax=true",
+        "/analysis/iltifat/:surah": "analyze_surah with sections=[iltifat], which embeds it",
+      };
+
+      // Deliberately not exposed.
+      const OMITTED = {
+        "/graph": "a model cannot render a force-directed graph, the node list is large, and every verse answer already carries the ui link that draws it",
+        "/health": "liveness for an ops probe, not a research question",
+        "/docs": "the interactive explorer — HTML, for humans",
+        "/guide": "prose reference — HTML; the ayat://guide resource carries it for MCP",
+        "/openapi.json": "a description of the HTTP surface; an MCP client has tools/list",
+      };
+
+      // What the tools actually call, read off the source so it cannot go stale.
+      const src = fs.readFileSync(path.join(REPO, "server", "mcp", "tools.js"), "utf8")
+        + fs.readFileSync(path.join(REPO, "server", "mcp", "resources.js"), "utf8");
+      const called = new Set([
+        // invoke("/x") and invoke(`/x/${arg}`)
+        ...[...src.matchAll(/invoke\(\s*(?:`([^`]+)`|"([^"]+)")/g)].map((m) => m[1] ?? m[2]),
+        // …and the paths browse_catalogue looks up rather than writing at the call site.
+        ...[...src.matchAll(/\bpath:\s*"(\/[^"]*)"/g)].map((m) => m[1]),
+      ].map((p) => p.replace(/\$\{[^}]*\}/g, ":x")));
+      const isCalled = (pattern) => {
+        const parts = pattern.split("/").filter(Boolean);
+        for (const c of called) {
+          const cp = c.split("?")[0].split("/").filter(Boolean);
+          if (cp.length !== parts.length) continue;
+          if (parts.every((p, i) => p.startsWith(":") ? cp[i] === ":x" : p === cp[i])) return true;
+        }
+        return pattern === "/" && called.has("/");
+      };
+
+      const unaccounted = router.routes
+        .map((r) => r.pattern)
+        .filter((p) => !isCalled(p) && !ALIASED[p] && !OMITTED[p]);
+
+      expect(unaccounted, `unreachable from MCP and unexplained: ${unaccounted.join(", ")}`).toEqual([]);
+
+      // And the justifications must not rot: every alias/omission must name a real route.
+      for (const p of [...Object.keys(ALIASED), ...Object.keys(OMITTED)]) {
+        expect(router.routes.some((r) => r.pattern === p), `${p} is justified but no longer exists`).toBe(true);
+      }
+    }, 180_000);
 
     it("declares every tool read-only, non-destructive and closed-world", () => {
       for (const t of tools) {

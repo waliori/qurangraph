@@ -247,6 +247,9 @@ change — see [Turning keys on](#turning-keys-on) below. Clients that already s
 | `GET /analysis/iltifat/{surah}` | Grammatical register shifts |
 | `GET /analysis/bonds/{surah}` | Rare words/phrases binding distant āyāt |
 | `GET /analysis/shared-roots` | `?a=&b=` — the roots two āyāt have in common |
+| `GET /analysis/construction/{root}` | Pin a root to ONE construction: Form · voice · governed particle · object definiteness · presence-vs-**absence** |
+| `GET /analysis/rasm` | Words the muṣḥaf draws more than one way (`?kind=variants\|orthography`) |
+| `GET /analysis/rasm/{id}` | One rasm entry: every spelling, where each is used, where the text switches |
 
 ### Expressions (التعابير)
 

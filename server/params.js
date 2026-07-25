@@ -121,6 +121,36 @@ export const P = {
   maxGlobal: q("max_global", { type: "integer", default: 3, minimum: 1, maximum: 50, description: "A word counts as a bond only if it occurs in at most this many āyāt corpus-wide." }),
   minDistance: q("min_distance", { type: "integer", default: 2, minimum: 1, maximum: 200, description: "Minimum āya distance for a bond to be interesting." }),
 
+  /* ── construction query ── */
+  constrForm: q("form", { type: "string", example: "4", description: "Verb Form(s) (وزن) to pin, comma-separated: 1–10. Read the available ones off `facets.forms`." }),
+  constrVoice: q("voice", { type: "string", enum: ["active", "passive"], description: "Pin the head's voice (مبني للمعلوم / مجهول)." }),
+  constrPos: q("pos", { type: "string", example: "verb", description: "Pin the head's part of speech, comma-separated." }),
+  constrAspect: q("aspect", { type: "string", example: "perf", description: "Pin the head's aspect (perf / impf / impv), comma-separated." }),
+  constrParticle: q("particle", {
+    type: "string", rtl: true, example: "ب",
+    description: "The governed particle(s), comma-separated, as bare skeletons (ب، ل، على، مع). "
+      + "Read the ones this head actually governs off `facets.preps`.",
+  }),
+  constrParticleMode: q("particle_mode", {
+    type: "string", enum: ["present", "absent", "any"], default: "any",
+    description: "`present` keeps only the governed occurrences; `absent` keeps the BARE ones — the "
+      + "residual that makes the contrast legible; `any` keeps both.",
+  }),
+  constrParticleSource: q("particle_source", {
+    type: "string", enum: ["frame", "standalone", "any"], default: "any",
+    description: "`frame` trusts only the offline-mined government frames (authoritative); `standalone` "
+      + "scans for a nearby free particle (مع, a ظرف — a heuristic); `any` tries the frame first.",
+  }),
+  constrDefinite: q("definite", { type: "boolean", description: "Pin the object's definiteness: `true` = معرفة (الله), `false` = نكرة (شيئًا). Heuristic — the record carries the evidence." }),
+  constrSpan: q("span", { type: "integer", default: 4, minimum: 1, maximum: 12, description: "How many words after the head to search for a standalone particle or the object." }),
+
+  /* ── rasm ── */
+  rasmVerses: q("verses", { type: "integer", default: 20, minimum: 0, maximum: 500, description: "How many attesting āyāt to attach. `verses_total` reports the full count." }),
+  rasmKind: q("kind", {
+    type: "string", enum: ["variants", "orthography"], default: "variants",
+    description: "`variants` = words the muṣḥaf draws more than one way; `orthography` = the systematic conventions (dagger alif, wāw seat).",
+  }),
+
   graphVerse: q("verse", { type: "string", default: "2:255", example: "2:255", description: "The āya at the centre of the graph. The sūrah half may be a name (`البقرة:255`)." }),
   maxBranch: q("max_branch", { type: "integer", default: 10, minimum: 1, maximum: 60, description: "Most āyāt any one word may fan out to." }),
   hideStop: q("hide_stopwords", { type: "boolean", default: true, description: "Hide grammatical particles (حروف المعاني)." }),
@@ -143,6 +173,7 @@ export const PP = {
   lemmaKey: path("key", { type: "string", rtl: true, example: "كِتاب", description: "A lemma (صيغة)." }),
   searchTerm: path("q", { type: "string", rtl: true, example: "كتب", description: "The term to look up." }),
   findText: path("text", { type: "string", rtl: true, example: "الحمد لله رب العالمين", description: "A quotation to locate, in any spelling." }),
+  rasmId: path("id", { type: "string", rtl: true, example: "سيماهم|سِيما", description: "A rasm entry id from /analysis/rasm. An `o|…` id is an orthographic convention; anything else is a variant word." }),
   lexiconId: path("id", { type: "string", enum: ["ayn", "sihah", "maqayis", "muhkam", "mufradat", "lisan"], example: "maqayis", description: "Which dictionary." }),
 };
 

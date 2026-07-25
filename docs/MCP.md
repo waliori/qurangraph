@@ -85,7 +85,7 @@ curl -s https://ayat.network/api/v1/mcp \
 
 ## Tools
 
-Twelve, over roughly forty HTTP endpoints. Every one is read-only, side-effect free and
+Fourteen, over the whole HTTP API. Every one is read-only, side-effect free and
 closed-world, and says so in its annotations — a client may run them without asking the user
 to confirm.
 
@@ -98,28 +98,49 @@ to confirm.
 | `browse_roots` | The root inventory — most frequent, containing given letters, or hapax |
 | `root_dossier` | Everything about one root at once, `sections`-selectable |
 | `lexicon_entry` | One dictionary's full article for one root, with a citation |
-| `analyze_term` | Nine lenses on a term: distribution · collocations · neighbours · semantic_neighbours · opposites · derivation · valency · roles · expressions |
+| `analyze_term` | Ten lenses on a term: distribution · collocations · neighbours · semantic_neighbours · opposites · derivation · valency · roles · expressions · **construction** |
 | `compare_terms` | Two terms side by side: shared āyāt, shared and distinctive collocates |
 | `analyze_verse` | One āya: profile · rhetoric · antithesis · similar · shared phrases · near-identical |
 | `analyze_surah` | One sūrah: profile · letters · keyness · cohesion · rhyme · iltifāt · munāsabāt |
+| `browse_catalogue` | The corpus-wide lists: idioms · compounds · collocations · government_frames · opposites · near_identical · seams · divine_names · rasm |
+| `relate` | Things held against each other: pairing grid · rhyme mates · shared roots · sūrah bonds |
 | `corpus_info` | What this corpus is, and where it came from — including the provenance manifest |
 
-### Why twelve and not forty
+### Why fourteen and not fifty
 
 A client loads **every** tool schema into its context before the conversation starts, so the
-table is a fixed tax on every turn. Forty thin tools would cost more *and* choose worse than
-twelve fat ones, so related endpoints fold behind an enum (`analyze_term` carries nine
-analyses; `corpus_info` carries six documents), and each description says **when** to reach
-for the tool rather than merely what it does — a trigger condition is what actually drives
-selection.
+table is a fixed tax on every turn. Fifty thin tools would cost more *and* choose worse than
+fourteen fat ones, so related endpoints fold behind an enum — `analyze_term` carries ten
+analyses, `browse_catalogue` nine catalogues, `relate` four relations, `corpus_info` six
+documents — and each description says **when** to reach for the tool rather than merely what
+it does, because a trigger condition is what actually drives selection.
 
-Two endpoint families are deliberately absent:
+The enums are not arbitrary groupings. Each answers a different **shape** of question:
+
+| Shape | Tool |
+|---|---|
+| one term | `analyze_term` |
+| one āya | `analyze_verse` |
+| one sūrah | `analyze_surah` |
+| the corpus as a whole | `browse_catalogue` |
+| two things held against each other | `relate` |
+
+A model choosing between five shapes chooses better than one choosing between fifty names.
+
+**Coverage is asserted, not assumed.** `server/mcp.test.js` walks the live route table and
+fails if any endpoint is neither reachable from a tool, reachable by an equivalent (the
+`/search` query form, `/words/{form}` via `mode`), nor listed with a reason. Adding an HTTP
+route without deciding which of the three it is breaks the build — which is what keeps the
+two surfaces from drifting apart silently.
+
+One family is deliberately absent, and one is served elsewhere:
 
 - **`/graph`** — the force-directed network. A model cannot render it, the node list is
   large, and every verse answer already carries the `ui` link that draws it in a browser.
   Nothing is lost and several thousand tokens are saved.
-- **`/docs`, `/guide`, `/openapi.json`** — documentation for humans and HTTP clients. An MCP
-  client has `tools/list`; the prose lives in the `ayat://guide` resource.
+- **`/docs`, `/guide`, `/openapi.json`, `/health`** — documentation for humans and HTTP
+  clients, plus an ops probe. An MCP client has `tools/list`; the prose lives in the
+  `ayat://guide` resource.
 
 ---
 
