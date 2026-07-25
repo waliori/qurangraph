@@ -1004,10 +1004,13 @@ export function buildTools({ invoke }) {
             ...(c.keys?.length ? { sample_keys: c.keys.slice(0, 5) } : {}),
           })));
           const clipped = (m.cells || []).some((row) => row.some((c) => (c.keys?.length || 0) > 5));
+          // `matrix` repeats the row/col headers the response already carries at top level —
+          // the same answer billed twice against the context window.
+          const grid = { ...m }; delete grid.rows; delete grid.cols;
           return {
             kind: a.kind,
             rows: r.data.rows, cols: r.data.cols,
-            matrix: { ...m, cells },
+            matrix: { ...grid, cells },
             notes: notes(
               "Each cell counts the āyāt containing BOTH terms. A zero is a real finding: the text never pairs them.",
               clipped && "`sample_keys` shows at most 5 verse keys per cell — `count` is the true total.",

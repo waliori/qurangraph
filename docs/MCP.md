@@ -261,6 +261,51 @@ or 50 āyāt with full morphology) reaches the ceiling.
 
 ---
 
+## Troubleshooting
+
+### "Couldn't register with ayat.network's sign-in service"
+
+A client saying it cannot register with a sign-in service, or asking for an **OAuth Client
+ID**, has run MCP authorization discovery and got something it could not parse — not
+something that requires a client id.
+
+Before connecting, a client probes for OAuth metadata:
+
+```
+/.well-known/oauth-protected-resource            (RFC 9728, optionally + the resource path)
+/.well-known/oauth-authorization-server
+```
+
+This endpoint requires no authorization, so those paths must **404**. The absence of metadata
+is what tells a client to connect anonymously.
+
+The trap is that this API is served from the same host as a single-page app, whose nginx
+fallback answers *every* unmatched path with `index.html` and a `200`. The client asks for
+authorization metadata, receives a web page, and reports a sign-in service that does not
+exist. Check it with:
+
+```bash
+curl -si https://ayat.network/.well-known/oauth-protected-resource | head -3
+# want: HTTP/1.1 404 …  ·  wrong: HTTP/1.1 200 … text/html
+```
+
+`docker/nginx.conf` carries a `location ~ ^/\.well-known/(oauth-|openid-)` block that returns
+404 ahead of the SPA fallback. Anyone running this behind their own reverse proxy needs the
+equivalent — the same footgun applies to any MCP server hosted alongside an SPA.
+
+### The endpoint answers 405
+
+That is correct for `GET`. This server is session-less and offers no server-to-client event
+stream, so only `POST` and `OPTIONS` are accepted. A client that only speaks the deprecated
+2024-11-05 HTTP+SSE transport cannot connect; use the stdio bridge for it.
+
+### A browser-based client gets 403
+
+`API_MCP_ORIGINS` is empty by default, which refuses browser origins on purpose. Add the
+origin explicitly, or `*` to allow any.
+
+---
+
 ## Protocol details
 
 - **Transport:** Streamable HTTP. One endpoint, `POST` only, no `Mcp-Session-Id` (one arriving
