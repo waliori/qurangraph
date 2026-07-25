@@ -169,3 +169,15 @@ export function distBySura(verseKeys) {
   for (const vk of verseKeys || []) { const s = +vk.split(":")[0]; m.set(s, (m.get(s) || 0) + 1); }
   return [...m.entries()].map(([s, count]) => ({ s, count })).sort((a, b) => a.s - b.s);
 }
+
+/* ── The display phrase of a mined multi-word unit ──
+ *
+ * The builders emit an iḍāfa compound as its component `words` and an idiom under
+ * `display`; neither carries `disp` or `norm`. Reading those names returned undefined for
+ * every row, which is how /expressions/idioms came to answer with rows containing a count
+ * and no idiom. One helper so a renamed field breaks in one place, not four. */
+export const compoundPhrase = (c) =>
+  c?.disp || c?.norm || (Array.isArray(c?.words) ? c.words.join(" ") : "") || null;
+
+export const idiomPhrase = (i) =>
+  i?.display || i?.disp || i?.norm || i?.label || (Array.isArray(i?.words) ? i.words.join(" ") : "") || null;

@@ -9,7 +9,7 @@
 import { notFound, qInt, paging, page } from "../http.js";
 import { resolveTerm, termShape } from "../terms.js";
 import { termLinks, verseLinks, viewLink } from "../links.js";
-import { headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun } from "../../src/analytics/expressions.js";
+import { headRows, expressionsForRoot, occVerses, FRAME_SPAN, spanRun, compoundPhrase, idiomPhrase } from "../../src/analytics/expressions.js";
 import { P, PP, PAGED } from "../params.js";
 
 export function register(router, ctx) {
@@ -56,7 +56,7 @@ export function register(router, ctx) {
     const p = page(rows, paging(query), url);
     return {
       data: p.items.map((i) => ({
-        phrase: i.disp || i.norm || i.label,
+        phrase: idiomPhrase(i),
         gloss: i.gloss || undefined,
         count: i.count ?? (i.occ || []).length,
         verses: occVerses(i.occ || [], V.verseData, spanRun((i.len || (i.norm || "").split(" ").length) || 2))
@@ -81,7 +81,7 @@ export function register(router, ctx) {
     const p = page(rows, paging(query), url);
     return {
       data: p.items.map((c) => ({
-        phrase: c.disp || c.norm, count: c.count, roots: c.roots || [],
+        phrase: compoundPhrase(c), count: c.count, roots: c.roots || [],
         verses: occVerses(c.occ || [], V.verseData, spanRun(2))
           .slice(0, verseCap(query))
           .map((o) => ({ verse_key: o.vk, word_indices: o.hi, links: verseLinks(o.vk, "exact", true) })),
@@ -126,7 +126,7 @@ export function register(router, ctx) {
         term: termShape(V, t, { anchor }),
         government_frames: (e.heads || []).map((h) => shapeHead(V, h, cap)),
         collocations: (e.collocations || []).map((c) => ({ verb: c.verb, noun: c.noun, count: c.count, log_likelihood: c.ll })),
-        compounds: (e.compounds || []).map((c) => ({ phrase: c.disp || c.norm, count: c.count })),
+        compounds: (e.compounds || []).map((c) => ({ phrase: compoundPhrase(c), count: c.count })),
       },
       links: {
         ...termLinks(t, anchor),

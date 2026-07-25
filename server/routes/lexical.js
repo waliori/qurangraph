@@ -13,7 +13,7 @@ import { termLinks, viewLink } from "../links.js";
 import { rootFrequency, hapaxRoots } from "../../src/analytics/corpus.js";
 import { derivationFamily } from "../../src/analytics/derivation.js";
 import { relationsOf } from "../../src/analytics/relations.js";
-import { expressionsForRoot } from "../../src/analytics/expressions.js";
+import { expressionsForRoot, compoundPhrase } from "../../src/analytics/expressions.js";
 import { distributionBySura } from "../../src/analytics/stats.js";
 import { P, PP, PAGED } from "../params.js";
 
@@ -279,7 +279,7 @@ function summariseExpressions(e) {
     collocations: (e.collocations || []).slice(0, 20).map((c) => ({
       verb: c.verb, noun: c.noun, count: c.count, log_likelihood: c.ll,
     })),
-    idafa_compounds: (e.compounds || []).slice(0, 20).map((c) => ({ phrase: c.disp || c.norm, count: c.count })),
+    idafa_compounds: (e.compounds || []).slice(0, 20).map((c) => ({ phrase: compoundPhrase(c), count: c.count })),
   };
 }
 
