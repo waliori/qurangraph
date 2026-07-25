@@ -486,12 +486,27 @@ describe.skipIf(!HAVE_DATA)("MCP", () => {
       expect(r.status).toBe(204);
     });
 
-    it("refuses a browser origin that is not allow-listed", async () => {
-      const r = await call({ jsonrpc: "2.0", id: 1, method: "ping" }, { headers: { origin: "https://evil.example" } });
-      expect(r.status).toBe(403);
-      // Explicitly denied, not merely absent: the API's blanket `*` must not leak through
-      // and hand the body back to the page that was refused.
-      expect(r.headers["Access-Control-Allow-Origin"]).toBe("null");
+    it("admits any browser origin by default", async () => {
+      // The default is "*" so that hosted MCP clients — which do send an Origin — connect
+      // without the operator having to discover an allow-list first.
+      const r = await call({ jsonrpc: "2.0", id: 1, method: "ping" }, { headers: { origin: "https://claude.ai" } });
+      expect(r.status).toBe(200);
+      expect(r.headers["Access-Control-Allow-Origin"]).toBe("*");
+    });
+
+    it("refuses a browser origin that is not allow-listed, once a list is set", async () => {
+      const { config } = await import("./config.js");
+      const before = config.mcp.origins;
+      config.mcp.origins = ["https://studio.example"];
+      try {
+        const r = await call({ jsonrpc: "2.0", id: 1, method: "ping" }, { headers: { origin: "https://evil.example" } });
+        expect(r.status).toBe(403);
+        // Explicitly denied, not merely absent: the API's blanket `*` must not leak through
+        // and hand the body back to the page that was refused.
+        expect(r.headers["Access-Control-Allow-Origin"]).toBe("null");
+      } finally {
+        config.mcp.origins = before;
+      }
     });
 
     it("echoes an allow-listed origin instead of the blanket wildcard", async () => {

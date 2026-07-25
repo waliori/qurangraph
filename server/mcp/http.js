@@ -13,10 +13,10 @@
  *
  * Security posture, in order of application:
  *
- *   · Origin allow-list. Browsers attach `Origin` and cannot forge it, so this is what stops
- *     a hostile page from driving this endpoint through a visitor's browser — the DNS-
- *     rebinding class of attack the MCP spec calls out. Non-browser callers send no Origin
- *     and are unaffected. Default: no browser origin is allowed.
+ *   · Origin allow-list. Browsers attach `Origin` and cannot forge it, so this is the hook
+ *     for refusing a page by name. It defaults to "*" — the DNS-rebinding attack the MCP
+ *     spec calls out is a loopback problem, and this server is public, read-only and holds
+ *     no ambient authority a page could borrow. See config.mcp.origins.
  *   · Body ceiling, enforced while reading, so an oversized body is dropped rather than
  *     buffered.
  *   · Batches refused: removed from MCP in 2025-06-18, and an array would otherwise let one

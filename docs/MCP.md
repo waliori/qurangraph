@@ -250,7 +250,7 @@ or 50 āyāt with full morphology) reaches the ceiling.
 
 | | |
 |---|---|
-| **Origin allow-list** | Browsers attach `Origin` and cannot forge it, so this is what stops a hostile page from driving the endpoint through a visitor's browser — the DNS-rebinding class the MCP spec calls out. **Empty by default**: real MCP clients connect from a process and send none, so they are unaffected. A refused origin gets `403` *and* an explicit `Access-Control-Allow-Origin: null`, so the API's blanket `*` cannot hand the body back to the page that was turned away. |
+| **Origin allow-list** | Browsers attach `Origin` and cannot forge it, so this is the hook for refusing a page by name. **`*` by default, and blank reads the same way.** The DNS-rebinding attack the MCP spec calls out is a *loopback* problem — a hostile page reaching an MCP server running on your own machine, with your files and your ambient authority behind it. This server is public, read-only, sets no cookie and holds no user state, so refusing browser origins protects nothing and locks out hosted clients, which *do* send an `Origin`. Set a list only if you run with `API_KEYS` on; a refused origin then gets `403` *and* an explicit `Access-Control-Allow-Origin: null`, so the API's blanket `*` cannot hand the body back to the page that was turned away. |
 | **No batching** | JSON-RPC arrays were removed from MCP in revision 2025-06-18 and are refused. This also closes the hole where one rate-limit token buys five hundred corpus queries. |
 | **Body ceiling** | 1 MB, enforced *while reading*, so an oversized body is dropped rather than buffered. |
 | **Method allow-list** | `POST` and `OPTIONS`. `GET` is `405` — the endpoint is session-less and offers no server-to-client stream. |
@@ -301,8 +301,24 @@ stream, so only `POST` and `OPTIONS` are accepted. A client that only speaks the
 
 ### A browser-based client gets 403
 
-`API_MCP_ORIGINS` is empty by default, which refuses browser origins on purpose. Add the
-origin explicitly, or `*` to allow any.
+`API_MCP_ORIGINS` is set to a list that does not name it. Add the origin, or `*` for any.
+Unset or blank already means `*`.
+
+### A client says it "couldn't register with your sign-in service"
+
+It is not talking about a service you run — it is describing a page it could not parse.
+
+Before connecting, an MCP client asks whether the endpoint is OAuth-protected. It probes
+`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`; finding
+no metadata, MCP's 2025-03-26 authorization revision tells it to fall back to fixed default
+paths on the issuer — `/authorize`, `/token`, `/register` — and attempt Dynamic Client
+Registration at the last of those.
+
+If any of those five paths falls through to an SPA fallback, the client is handed `index.html`
+with a `200`, reads a successful registration it cannot parse, and reports a broken sign-in
+service that never existed. **The absence of authorization has to be stated, not implied**: all
+five must answer a clean `404`. `docker/nginx.conf` does this in two `location` blocks; if you
+front the app with your own server, copy them.
 
 ---
 
@@ -347,7 +363,7 @@ whole prefix, POST included.
 | Variable | Default | |
 |---|---|---|
 | `API_MCP` | `true` | Switch the endpoint off entirely |
-| `API_MCP_ORIGINS` | *(empty)* | Browser origins allowed to POST. `*` for any |
+| `API_MCP_ORIGINS` | `*` | Browser origins allowed to POST. Blank also means any |
 | `API_MCP_MAX_RESPONSE` | `60000` | Ceiling on one tool result, in characters |
 | `API_MCP_MAX_BODY` | `1000000` | Largest request body, in bytes |
 | `API_MCP_STRUCTURED` | `false` | Also return `structuredContent` beside the text block |

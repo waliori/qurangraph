@@ -76,11 +76,21 @@ export const config = {
   mcp: {
     enabled: bool(process.env.API_MCP, true),
 
-    // Browser origins permitted to POST to the MCP endpoint. EMPTY BY DEFAULT: MCP clients
-    // connect from a process, not a page, so they send no Origin and are unaffected, while
-    // a hostile web page driving this endpoint through a visitor's browser is refused. Set
-    // to "*" only if you deliberately want an in-browser client to reach it.
-    origins: String(process.env.API_MCP_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
+    // Browser origins permitted to POST to the MCP endpoint. "*" BY DEFAULT.
+    //
+    // The Origin allow-list exists in the MCP spec to stop DNS rebinding — a hostile page
+    // that resolves a name to 127.0.0.1 and drives an MCP server the user is running on
+    // their own machine, reaching their files and their ambient authority. That threat is
+    // specific to a LOOPBACK server. This one is a public, read-only corpus: it holds no
+    // per-user state, sets no cookie, and grants no authority a page could borrow. Refusing
+    // browser origins here protects nothing and breaks the clients that matter — a hosted
+    // MCP client (claude.ai's custom connectors among them) sends an `Origin`, and a 403
+    // surfaces to the user as an unexplained "couldn't connect to the server".
+    //
+    // Narrow this if you run with API_KEYS on and want to name the studios that may reach it.
+    // Blank reads as "*" rather than as "deny every browser", so that a stale .env carried
+    // over from an earlier release cannot silently lock hosted clients out.
+    origins: String(process.env.API_MCP_ORIGINS || "*").split(",").map((s) => s.trim()).filter(Boolean),
 
     // Largest request body accepted, enforced while reading.
     maxBodyBytes: num(process.env.API_MCP_MAX_BODY, 1_000_000),
