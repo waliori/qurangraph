@@ -154,7 +154,11 @@ export function createMcpHandler({ router, corpus, ctx }) {
 
     let decoded;
     try {
-      decoded = JSON.parse(raw);
+      // Strip a leading BOM. JSON.parse rejects one, and Windows puts it there without
+      // being asked: PowerShell's `Set-Content -Encoding UTF8` writes a BOM, so a request
+      // body prepared as a file arrives with three bytes in front of the `{`. The failure
+      // reads as "your JSON is malformed" when the JSON is perfect.
+      decoded = JSON.parse(raw.replace(/^\uFEFF/, ""));
     } catch {
       return rpcError(res, 400, parseError().code, "Request body is not valid JSON.", rateHeaders, origin);
     }
