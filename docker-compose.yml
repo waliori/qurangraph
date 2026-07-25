@@ -39,6 +39,17 @@ services:
       API_RATE_LIMIT: ${API_RATE_LIMIT:-600}
       API_RATE_LIMIT_KEYED: ${API_RATE_LIMIT_KEYED:-6000}
       API_LOG: ${API_LOG:-false}
+      # ── The MCP endpoint (POST /api/v1/mcp) — see docs/MCP.md ──
+      # It inherits API_KEYS and the rate limits above; these are its own knobs, and every
+      # one has a working default, so an empty .env leaves it on and sane.
+      API_MCP: ${API_MCP:-true}
+      # Browser origins allowed to POST to it. EMPTY is right for almost everyone: MCP
+      # clients connect from a process and send no Origin, so they are unaffected, while a
+      # hostile page cannot drive the endpoint through a visitor's browser.
+      API_MCP_ORIGINS: ${API_MCP_ORIGINS:-}
+      API_MCP_MAX_RESPONSE: ${API_MCP_MAX_RESPONSE:-60000}
+      API_MCP_MAX_BODY: ${API_MCP_MAX_BODY:-1000000}
+      API_MCP_STRUCTURED: ${API_MCP_STRUCTURED:-false}
     networks:
       - qurangraph_internal
 

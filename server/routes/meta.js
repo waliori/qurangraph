@@ -33,6 +33,15 @@ export function register(router, ctx) {
         format: "?format=csv on list endpoints",
         links: "every object carries `links` — `ui*` keys open the matching view in the app",
       },
+      mcp: config.mcp.enabled
+        ? {
+          endpoint: `${base}/mcp`,
+          transport: "Streamable HTTP (JSON-RPC 2.0 over POST); session-less, no server-to-client stream",
+          description: "The same corpus as a Model Context Protocol server, for AI agents: curated tools, "
+            + "a corpus briefing as a resource, and research workflows as prompts.",
+          docs: "https://github.com/waliori/qurangraph/blob/main/docs/MCP.md",
+        }
+        : { enabled: false },
       endpoints: router.routes
         .filter((r) => !r.meta.hidden)
         .map((r) => ({ path: r.pattern, url: base + (r.pattern === "/" ? "" : r.pattern), summary: r.meta.summary })),
@@ -41,6 +50,7 @@ export function register(router, ctx) {
         docs: base + "/docs",
         guide: base + "/guide",
         openapi: base + "/openapi.json",
+        ...(config.mcp.enabled ? { mcp: base + "/mcp" } : {}),
         ui: config.appBase,
         ui_corpus_explorer: corpusLink("2:255"),
         ui_claim_board: claimsLink("2:255"),

@@ -169,7 +169,7 @@ export function parsePageMarker(line) {
  * the keys that have real values: { title, author, died, editor, publisher, year, vols }. */
 export function parseLexMeta(text) {
   const meta = {};
-  for (const line of (text || "").split("\n")) {
+  for (const line of (text || "").split(/\r?\n/)) {
     if (/^#META#Header#End#/.test(line)) break;
     const m = META_LINE.exec(line);
     if (!m) continue;
@@ -288,7 +288,7 @@ function pack(rootText, bodyLines, maxFull) {
 }
 
 export function parseLexiconText(text, format, maxFull = 600) {
-  const lines = text.split("\n");
+  const lines = text.split(/\r?\n/);
   const out = {};
   const add = (root, body, cite) => {
     const r = (root || "").replace(/[^ء-ي]/g, "");

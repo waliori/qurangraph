@@ -33,7 +33,7 @@ function mode(arr) {
 
 // ── Parse segments, grouped by verse ──
 const verseSegs = new Map(); // "s:a" → [{ a, person, number, aspect, voice, isVerb, content, form }]
-for (const line of readFileSync("data/source/quran-morphology.txt", "utf8").split("\n")) {
+for (const line of readFileSync("data/source/quran-morphology.txt", "utf8").split(/\r?\n/)) {
   if (!line) continue;
   const [loc, form, tag, feats] = line.split("\t");
   if (!loc || !feats) continue;

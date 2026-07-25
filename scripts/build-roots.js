@@ -23,7 +23,7 @@ for (const f of [MORPH, HAFS]) {
  * inflection. verseWords["s:a"] is the ordered list of word morphology records. */
 const verseWords = {}; // "s:a" → [{ form, root, lemma, vf, aspect, voice, mood, pos, person, gender, number, gcase }]
 {
-  const lines = readFileSync(MORPH, "utf8").split("\n");
+  const lines = readFileSync(MORPH, "utf8").split(/\r?\n/);
   const segs = {};      // "s:a:w" → [{ form, features, posClass }]
   const order = {};     // "s:a" → ["s:a:w", …]  (first-seen word order)
   for (const line of lines) {

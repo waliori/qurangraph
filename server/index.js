@@ -24,11 +24,16 @@ import * as lexicalRoutes from "./routes/lexical.js";
 import * as analysisRoutes from "./routes/analysis.js";
 import * as expressionRoutes from "./routes/expressions.js";
 import * as graphRoutes from "./routes/graph.js";
+import { createMcpHandler } from "./mcp/http.js";
 
 export const API_VERSION = "v1";
 const PREFIX = `/api/${API_VERSION}`;
+export const MCP_PATH = `${PREFIX}/mcp`;
 
-export function createApp({ corpus } = {}) {
+/* The corpus plus the populated router — everything an answer needs, independent of which
+ * protocol asked for it. Both transports build on this: the HTTP app below, and the stdio
+ * MCP bridge in server/mcp/stdio.js. */
+export function createServices({ corpus } = {}) {
   const C = corpus || loadCorpus();
   const router = createRouter();
   const ctx = { corpus: C, base: config.publicBase, version: API_VERSION };
@@ -37,10 +42,22 @@ export function createApp({ corpus } = {}) {
   for (const m of [metaRoutes, corpusRoutes, lexicalRoutes, analysisRoutes, expressionRoutes, graphRoutes]) {
     m.register(router, ctx);
   }
+  return { corpus: C, router, ctx };
+}
+
+export function createApp({ corpus } = {}) {
+  const { corpus: C, router, ctx } = createServices({ corpus });
+
+  // The MCP endpoint answers the SAME router — every tool calls a real route handler — but
+  // speaks JSON-RPC over POST, so it is dispatched before the read-only GET guard below
+  // rather than through the router. See server/mcp/.
+  const mcpHandler = config.mcp.enabled ? createMcpHandler({ router, corpus: C, ctx }) : null;
 
   /** Handle one request. Exported shape: (req, res) — usable by node:http directly. */
   return async function handle(req, res) {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+
+    if (mcpHandler && url.pathname === MCP_PATH) return mcpHandler(req, res, url);
 
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (req.method !== "GET" && req.method !== "HEAD") {
@@ -128,6 +145,7 @@ if (isMain) {
     console.log(`[api] آيات.network API listening on http://${config.host}:${config.port}${PREFIX}/`);
     console.log(`[api] data: ${config.dataDir}  ·  app links: ${config.appBase}`);
     console.log(`[api] access: ${keysEnforced() ? `${config.keys.size} key(s) required` : "OPEN (no key)"}  ·  rate limit: ${config.rateLimit}/${Math.round(config.rateWindowMs / 60000)}min`);
+    console.log(`[api] mcp: ${config.mcp.enabled ? `POST ${MCP_PATH} (browser origins: ${config.mcp.origins.length ? config.mcp.origins.join(", ") : "none"})` : "disabled"}`);
     console.log(`[api] ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   });
   const bye = () => server.close(() => process.exit(0));

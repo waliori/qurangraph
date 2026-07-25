@@ -52,6 +52,54 @@ export const THEMES = {
 
 export const CHANGELOG = [
   {
+    id: "1.9.0",
+    date: "2026-07-25",
+    title: { ar: "مساعدُك الذكيّ يقرأ من النصّ", en: "Your AI assistant, reading from the text" },
+    groups: [
+      {
+        theme: "api",
+        changes: [
+          {
+            kind: "new",
+            text: {
+              ar: "اربط مساعدَك الذكيّ بالمصحف مباشرةً",
+              en: "Connect your AI assistant straight to the corpus",
+            },
+            detail: {
+              ar: "خادمٌ بمعيار MCP على العنوان نفسه: يستطيع المساعدُ أن يبحث في النصّ، ويتحقّق من موضع أيّ اقتباس، ويقرأ موادّ المعاجم الستّة، ويُجري تحليلات الموقع — فيجيبك من النصّ لا من ذاكرته. بلا مفتاحٍ ولا تسجيل.",
+              en: "An MCP server at the same address: your assistant can search the text, verify where a quotation actually is, read the six dictionaries' articles and run the site's analyses — answering from the corpus rather than from memory. No key, no signup.",
+            },
+            steps: [
+              {
+                ar: "أضف العنوان ‎https://ayat.network/api/v1/mcp‎ في إعدادات خوادم MCP لدى مساعدك.",
+                en: "Add https://ayat.network/api/v1/mcp under MCP servers in your assistant's settings.",
+              },
+              {
+                ar: "ثمّ اسأله: «في أيّ آيةٍ ورد هذا النصّ؟» أو «ما مواضع جذر ع-ل-م؟» أو «ما الذي يقوله ابن فارس في ن-و-ر؟»",
+                en: "Then ask it: “which āya is this text?”, “where does the root ع-ل-م occur?”, “what does Ibn Fāris say about ن-و-ر?”",
+              },
+              {
+                ar: "كلُّ جوابٍ يحمل رابطًا يفتح المشهد نفسَه هنا، فتراجع بنفسك ما استند إليه.",
+                en: "Every answer carries a link that opens the same view here, so you can check for yourself what it was working from.",
+              },
+            ],
+          },
+          {
+            kind: "new",
+            text: {
+              ar: "الاقتباس يُتحقَّق منه قبل أن يُنسَب",
+              en: "A quotation gets checked before it is attributed",
+            },
+            detail: {
+              ar: "أكثرُ ما يخطئ فيه المساعدون الأذكياء رقمُ الآية. صار بوسع المساعد أن يعطي النصّ العربيّ كما هو — مشكولًا أو غير مشكول — فيُردَّ إلى موضعه، أو يُقال له صراحةً إنّه جزءُ آيةٍ لا آية، أو إنّ اللفظ متكرّرٌ في مواضع فليذكرها جميعًا. والخادم لا يترجم ولا يفسّر: كلُّ صلةٍ فيه لفظيّة، وما زاد على ذلك فهو رأيُ المساعد لا قولُ النصّ.",
+              en: "The verse number is what AI assistants most often get wrong. An assistant can now hand over the Arabic exactly as it has it — vocalized or not — and be told where it actually is, or told plainly that it is only a fragment, or that the wording recurs in several places and all of them should be cited. And the server neither translates nor interprets: every connection it makes is lexical, and anything beyond that is the assistant's reading, not the text's.",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "1.8.0",
     date: "2026-07-23",
     title: { ar: "الروابط تفتح على ما شُورك به، وواجهةٌ برمجية", en: "Links open on what was shared — and an API" },
