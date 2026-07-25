@@ -12,7 +12,8 @@ every endpoint with typed parameters, worked examples and a Run button.
 
 Service index: [`/api/v1/`](https://ayat.network/api/v1/) ·
 prose reference: [`/api/v1/guide`](https://ayat.network/api/v1/guide) ·
-OpenAPI 3.1: [`/api/v1/openapi.json`](https://ayat.network/api/v1/openapi.json)
+OpenAPI 3.1: [`/api/v1/openapi.json`](https://ayat.network/api/v1/openapi.json) ·
+MCP (for AI agents): [`/api/v1/mcp`](MCP.md)
 
 ---
 
@@ -83,7 +84,7 @@ a link the API emits is a link the app can read.
 | **CSV** | `?format=csv` on any endpoint whose `data` is a list of rows. |
 | **Caching** | Per-build immutable: every response has an `ETag`; send `If-None-Match` for a 304. |
 | **CORS** | `*` — call it straight from a browser. |
-| **Methods** | `GET` only. Anything else is `405`. |
+| **Methods** | `GET` only, and every endpoint below is read-only. Anything else is `405`. The one exception is the MCP endpoint ([`POST /mcp`](MCP.md)), which is JSON-RPC and therefore posts — it too only reads. |
 
 **Errors** use the same envelope:
 
@@ -259,6 +260,25 @@ change — see [Turning keys on](#turning-keys-on) below. Clients that already s
 
 Occurrence lists here are sampled — `?verses=N` (0–500, default 5) raises or removes them.
 
+### For AI agents (MCP)
+
+| | |
+|---|---|
+| `POST /mcp` | The same corpus as a **Model Context Protocol** server — see [MCP.md](MCP.md) |
+
+Streamable HTTP, JSON-RPC 2.0, session-less, open access. Twelve curated tools over these
+endpoints, the corpus briefing as a resource, research workflows as prompts. The tools call
+the same route handlers documented above, so an MCP answer and an HTTP answer to the same
+question are the same answer. It is the only `POST` on this API; everything else is `GET`.
+
+```bash
+curl -s https://ayat.network/api/v1/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+> Arabic needs no special handling here — the query travels in a JSON body, not in a URL, so
+> the curl encoding trap described above does not arise.
+
 ### Graph
 
 | | |
@@ -347,6 +367,7 @@ Alongside the Vite dev server, `npm run api:dev` points the `ui…` links at
 | `API_MAX_LIMIT` / `API_DEFAULT_LIMIT` | `500` / `50` | |
 | `API_CACHE_SECONDS` | `3600` | |
 | `API_LOG` | `true` | |
+| `API_MCP*` | | The MCP endpoint's own knobs — see [MCP.md](MCP.md#configuration) |
 
 ### Turning keys on
 

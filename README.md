@@ -71,6 +71,11 @@ morphology, and lexicon glosses are never translated.
   thing in the UI**. Open access, no key, and an
   [interactive explorer](https://ayat.network/api/v1/docs) that runs any request in the
   browser. See [docs/API.md](docs/API.md).
+- **An MCP server for AI agents** — `ayat.network/api/v1/mcp`: the same corpus spoken as
+  **Model Context Protocol**, so an agent can look the Qurʾān up instead of recalling it.
+  Twelve curated tools (search, quotation → āya, root dossiers, dictionary articles, the
+  analyses), the corpus briefing as a resource, and research workflows as prompts. Open
+  access, remote or over stdio. See [docs/MCP.md](docs/MCP.md).
 - Pan, zoom, drag nodes, light/dark themes — all in the browser, offline-capable.
 
 ## The Qurʾān text

@@ -1,7 +1,7 @@
 {
   "name": "qurangraph",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,9 @@
     "data:build": "npm run data:download && npm run data:transform && npm run data:roots && npm run data:lexicons && npm run data:semantic && npm run data:relations && npm run data:expressions && npm run data:mutashabihat && npm run data:munasabat && npm run data:iltifat && npm run data:manifest",
     "api": "node server/index.js",
     "api:dev": "API_APP_BASE=http://localhost:5173/ API_PUBLIC_BASE=http://localhost:8080/api/v1 node server/index.js",
-    "api:key": "node server/genkey.js"
+    "api:key": "node server/genkey.js",
+    "mcp": "node server/mcp/stdio.js",
+    "mcp:bridge": "node server/mcp/stdio.js --url https://ayat.network/api/v1/mcp"
   },
   "dependencies": {
     "react": "^19.1.0",

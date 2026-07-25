@@ -66,6 +66,34 @@ export const config = {
   cacheSeconds: num(process.env.API_CACHE_SECONDS, 3600),
   logRequests: bool(process.env.API_LOG, true),
   repoRoot: REPO,
+
+  /* ── The MCP endpoint (POST /api/v1/mcp) ──
+   *
+   * Same corpus, same handlers, different protocol — see server/mcp/. The knobs that
+   * matter are the two ceilings and the origin list; everything else the MCP server
+   * inherits from the settings above, including API keys and the rate limiter.
+   */
+  mcp: {
+    enabled: bool(process.env.API_MCP, true),
+
+    // Browser origins permitted to POST to the MCP endpoint. EMPTY BY DEFAULT: MCP clients
+    // connect from a process, not a page, so they send no Origin and are unaffected, while
+    // a hostile web page driving this endpoint through a visitor's browser is refused. Set
+    // to "*" only if you deliberately want an in-browser client to reach it.
+    origins: String(process.env.API_MCP_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
+
+    // Largest request body accepted, enforced while reading.
+    maxBodyBytes: num(process.env.API_MCP_MAX_BODY, 1_000_000),
+
+    // Hard ceiling on ONE tool result, in characters of serialized JSON (~4 chars/token).
+    // The result degrades in a defined order and says so; see server/mcp/shape.js.
+    maxResponseChars: num(process.env.API_MCP_MAX_RESPONSE, 60_000),
+
+    // Also return the answer as `structuredContent` beside the text block. Off by default:
+    // a client that renders both pays for the same answer twice, and the text block is the
+    // one every client can read.
+    structuredContent: bool(process.env.API_MCP_STRUCTURED, false),
+  },
 };
 
 export const keysEnforced = () => config.keys.size > 0;
