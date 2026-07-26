@@ -40,6 +40,25 @@ Any client that accepts a remote MCP URL:
 }
 ```
 
+### As a connector in Claude
+
+Settings → Connectors → **Add custom connector**, then paste the URL above. Leave the OAuth
+fields empty — there is no sign-in, and the endpoint says so by publishing no authorization
+metadata.
+
+To check it took, ask for something the model cannot answer from memory without being wrong,
+so a silent fallback to recall is visible:
+
+> Which āya is «إياك نعبد وإياك نستعين»? Use the ayat tools.
+
+It should call `locate_quotation` and come back with **1:5** and a `ui` link. Then something
+only the corpus can do:
+
+> Build a co-occurrence grid for the roots نور and ظلم against علم and جهل.
+
+`relate` returns the grid, and the نور × جهل cell is **0** — a pairing the text never makes,
+which is the kind of answer no amount of recall produces.
+
 ### stdio, for clients that only launch subprocesses
 
 `server/mcp/stdio.js` speaks newline-delimited JSON-RPC on stdin/stdout, in either of two
@@ -320,6 +339,38 @@ service that never existed. **The absence of authorization has to be stated, not
 five must answer a clean `404`. `docker/nginx.conf` does this in two `location` blocks; if you
 front the app with your own server, copy them.
 
+**That same message also appears when the request never reached the server at all** — see the
+next section. The symptom does not distinguish them, so check both.
+
+### A CDN is challenging the POST
+
+If you front the deployment with Cloudflare or similar, its bot protection will challenge
+`POST /api/v1/mcp`, and the client is handed a `Just a moment...` interstitial instead of
+JSON-RPC. It cannot parse that either, so it reports the same phantom sign-in service. The
+tell is in the body — `cType: 'managed'` and a `cZone` naming your domain.
+
+It is easy to miss because it is **selective**: a `curl` from your own machine often passes
+while the same request from a hosted client's datacenter IP is challenged, so the endpoint
+looks healthy from where you are testing. Print the body rather than the status:
+
+```bash
+curl -s -X POST https://ayat.network/api/v1/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | head -c 200
+```
+
+On Cloudflare, three settings do it, and they act in this order:
+
+| Setting | What it sends | Fix |
+|---|---|---|
+| **Bot Fight Mode** | managed challenge | Security → Bots → off. On the Free plan it is zone-wide and **cannot** be skipped by a WAF rule |
+| **Browser Integrity Check** / **Security Level** | managed challenge | WAF custom rule, action **Skip**, over `starts_with(http.request.uri.path, "/api/")` |
+| **Block AI bots** | `403` block | Rescope off `/api/`, or turn off. It targets exactly the agent user-agents this endpoint exists to serve |
+
+The first masks the others: fix it and the next one surfaces. `starts_with` is a *function*
+in Cloudflare's expression language, not an infix operator, and regex `matches` needs a
+Business plan.
+
 ---
 
 ## Protocol details
@@ -382,7 +433,7 @@ server/mcp/
   server.js      Method dispatch, protocol negotiation, argument completion
   jsonrpc.js     JSON-RPC 2.0 framing
   invoke.js      Calls a REAL route handler in-process — the one-implementation guarantee
-  tools.js       The twelve tools
+  tools.js       The fourteen tools
   resources.js   Fixed resources + templates
   prompts.js     The five workflows
   guide.js       `instructions` and the corpus briefing

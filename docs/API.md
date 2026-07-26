@@ -269,7 +269,7 @@ Occurrence lists here are sampled — `?verses=N` (0–500, default 5) raises or
 |---|---|
 | `POST /mcp` | The same corpus as a **Model Context Protocol** server — see [MCP.md](MCP.md) |
 
-Streamable HTTP, JSON-RPC 2.0, session-less, open access. Twelve curated tools over these
+Streamable HTTP, JSON-RPC 2.0, session-less, open access. Fourteen curated tools over these
 endpoints, the corpus briefing as a resource, research workflows as prompts. The tools call
 the same route handlers documented above, so an MCP answer and an HTTP answer to the same
 question are the same answer. It is the only `POST` on this API; everything else is `GET`.
